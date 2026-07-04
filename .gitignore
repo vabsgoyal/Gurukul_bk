@@ -1,5 +1,8 @@
 HELP.md
 target/
+.env
+.env.*
+!deploy/aws/.env.example
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

@@ -15,7 +15,10 @@ public class SecurityConfig {
 		http
 				.csrf(csrf -> csrf.disable())
 				.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
-				.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
+						.permitAll()
+						.anyRequest().permitAll());
 		return http.build();
 	}
 

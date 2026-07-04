@@ -1,6 +1,6 @@
 # Gurukul Backend
 
-School management backend for Gurukul, built with Spring Boot and Maven. The project is developed as vertical slices; the current slice implements **student enrollment** with class-sections and multi-tenant school scoping.
+School management backend for Gurukul, built with Spring Boot and Maven. The project is developed as vertical slices; the current slice implements **school registration**, **class-sections**, and **student enrollment** with multi-tenant school scoping.
 
 ## Prerequisites
 
@@ -8,6 +8,11 @@ School management backend for Gurukul, built with Spring Boot and Maven. The pro
 - Maven, or the included Maven wrapper
 
 No external database is required for local development — the app uses **H2 in-memory** by default.
+
+For production / Aurora testing you also need:
+
+- [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured (`aws configure`)
+- IAM permission `rds-db:connect` on the Aurora cluster DB user (see [Aurora (production)](#aurora-production))
 
 ## Setup
 
@@ -17,7 +22,7 @@ cd Gurukul_bk
 mvn clean install
 ```
 
-## Run locally
+## Run locally (default — H2)
 
 ```bash
 mvn spring-boot:run
@@ -29,23 +34,33 @@ Or with the wrapper:
 ./mvnw spring-boot:run
 ```
 
-The application starts at:
+The **`local`** profile is active by default. The application starts at:
 
 ```text
 http://localhost:8080
 ```
 
-If port 8080 is already in use, stop the other process first (for example `Ctrl+C` in the other terminal).
+If port 8080 is already in use:
+
+```bash
+lsof -i :8080          # find the PID
+kill <PID>             # stop the other process
+# or use another port:
+export PORT=8081
+mvn spring-boot:run
+```
 
 ### Swagger UI (API docs)
 
-With the app running, open:
+Available only on the **`local`** profile. With the app running, open:
 
 **http://localhost:8080/swagger-ui.html**
 
 OpenAPI JSON spec: **http://localhost:8080/v3/api-docs**
 
 Every `/api/v1/**` endpoint requires the **`X-School-Id`** header. Swagger UI includes it on all operations — set it to the example school UUID below before trying requests.
+
+Swagger is **disabled** on the `prod` profile.
 
 Packaged jar:
 
@@ -54,9 +69,14 @@ mvn clean package
 java -jar target/gurukul-backend-0.0.1-SNAPSHOT.jar
 ```
 
-## Database (local)
+## Profiles
 
-The **`local`** profile is active by default and uses **H2 in-memory**:
+| Profile | Database | Use when |
+|---------|----------|----------|
+| `local` (default) | H2 in-memory | Day-to-day development |
+| `prod` | Aurora PostgreSQL via IAM | Testing against RDS, Docker, ECS/App Runner |
+
+## Database — local (H2)
 
 | Setting | Value |
 |---------|--------|
@@ -68,7 +88,7 @@ Schema is managed by **Flyway** (`src/main/resources/db/migration/`). Data is re
 
 ### H2 Console
 
-With the app running, open:
+With the app running on `local`, open:
 
 **http://localhost:8080/h2-console**
 
@@ -76,11 +96,86 @@ With the app running, open:
 
 Use the JDBC URL above with user `sa` and no password.
 
-- H2 documentation: https://www.h2database.com/html/main.html
+## Aurora (production)
 
-### PostgreSQL (future)
+Production uses **Aurora PostgreSQL** with **IAM database authentication** via the [AWS Advanced JDBC Wrapper](https://github.com/aws/aws-advanced-jdbc-wrapper).
 
-The PostgreSQL driver is on the classpath for production use later. To switch, add a `prod` profile with PostgreSQL connection settings and set `spring.profiles.active=prod`.
+This is required when Aurora **Internet Access Gateway (IAG)** is enabled — AWS does not allow password-only auth from the internet in that configuration. IAG cannot be disabled after cluster creation.
+
+### Run locally against Aurora
+
+```bash
+export SPRING_PROFILES_ACTIVE=prod
+export AWS_REGION=eu-north-1
+export SPRING_DATASOURCE_URL="jdbc:aws-wrapper:postgresql://your-cluster-host:5432/postgres?sslmode=require"
+export SPRING_DATASOURCE_USERNAME=postgres
+
+mvn spring-boot:run
+```
+
+**No `SPRING_DATASOURCE_PASSWORD`** — the JDBC wrapper generates short-lived IAM tokens from your AWS credential chain (`~/.aws/credentials` locally, ECS task role in AWS).
+
+Startup takes ~12s (network + IAM token + Flyway validation against RDS).
+
+### IAM policy
+
+Your IAM user or ECS task role needs `rds-db:connect`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "rds-db:connect",
+    "Resource": "arn:aws:rds-db:eu-north-1:ACCOUNT_ID:dbuser:CLUSTER_RESOURCE_ID/postgres"
+  }]
+}
+```
+
+Get the cluster resource ID:
+
+```bash
+aws rds describe-db-clusters \
+  --db-cluster-identifier gurukul \
+  --region eu-north-1 \
+  --query 'DBClusters[0].DbClusterResourceId' \
+  --output text
+```
+
+### Connectivity test (optional)
+
+```bash
+export RDSHOST="your-cluster-host"
+export PGPASSWORD="$(aws rds generate-db-auth-token \
+  --hostname "$RDSHOST" --port 5432 --username postgres --region eu-north-1)"
+psql "host=$RDSHOST port=5432 dbname=postgres user=postgres sslmode=require" -c "SELECT 1;"
+```
+
+### Health check
+
+```bash
+curl http://localhost:8080/actuator/health
+# {"status":"UP"}
+```
+
+### Docker
+
+```bash
+docker build -t gurukul-backend .
+
+# Copy deploy/aws/.env.example → .env and set prod env vars (IAM URL, no password)
+docker run -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e AWS_REGION=eu-north-1 \
+  -e SPRING_DATASOURCE_URL="jdbc:aws-wrapper:postgresql://your-cluster-host:5432/postgres?sslmode=require" \
+  -e SPRING_DATASOURCE_USERNAME=postgres \
+  -v ~/.aws:/root/.aws:ro \
+  gurukul-backend
+```
+
+Mount AWS credentials for local Docker runs, or use an ECS task role in AWS (no keys in the container).
+
+Full AWS deployment (ECR, ECS/App Runner): **[deploy/aws/DEPLOYMENT.md](deploy/aws/DEPLOYMENT.md)**
 
 ## Multi-tenant: `X-School-Id` header
 
@@ -121,6 +216,12 @@ curl -X POST http://localhost:8080/api/v1/schools \
     "principalName": "Dr. Anita Verma",
     "directorName": "Mr. Sanjay Mehta"
   }'
+```
+
+**Get seeded demo school:**
+
+```bash
+curl http://localhost:8080/api/v1/schools/11111111-1111-1111-1111-111111111111
 ```
 
 **Response** includes `data.id` (use as `X-School-Id`) plus live counts:
@@ -234,27 +335,35 @@ curl -X POST http://localhost:8080/api/v1/students \
 
 | Command | Description |
 |---------|-------------|
-| `mvn spring-boot:run` | Start the backend server |
+| `mvn spring-boot:run` | Start the backend (local profile, H2) |
+| `SPRING_PROFILES_ACTIVE=prod mvn spring-boot:run` | Start against Aurora (set env vars first) |
 | `mvn clean install` | Build, test, package, and install locally |
 | `mvn clean install -DskipTests` | Build without running tests |
 | `mvn test` | Run tests |
 | `mvn clean package` | Build the executable jar |
+| `docker build -t gurukul-backend .` | Build production Docker image |
 
 ## Project structure
 
 ```text
 .
 ├── pom.xml
+├── Dockerfile
+├── deploy/aws/
+│   ├── DEPLOYMENT.md            # ECR, ECS/App Runner guide
+│   └── .env.example
 ├── src/
 │   ├── main/
 │   │   ├── java/com/gurukul/
 │   │   │   ├── GurukulApplication.java
 │   │   │   ├── common/          # BaseEntity, ApiResponse, SchoolContext, exception handling
 │   │   │   ├── config/          # Security, SchoolContextFilter, OpenAPI
+│   │   │   ├── schools/         # School registration + tenant lookup
 │   │   │   └── students/        # Students + ClassSection (entity, repo, service, controller)
 │   │   └── resources/
 │   │       ├── application.properties
 │   │       ├── application-local.properties
+│   │       ├── application-prod.properties   # Aurora + IAM JDBC wrapper
 │   │       └── db/migration/    # Flyway SQL migrations
 │   └── test/java/com/gurukul/
 └── README.md
@@ -268,20 +377,23 @@ curl -X POST http://localhost:8080/api/v1/students \
 - Spring Web MVC
 - Spring Security (dev mode: open endpoints)
 - Spring Data JPA
-- Flyway
-- H2 (local) / PostgreSQL driver (production-ready)
-- springdoc-openapi (Swagger UI)
+- Flyway (+ `flyway-database-postgresql` for Aurora PG 17)
+- H2 (local) / Aurora PostgreSQL (prod)
+- AWS Advanced JDBC Wrapper (IAM auth for Aurora)
+- springdoc-openapi (Swagger UI — local profile only)
 - Bean Validation
 - Lombok
 
 ## Roadmap
 
-Built slice-by-slice inside the `students` module first, then expanding:
+Built slice-by-slice:
 
 1. ~~ClassSection (link students to classes)~~
-2. Admissions + enroll workflow
-3. JWT auth and role-based access
-4. Teachers, attendance, fees, and other modules
+2. ~~School registration + multi-tenant scoping~~
+3. ~~Aurora PostgreSQL + IAM auth (prod profile)~~
+4. Docker + AWS deployment (ECS / App Runner)
+5. JWT auth and role-based access
+6. Teachers, attendance, fees, and other modules
 
 ## License
 
