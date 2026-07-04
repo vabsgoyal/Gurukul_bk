@@ -1,10 +1,10 @@
-package com.digitalschool.digital_school_backend;
+package com.gurukul;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class DigitalSchoolBackendApplicationTests {
+class GurukulApplicationTests {
 
 	@Test
 	void contextLoads() {
