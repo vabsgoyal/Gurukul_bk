@@ -1,0 +1,16 @@
+[Unit]
+Description=Gurukul Backend (Docker / ECR)
+Documentation=https://github.com/vabsgoyal/Gurukul_bk/blob/main/deploy/aws/PIPELINE.md
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/gurukul/backend.env
+ExecStart=/opt/gurukul/run-container.sh pull-and-restart
+ExecStop=/usr/bin/docker stop gurukul-backend
+
+[Install]
+WantedBy=multi-user.target

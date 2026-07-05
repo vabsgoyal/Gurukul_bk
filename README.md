@@ -175,7 +175,9 @@ docker run -p 8080:8080 \
 
 Mount AWS credentials for local Docker runs, or use an ECS task role in AWS (no keys in the container).
 
-Full AWS deployment (ECR, ECS/App Runner): **[deploy/aws/DEPLOYMENT.md](deploy/aws/DEPLOYMENT.md)**
+Full AWS deployment: **[deploy/aws/EC2.md](deploy/aws/EC2.md)** (EC2) · **[deploy/aws/PIPELINE.md](deploy/aws/PIPELINE.md)** (CI/CD) · **[deploy/aws/DEPLOYMENT.md](deploy/aws/DEPLOYMENT.md)** (App Runner / ECS)
+
+**Auto-deploy:** merge to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — `mvn test` → JAR to S3 → SSM runs `/opt/gurukul/deploy-from-s3.sh` on EC2 → smoke test on `HEALTH_CHECK_URL`.
 
 ## Multi-tenant: `X-School-Id` header
 
@@ -350,7 +352,8 @@ curl -X POST http://localhost:8080/api/v1/students \
 ├── pom.xml
 ├── Dockerfile
 ├── deploy/aws/
-│   ├── DEPLOYMENT.md            # ECR, ECS/App Runner guide
+│   ├── EC2.md                   # EC2 + Docker deploy (recommended)
+│   ├── DEPLOYMENT.md            # App Runner / ECS guide
 │   └── .env.example
 ├── src/
 │   ├── main/
@@ -391,9 +394,10 @@ Built slice-by-slice:
 1. ~~ClassSection (link students to classes)~~
 2. ~~School registration + multi-tenant scoping~~
 3. ~~Aurora PostgreSQL + IAM auth (prod profile)~~
-4. Docker + AWS deployment (ECS / App Runner)
-5. JWT auth and role-based access
-6. Teachers, attendance, fees, and other modules
+4. ~~EC2 deployment guide~~ — [deploy/aws/EC2.md](deploy/aws/EC2.md)
+5. ~~Deploy to EC2 + CI/CD~~ — push to `main` (see [PIPELINE.md](deploy/aws/PIPELINE.md))
+6. JWT auth and role-based access
+7. Teachers, attendance, fees, and other modules
 
 ## License
 

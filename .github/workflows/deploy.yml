@@ -1,0 +1,123 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - run: mvn clean test -q
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build JAR and upload to S3
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_JAR_KEY: ${{ secrets.S3_JAR_KEY }}
+        run: |
+          mvn package -DskipTests -q
+          aws s3 cp target/gurukul-backend-0.0.1-SNAPSHOT.jar \
+            "s3://${S3_BUCKET}/${S3_JAR_KEY}" \
+            --region "${AWS_REGION}"
+          aws s3 cp target/gurukul-backend-0.0.1-SNAPSHOT.jar \
+            "s3://${S3_BUCKET}/releases/gurukul-backend-${GITHUB_SHA}.jar" \
+            --region "${AWS_REGION}"
+
+      - name: Deploy to EC2 via SSM
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Gurukul JAR deploy ${GITHUB_SHA}" \
+            --parameters 'commands=["/opt/gurukul/deploy-from-s3.sh"]' \
+            --region "${AWS_REGION}" \
+            --output text \
+            --query 'Command.CommandId' > command_id.txt
+
+          COMMAND_ID=$(cat command_id.txt)
+          echo "SSM CommandId: $COMMAND_ID"
+
+          for i in $(seq 1 36); do
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --query 'CommandInvocations[0].Status' \
+              --output text \
+              --region "${AWS_REGION}")
+            echo "Status: $STATUS"
+            if [[ "$STATUS" == "Success" ]]; then
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$EC2_INSTANCE_ID" \
+                --region "${AWS_REGION}" \
+                --query '[StandardOutputContent, StandardErrorContent]' \
+                --output text
+              exit 0
+            fi
+            if [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$EC2_INSTANCE_ID" \
+                --region "${AWS_REGION}" \
+                --query '[StandardOutputContent, StandardErrorContent]' \
+                --output text
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "SSM command timed out waiting for completion"
+          exit 1
+
+      - name: Smoke test (public health)
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.HEALTH_CHECK_URL }}
+        run: |
+          if [[ -z "$HEALTH_CHECK_URL" ]]; then
+            echo "HEALTH_CHECK_URL not set — skipping smoke test"
+            exit 0
+          fi
+          for i in $(seq 1 18); do
+            if curl -sf "$HEALTH_CHECK_URL" | grep -q '"status":"UP"'; then
+              echo "Health OK: $HEALTH_CHECK_URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Smoke test failed: $HEALTH_CHECK_URL"
+          exit 1
