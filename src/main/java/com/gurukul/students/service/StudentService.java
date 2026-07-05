@@ -9,6 +9,7 @@ import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.entity.StudentStatus;
 import com.gurukul.students.repository.StudentRepository;
+import com.gurukul.fees.service.FeeStructureService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ public class StudentService {
 	private final StudentRepository studentRepository;
 	private final SchoolContext schoolContext;
 	private final ClassSectionService classSectionService;
+	private final FeeStructureService feeStructureService;
 
 	public List<StudentResponse> list() {
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
@@ -61,7 +63,10 @@ public class StudentService {
 		applyRequest(student, request, classSection);
 		student.setStatus(StudentStatus.ACTIVE);
 
-		return StudentResponse.from(studentRepository.save(student));
+		Student saved = studentRepository.save(student);
+		feeStructureService.createAssessmentForStudentIfStructureExists(saved);
+
+		return StudentResponse.from(saved);
 	}
 
 	@Transactional
