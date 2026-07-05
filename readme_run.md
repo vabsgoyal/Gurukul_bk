@@ -82,7 +82,7 @@ java -jar target/gurukul-backend-0.0.1-SNAPSHOT.jar
 curl http://localhost:8080/actuator/health
 ```
 
-Swagger is **disabled** on the `prod` profile.
+Swagger is **enabled** on the `prod` profile at `http://<EC2_HOST>:8080/swagger-ui.html` (after deploy).
 
 ---
 
@@ -277,7 +277,7 @@ mvn spring-boot:run
 | Profile | `local` (default) | `prod` |
 | Database | H2 in-memory | Aurora PostgreSQL |
 | Auth | none | IAM (AWS creds) |
-| Swagger | yes | no |
+| Swagger | yes | yes (`/swagger-ui.html`) |
 | Startup | ~2s | ~12s |
 
 ---

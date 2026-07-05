@@ -215,7 +215,7 @@ Trade-off: less control than ECS, easier setup.
 | `prod` profile | ✅ `application-prod.properties` |
 | Flyway migrations | ✅ `V1__student_school.sql` |
 | Health endpoint | ✅ `/actuator/health` |
-| Swagger disabled in prod | ✅ |
+| Swagger enabled in prod | ✅ (`/swagger-ui.html`) |
 | H2 disabled in prod | ✅ |
 | Secrets via env vars | ✅ (you configure in AWS) |
 | HTTPS | ⚠️ Add ACM cert on ALB / App Runner custom domain |

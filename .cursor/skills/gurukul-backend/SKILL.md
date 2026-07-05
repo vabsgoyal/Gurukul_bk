@@ -17,7 +17,7 @@ Apply these rules for **all** work in this repo unless the user explicitly overr
 - Spring Web MVC, Spring Data JPA, Bean Validation
 - Flyway migrations (`src/main/resources/db/migration/`)
 - H2 in-memory (`local` profile), Aurora PostgreSQL (`prod` profile)
-- springdoc-openapi (Swagger UI on `local` only)
+- springdoc-openapi (Swagger UI on local and prod)
 - Lombok (`@Getter`, `@Setter`, `@RequiredArgsConstructor`)
 
 ## Architecture

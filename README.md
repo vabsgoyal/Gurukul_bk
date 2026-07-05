@@ -52,15 +52,18 @@ mvn spring-boot:run
 
 ### Swagger UI (API docs)
 
-Available only on the **`local`** profile. With the app running, open:
+With the app running:
 
-**http://localhost:8080/swagger-ui.html**
+| Environment | Swagger UI | OpenAPI JSON |
+|-------------|------------|--------------|
+| **Local** (`local` profile) | http://localhost:8080/swagger-ui.html | http://localhost:8080/v3/api-docs |
+| **Production** (EC2, `prod` profile) | `http://<EC2_HOST>:8080/swagger-ui.html` | `http://<EC2_HOST>:8080/v3/api-docs` |
 
-OpenAPI JSON spec: **http://localhost:8080/v3/api-docs**
+Replace `<EC2_HOST>` with your EC2 public IP or domain (same host as `HEALTH_CHECK_URL` in GitHub Actions, without the path).
 
 Every `/api/v1/**` endpoint requires the **`X-School-Id`** header. Swagger UI includes it on all operations — set it to the example school UUID below before trying requests.
 
-Swagger is **disabled** on the `prod` profile.
+> Swagger on production exposes your API schema publicly. Restrict EC2 security group access or add auth before wider exposure.
 
 Packaged jar:
 
@@ -416,7 +419,7 @@ Architecture documentation: [`docs/HLD_LLD.md`](docs/HLD_LLD.md)
 - Flyway (+ `flyway-database-postgresql` for Aurora PG 17)
 - H2 (local) / Aurora PostgreSQL (prod)
 - AWS Advanced JDBC Wrapper (IAM auth for Aurora)
-- springdoc-openapi (Swagger UI — local profile only)
+- springdoc-openapi (Swagger UI — local and prod)
 - Bean Validation
 - Lombok
 
