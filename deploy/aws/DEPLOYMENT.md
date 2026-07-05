@@ -1,16 +1,22 @@
 # AWS deployment — Gurukul Backend
 
-Production stack:
+Production stack options:
 
 ```text
-Internet → ALB / App Runner
-              ↓
-         ECS Fargate (Docker)
-              ↓
-         RDS PostgreSQL (private)
+Internet → EC2 (Docker)          ← simplest for your setup (see EC2.md)
+Internet → App Runner / ALB → ECS Fargate
+              ↓ IAM auth
+         Aurora PostgreSQL (gurukul, eu-north-1)
 ```
 
-Flyway runs `V1__student_school.sql` on first startup against RDS.
+**Your live database:** Aurora cluster `gurukul` in **eu-north-1** with **IAM authentication** (Internet Access Gateway). No DB password in env vars.
+
+| Guide | Use when |
+|-------|----------|
+| **[EC2.md](./EC2.md)** | Single EC2 + Docker + GitHub clone (**recommended to start**) |
+| This file | App Runner, ECS, general reference |
+
+Flyway runs migrations automatically on app startup (`prod` profile).
 
 ---
 
