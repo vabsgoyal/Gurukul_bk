@@ -85,8 +85,8 @@ class FinanceFoundationIntegrationTest {
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 
-		double inflowBefore = JsonPath.read(summaryBefore, "$.data.totalInflow");
-		double outflowBefore = JsonPath.read(summaryBefore, "$.data.totalOutflow");
+		double inflowBefore = ((Number) JsonPath.read(summaryBefore, "$.data.totalInflow")).doubleValue();
+		double outflowBefore = ((Number) JsonPath.read(summaryBefore, "$.data.totalOutflow")).doubleValue();
 
 		String inflowPayload = """
 				{

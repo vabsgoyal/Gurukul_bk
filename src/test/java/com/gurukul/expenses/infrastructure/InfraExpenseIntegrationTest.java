@@ -70,6 +70,11 @@ class InfraExpenseIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PURCHASED"));
 
+		String summaryBefore = mockMvc.perform(get("/api/v1/finance/summary").header("X-School-Id", SCHOOL_ID))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		double outflowBefore = ((Number) JsonPath.read(summaryBefore, "$.data.totalOutflow")).doubleValue();
+
 		mockMvc.perform(post("/api/v1/infra-expense-requests/" + requestId + "/pay")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -79,7 +84,7 @@ class InfraExpenseIntegrationTest {
 
 		mockMvc.perform(get("/api/v1/finance/summary").header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.totalOutflow").value(14500.00));
+				.andExpect(jsonPath("$.data.totalOutflow").value(outflowBefore + 14500.00));
 	}
 
 }
