@@ -74,7 +74,67 @@ java -jar target/gurukul-backend-0.0.1-SNAPSHOT.jar
 | Profile | Database | Use when |
 |---------|----------|----------|
 | `local` (default) | H2 in-memory | Day-to-day development |
-| `prod` | Aurora PostgreSQL via IAM | Testing against RDS, Docker, ECS/App Runner |
+| `prod` | Aurora PostgreSQL via IAM | EC2 production, local Aurora testing |
+
+## Production environment
+
+The live backend runs on **AWS EC2** (`eu-north-1`) with **Aurora PostgreSQL** and **IAM auth**. Deploys are fully automated — no manual SSH for routine releases.
+
+| Item | Value |
+|------|--------|
+| Base URL | `http://13.60.11.238:8080` |
+| Health | `http://13.60.11.238:8080/actuator/health` |
+| Region | `eu-north-1` |
+| Database | Aurora cluster `gurukul` (Flyway migrations on startup) |
+| Swagger | Disabled on `prod` |
+
+```bash
+# Quick prod check
+curl http://13.60.11.238:8080/actuator/health
+
+curl http://13.60.11.238:8080/api/v1/schools/11111111-1111-1111-1111-111111111111
+
+curl http://13.60.11.238:8080/api/v1/students \
+  -H "X-School-Id: 11111111-1111-1111-1111-111111111111"
+```
+
+> The EC2 public IP may change if the instance is stopped and started without an Elastic IP. Update `HEALTH_CHECK_URL` in GitHub secrets if it changes.
+
+## Team workflow (CI/CD)
+
+Every developer follows the same flow. **Merging to `main` deploys to production** — there is no separate staging environment yet.
+
+| Step | Action | Result |
+|------|--------|--------|
+| 1 | Branch off `main`, make changes | Local dev with H2 (`mvn spring-boot:run`) |
+| 2 | Open a **pull request** | **CI** runs — tests, JAR build, Docker build verify ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) |
+| 3 | Get review, fix CI if needed | PR must pass CI before merge |
+| 4 | **Merge PR → `main`** | **Deploy** runs automatically ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) |
+| 5 | Wait for Actions to finish (~2 min) | JAR uploaded to S3 → EC2 restarts via SSM → health smoke test |
+| 6 | Test on prod | Use `http://13.60.11.238:8080` (see examples above) |
+
+```text
+PR opened/updated  →  CI (test + build)           →  no deploy
+Merge to main        →  Deploy (test → S3 → EC2)   →  live on prod
+```
+
+**What deploy does on each merge to `main`:**
+
+1. `mvn clean test`
+2. `mvn package` → upload JAR to S3 (`releases/gurukul-backend.jar` + SHA-tagged copy)
+3. AWS SSM runs `/opt/gurukul/deploy-from-s3.sh` on EC2 (pull JAR, restart systemd, local health check)
+4. GitHub Actions smoke-tests `HEALTH_CHECK_URL`
+
+Monitor runs: [GitHub Actions](https://github.com/vabsgoyal/Gurukul_bk/actions). Manual redeploy: **Actions → Deploy → Run workflow**.
+
+**Important for the team:**
+
+- **Shared prod** — everyone tests against the same environment after merge.
+- **Flyway migrations** run against Aurora on app startup — review SQL in `src/main/resources/db/migration/` carefully before merging.
+- **Auth is not enforced yet** — prod APIs are open; do not put real PII in test data until JWT is added.
+- **Smoke test only checks `/actuator/health`** — verify your specific API changes manually after deploy.
+
+Infrastructure setup (one-time): **[deploy/aws/EC2.md](deploy/aws/EC2.md)** · **[deploy/aws/PIPELINE.md](deploy/aws/PIPELINE.md)**
 
 ## Database — local (H2)
 
@@ -175,9 +235,9 @@ docker run -p 8080:8080 \
 
 Mount AWS credentials for local Docker runs, or use an ECS task role in AWS (no keys in the container).
 
-Full AWS deployment: **[deploy/aws/EC2.md](deploy/aws/EC2.md)** (EC2) · **[deploy/aws/PIPELINE.md](deploy/aws/PIPELINE.md)** (CI/CD) · **[deploy/aws/DEPLOYMENT.md](deploy/aws/DEPLOYMENT.md)** (App Runner / ECS)
+Docker is optional for local prod-profile testing. **Production deploys use a JAR on EC2**, not Docker.
 
-**Auto-deploy:** merge to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — `mvn test` → JAR to S3 → SSM runs `/opt/gurukul/deploy-from-s3.sh` on EC2 → smoke test on `HEALTH_CHECK_URL`.
+Other AWS guides: **[deploy/aws/DEPLOYMENT.md](deploy/aws/DEPLOYMENT.md)** (App Runner / ECS — not used for current prod)
 
 ## Multi-tenant: `X-School-Id` header
 
@@ -338,12 +398,11 @@ curl -X POST http://localhost:8080/api/v1/students \
 | Command | Description |
 |---------|-------------|
 | `mvn spring-boot:run` | Start the backend (local profile, H2) |
-| `SPRING_PROFILES_ACTIVE=prod mvn spring-boot:run` | Start against Aurora (set env vars first) |
+| `SPRING_PROFILES_ACTIVE=prod mvn spring-boot:run` | Start against Aurora locally (set env vars first) |
 | `mvn clean install` | Build, test, package, and install locally |
-| `mvn clean install -DskipTests` | Build without running tests |
-| `mvn test` | Run tests |
-| `mvn clean package` | Build the executable jar |
-| `docker build -t gurukul-backend .` | Build production Docker image |
+| `mvn test` | Run tests (same as CI) |
+| `mvn clean package` | Build the executable JAR (same artifact CI deploys) |
+| `docker build -t gurukul-backend .` | Optional — verify Docker image (CI checks this on PRs) |
 
 ## Project structure
 
@@ -351,9 +410,15 @@ curl -X POST http://localhost:8080/api/v1/students \
 .
 ├── pom.xml
 ├── Dockerfile
+├── .github/workflows/
+│   ├── ci.yml                   # PR + push: test, build JAR, Docker verify
+│   └── deploy.yml               # merge main: test → S3 → SSM → EC2 → smoke test
 ├── deploy/aws/
-│   ├── EC2.md                   # EC2 + Docker deploy (recommended)
-│   ├── DEPLOYMENT.md            # App Runner / ECS guide
+│   ├── EC2.md                   # EC2 + JAR setup (production)
+│   ├── PIPELINE.md              # CI/CD pipeline details
+│   ├── deploy-from-s3.sh        # EC2 deploy script (S3 pull + restart)
+│   ├── gurukul-backend.service  # systemd unit
+│   ├── DEPLOYMENT.md            # App Runner / ECS (alternative)
 │   └── .env.example
 ├── src/
 │   ├── main/
@@ -383,6 +448,8 @@ curl -X POST http://localhost:8080/api/v1/students \
 - Flyway (+ `flyway-database-postgresql` for Aurora PG 17)
 - H2 (local) / Aurora PostgreSQL (prod)
 - AWS Advanced JDBC Wrapper (IAM auth for Aurora)
+- GitHub Actions (CI on PR, CD on merge to `main`)
+- AWS S3 + SSM (JAR deploy to EC2)
 - springdoc-openapi (Swagger UI — local profile only)
 - Bean Validation
 - Lombok
@@ -395,9 +462,10 @@ Built slice-by-slice:
 2. ~~School registration + multi-tenant scoping~~
 3. ~~Aurora PostgreSQL + IAM auth (prod profile)~~
 4. ~~EC2 deployment guide~~ — [deploy/aws/EC2.md](deploy/aws/EC2.md)
-5. ~~Deploy to EC2 + CI/CD~~ — push to `main` (see [PIPELINE.md](deploy/aws/PIPELINE.md))
-6. JWT auth and role-based access
-7. Teachers, attendance, fees, and other modules
+5. ~~Deploy to EC2 + CI/CD~~ — merge PR to `main` (see [Team workflow](#team-workflow-cicd))
+6. Elastic IP + HTTPS
+7. JWT auth and role-based access
+8. Teachers, attendance, fees, and other modules
 
 ## License
 
