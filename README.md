@@ -333,6 +333,28 @@ curl -X POST http://localhost:8080/api/v1/students \
 - Roll numbers must be unique per school.
 - `classSectionId` must belong to the same school as the header.
 
+## API — Fund Management
+
+All fund endpoints require `X-School-Id`. Every monetary movement posts to the central ledger (`/api/v1/finance/transactions`).
+
+| Area | Base path | Highlights |
+|------|-----------|------------|
+| Finance | `/api/v1/finance` | Transactions list, fund summary, manual inflow/outflow |
+| Vendors | `/api/v1/vendors` | Vendor master CRUD |
+| Employees | `/api/v1/employees` | Employee master CRUD |
+| Events | `/api/v1/events` | Shared events for collections and expenses |
+| Fee categories | `/api/v1/fee-categories` | Tuition, transport, hostel, etc. |
+| Fee structures | `/api/v1/fee-structures` | Per class-section; generate assessments |
+| Fee payments | `/api/v1/fee-payments` | Partial payments, receipt numbers |
+| Event collections | `/api/v1/events/{id}/collections` | Participation fees, collections, balance |
+| Sponsorships | `/api/v1/sponsorships` | Pledge and payment tracking |
+| Infra expenses | `/api/v1/infra-expense-requests` | Request → approve → purchase → pay |
+| Event expenses | `/api/v1/events/{id}/expense-requests` | Budget, approvals, vendor payments |
+| Payroll | `/api/v1/payroll/runs` | Process and pay monthly salary runs |
+| Reports | `/api/v1/reports` | Fund summary, dues, event P&L, sponsorships |
+
+Architecture documentation: [`docs/HLD_LLD.md`](docs/HLD_LLD.md)
+
 ## Scripts
 
 | Command | Description |
@@ -362,7 +384,18 @@ curl -X POST http://localhost:8080/api/v1/students \
 │   │   │   ├── common/          # BaseEntity, ApiResponse, SchoolContext, exception handling
 │   │   │   ├── config/          # Security, SchoolContextFilter, OpenAPI
 │   │   │   ├── schools/         # School registration + tenant lookup
-│   │   │   └── students/        # Students + ClassSection (entity, repo, service, controller)
+│   │   │   ├── students/        # Students + ClassSection
+│   │   │   ├── finance/         # Ledger, fund accounts, transactions
+│   │   │   ├── vendors/         # Vendor master
+│   │   │   ├── employees/       # Employee master
+│   │   │   ├── events/          # Shared school events
+│   │   │   ├── fees/            # Student fee structures and payments
+│   │   │   ├── collections/     # Event collection inflows
+│   │   │   ├── sponsorships/    # Sponsor and sponsorship payments
+│   │   │   ├── workflow/        # Approval engine
+│   │   │   ├── expenses/        # Infrastructure and event outflows
+│   │   │   ├── payroll/         # Salary structures and payroll runs
+│   │   │   └── reports/         # Fund summary and aggregations
 │   │   └── resources/
 │   │       ├── application.properties
 │   │       ├── application-local.properties
