@@ -19,6 +19,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, UUID
 	boolean existsBySchoolIdAndClassNameAndSectionAndAcademicYear(
 			UUID schoolId, String className, String section, String academicYear);
 
+	boolean existsBySchoolIdAndClassTeacherIdAndAcademicYear(UUID schoolId, UUID teacherId, String academicYear);
+
 	long countBySchoolId(UUID schoolId);
 
 }
