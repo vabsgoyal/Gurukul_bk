@@ -32,8 +32,23 @@ public class Employee extends BaseEntity {
 	@Column(name = "contact_phone")
 	private String contactPhone;
 
+	@Column(name = "contact_email")
+	private String contactEmail;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private EmployeeStatus status;
+
+	@Column(name = "academic_background", length = 1000)
+	private String academicBackground;
+
+	@Column(name = "experience_years")
+	private Integer experienceYears;
+
+	@Column(name = "experience_months")
+	private Integer experienceMonths;
+
+	@Column(precision = 3, scale = 2)
+	private java.math.BigDecimal rating;
 
 }

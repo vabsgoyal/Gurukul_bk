@@ -22,6 +22,7 @@ public class EmployeeResponse {
 	private LocalDate joinDate;
 	private String bankAccount;
 	private String contactPhone;
+	private String contactEmail;
 	private EmployeeStatus status;
 	private Instant createdAt;
 	private Instant updatedAt;
@@ -35,6 +36,7 @@ public class EmployeeResponse {
 				employee.getJoinDate(),
 				employee.getBankAccount(),
 				employee.getContactPhone(),
+				employee.getContactEmail(),
 				employee.getStatus(),
 				employee.getCreatedAt(),
 				employee.getUpdatedAt()

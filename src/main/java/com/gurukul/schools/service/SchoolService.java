@@ -41,6 +41,21 @@ public class SchoolService {
 		return toResponse(findSchool(id));
 	}
 
+	@Transactional
+	public SchoolResponse update(UUID id, SchoolRegistrationRequest request) {
+		School school = findSchool(id);
+		school.setName(request.getName());
+		school.setAddress(request.getAddress());
+		school.setCity(request.getCity());
+		school.setState(request.getState());
+		school.setPincode(request.getPincode());
+		school.setContactEmail(request.getContactEmail());
+		school.setContactPhone(request.getContactPhone());
+		school.setPrincipalName(request.getPrincipalName());
+		school.setDirectorName(request.getDirectorName());
+		return toResponse(schoolRepository.save(school));
+	}
+
 	public void requireExists(UUID id) {
 		findSchool(id);
 	}

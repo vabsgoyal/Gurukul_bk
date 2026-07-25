@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -63,6 +64,26 @@ public class SchoolController {
 			@Parameter(description = "School UUID", required = true)
 			@PathVariable UUID id) {
 		return ApiResponse.success(schoolService.getById(id));
+	}
+
+	@PutMapping("/{id}")
+	@Operation(
+			summary = "Update school",
+			description = """
+					Updates school profile fields, including contact email/phone.
+					No X-School-Id header required.
+					"""
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "School updated"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "School not found")
+	})
+	public ApiResponse<SchoolResponse> update(
+			@Parameter(description = "School UUID", required = true)
+			@PathVariable UUID id,
+			@Valid @RequestBody SchoolRegistrationRequest request) {
+		return ApiResponse.success(schoolService.update(id, request), "School updated");
 	}
 
 }

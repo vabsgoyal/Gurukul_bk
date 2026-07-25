@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,6 +37,13 @@ public class SponsorshipController {
 	@Operation(summary = "Create sponsor")
 	public ApiResponse<SponsorshipDtos.SponsorResponse> createSponsor(@Valid @RequestBody SponsorshipDtos.SponsorRequest request) {
 		return ApiResponse.success(sponsorshipService.createSponsor(request), "Sponsor created");
+	}
+
+	@PutMapping("/api/v1/sponsors/{id}")
+	@Operation(summary = "Update sponsor")
+	public ApiResponse<SponsorshipDtos.SponsorResponse> updateSponsor(
+			@PathVariable UUID id, @Valid @RequestBody SponsorshipDtos.SponsorRequest request) {
+		return ApiResponse.success(sponsorshipService.updateSponsor(id, request), "Sponsor updated");
 	}
 
 	@GetMapping("/api/v1/sponsorships")
