@@ -50,6 +50,17 @@ public class SponsorshipService {
 		return SponsorshipDtos.SponsorResponse.from(sponsorRepository.save(sponsor));
 	}
 
+	@Transactional
+	public SponsorshipDtos.SponsorResponse updateSponsor(UUID id, SponsorshipDtos.SponsorRequest request) {
+		Sponsor sponsor = sponsorRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
+				.orElseThrow(() -> new EntityNotFoundException("Sponsor not found"));
+		sponsor.setName(request.getName());
+		sponsor.setContactPhone(request.getContactPhone());
+		sponsor.setContactEmail(request.getContactEmail());
+		sponsor.setPan(request.getPan());
+		return SponsorshipDtos.SponsorResponse.from(sponsorRepository.save(sponsor));
+	}
+
 	@Transactional(readOnly = true)
 	public List<SponsorshipDtos.SponsorshipResponse> listSponsorships(SponsorshipPurpose purpose) {
 		UUID schoolId = schoolContext.getSchoolId();

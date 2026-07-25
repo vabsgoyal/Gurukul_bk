@@ -65,6 +65,7 @@ public class EmployeeService {
 		employee.setJoinDate(request.getJoinDate());
 		employee.setBankAccount(request.getBankAccount());
 		employee.setContactPhone(request.getContactPhone());
+		employee.setContactEmail(request.getContactEmail());
 	}
 
 }

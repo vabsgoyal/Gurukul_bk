@@ -32,6 +32,9 @@ public class Employee extends BaseEntity {
 	@Column(name = "contact_phone")
 	private String contactPhone;
 
+	@Column(name = "contact_email")
+	private String contactEmail;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private EmployeeStatus status;
