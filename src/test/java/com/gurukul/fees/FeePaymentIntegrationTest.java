@@ -9,6 +9,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.UUID;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,13 +21,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class FeePaymentIntegrationTest {
 
 	private static final String SCHOOL_ID = "11111111-1111-1111-1111-111111111111";
-	private static final String CLASS_SECTION_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@Test
 	void feeStructureAssessmentAndPartialPaymentFlow() throws Exception {
+		String sectionSuffix = UUID.randomUUID().toString().substring(0, 8);
+		MvcResult sectionResult = mockMvc.perform(post("/api/v1/class-sections")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"className": "Grade 8", "section": "FEE-%s", "academicYear": "2026-27"}
+								""".formatted(sectionSuffix)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String classSectionId = JsonPath.read(sectionResult.getResponse().getContentAsString(), "$.data.id");
+
 		String categoryPayload = """
 				{"code": "TUITION", "name": "Tuition Fee"}
 				""";
@@ -45,7 +57,7 @@ class FeePaymentIntegrationTest {
 				  "academicYear": "2026-27",
 				  "lines": [{"feeCategoryId": "%s", "amount": 10000.00}]
 				}
-				""", CLASS_SECTION_ID, categoryId);
+				""", classSectionId, categoryId);
 
 		MvcResult structureResult = mockMvc.perform(post("/api/v1/fee-structures")
 						.header("X-School-Id", SCHOOL_ID)
@@ -74,7 +86,7 @@ class FeePaymentIntegrationTest {
 				  "classSectionId": "%s",
 				  "admissionDate": "2026-04-01"
 				}
-				""".formatted(CLASS_SECTION_ID);
+				""".formatted(classSectionId);
 
 		mockMvc.perform(post("/api/v1/students")
 						.header("X-School-Id", SCHOOL_ID)
