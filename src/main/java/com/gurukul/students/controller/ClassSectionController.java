@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -45,6 +46,41 @@ public class ClassSectionController {
 	})
 	public ApiResponse<List<ClassSectionResponse>> list() {
 		return ApiResponse.success(classSectionService.list());
+	}
+
+	@GetMapping("/classes")
+	@Operation(
+			summary = "List distinct classes",
+			description = "Returns the distinct class/grade names for the school, e.g. for a top-level class-picker tile."
+	)
+	public ApiResponse<List<String>> listClasses() {
+		return ApiResponse.success(classSectionService.listClassNames());
+	}
+
+	@GetMapping("/by-class")
+	@Operation(
+			summary = "List sections within a class",
+			description = "Returns all class-sections whose className matches the given value, e.g. all sections of Grade 5."
+	)
+	public ApiResponse<List<ClassSectionResponse>> listByClass(
+			@Parameter(description = "Class or grade name", example = "Grade 5", required = true)
+			@RequestParam String className) {
+		return ApiResponse.success(classSectionService.listByClassName(className));
+	}
+
+	@GetMapping("/{id}")
+	@Operation(
+			summary = "Get class-section by ID",
+			description = "Returns a single class-section's details."
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Class-section found"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Class-section not found")
+	})
+	public ApiResponse<ClassSectionResponse> getById(
+			@Parameter(description = "Class-section UUID", required = true)
+			@PathVariable UUID id) {
+		return ApiResponse.success(classSectionService.getById(id));
 	}
 
 	@PostMapping

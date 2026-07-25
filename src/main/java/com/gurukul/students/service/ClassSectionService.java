@@ -1,5 +1,6 @@
 package com.gurukul.students.service;
 
+import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.students.dto.ClassSectionRequest;
 import com.gurukul.students.dto.ClassSectionResponse;
@@ -24,6 +25,22 @@ public class ClassSectionService {
 				.stream()
 				.map(ClassSectionResponse::from)
 				.toList();
+	}
+
+	public List<String> listClassNames() {
+		return classSectionRepository.findDistinctClassNamesBySchoolId(schoolContext.getSchoolId());
+	}
+
+	public List<ClassSectionResponse> listByClassName(String className) {
+		return classSectionRepository.findAllBySchoolIdAndClassNameOrderBySectionAsc(schoolContext.getSchoolId(), className)
+				.stream()
+				.map(ClassSectionResponse::from)
+				.toList();
+	}
+
+	public ClassSectionResponse getById(UUID id) {
+		return ClassSectionResponse.from(classSectionRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
+				.orElseThrow(() -> new EntityNotFoundException("Class-section not found")));
 	}
 
 	@Transactional
