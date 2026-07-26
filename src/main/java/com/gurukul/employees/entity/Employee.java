@@ -39,6 +39,10 @@ public class Employee extends BaseEntity {
 	@Column(nullable = false)
 	private EmployeeStatus status;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "employee_type")
+	private EmployeeType employeeType;
+
 	@Column(name = "academic_background", length = 1000)
 	private String academicBackground;
 

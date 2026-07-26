@@ -63,4 +63,16 @@ public class AcademicsDtos {
 		private UUID id;
 		private String name;
 	}
+
+	@Getter @AllArgsConstructor
+	@Schema(description = "A section+subject this teacher is assigned to teach")
+	public static class TeacherAssignmentResponse {
+		private UUID sectionId;
+		private String className;
+		private String section;
+		private String academicYear;
+		private UUID subjectId;
+		private String subjectName;
+		private String subjectCode;
+	}
 }

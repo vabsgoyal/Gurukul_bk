@@ -4,6 +4,7 @@ import com.gurukul.academics.dto.AcademicsDtos.SectionSubjectRequest;
 import com.gurukul.academics.dto.AcademicsDtos.SubjectAssignmentResponse;
 import com.gurukul.academics.dto.AcademicsDtos.SubjectRequest;
 import com.gurukul.academics.dto.AcademicsDtos.SubjectResponse;
+import com.gurukul.academics.dto.AcademicsDtos.TeacherAssignmentResponse;
 import com.gurukul.academics.entity.SectionSubjectTeacher;
 import com.gurukul.academics.entity.Subject;
 import com.gurukul.academics.repository.SectionSubjectTeacherRepository;
@@ -82,6 +83,13 @@ public class AcademicsService {
 		return toSubjectAssignmentResponse(sectionSubjectTeacherRepository.save(assignment));
 	}
 
+	public List<TeacherAssignmentResponse> listAssignmentsForTeacher(UUID teacherId) {
+		employeeService.getScopedEntity(teacherId);
+		return sectionSubjectTeacherRepository.findAllByTeacherId(teacherId).stream()
+				.map(AcademicsService::toTeacherAssignmentResponse)
+				.toList();
+	}
+
 	private Subject findSubject(UUID id) {
 		return subjectRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Subject not found"));
@@ -98,6 +106,18 @@ public class AcademicsService {
 				assignment.getSubject().getCode(),
 				assignment.getTeacher().getId(),
 				assignment.getTeacher().getName()
+		);
+	}
+
+	private static TeacherAssignmentResponse toTeacherAssignmentResponse(SectionSubjectTeacher assignment) {
+		return new TeacherAssignmentResponse(
+				assignment.getSection().getId(),
+				assignment.getSection().getClassName(),
+				assignment.getSection().getSection(),
+				assignment.getSection().getAcademicYear(),
+				assignment.getSubject().getId(),
+				assignment.getSubject().getName(),
+				assignment.getSubject().getCode()
 		);
 	}
 

@@ -3,6 +3,7 @@ package com.gurukul.students.controller;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.students.dto.ClassSectionRequest;
 import com.gurukul.students.dto.ClassSectionResponse;
+import com.gurukul.students.dto.ClassTeacherAssignmentRequest;
 import com.gurukul.students.dto.StudentResponse;
 import com.gurukul.students.service.ClassSectionService;
 import com.gurukul.students.service.StudentService;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -94,6 +96,23 @@ public class ClassSectionController {
 	})
 	public ApiResponse<ClassSectionResponse> create(@Valid @RequestBody ClassSectionRequest request) {
 		return ApiResponse.success(classSectionService.create(request), "Class-section created");
+	}
+
+	@PatchMapping("/{id}/class-teacher")
+	@Operation(
+			summary = "Assign class teacher",
+			description = "Assigns an employee as the class teacher of this section. A teacher can only be the class teacher of one section per academic year."
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Class teacher assigned"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Teacher already assigned to another section this year"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Class-section or employee not found")
+	})
+	public ApiResponse<ClassSectionResponse> assignClassTeacher(
+			@Parameter(description = "Class-section UUID", required = true)
+			@PathVariable UUID id,
+			@Valid @RequestBody ClassTeacherAssignmentRequest request) {
+		return ApiResponse.success(classSectionService.assignClassTeacher(id, request), "Class teacher assigned");
 	}
 
 	@GetMapping("/{classSectionId}/students")

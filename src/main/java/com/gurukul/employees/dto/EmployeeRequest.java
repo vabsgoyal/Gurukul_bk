@@ -1,6 +1,7 @@
 package com.gurukul.employees.dto;
 
 import com.gurukul.employees.entity.EmployeeStatus;
+import com.gurukul.employees.entity.EmployeeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -39,5 +40,8 @@ public class EmployeeRequest {
 
 	@Schema(description = "Employee status", example = "ACTIVE")
 	private EmployeeStatus status;
+
+	@Schema(description = "Teaching or non-teaching staff", example = "TEACHING")
+	private EmployeeType employeeType;
 
 }

@@ -4,6 +4,8 @@ import com.gurukul.common.ApiResponse;
 import com.gurukul.employees.dto.EmployeeRequest;
 import com.gurukul.employees.dto.EmployeeResponse;
 import com.gurukul.employees.service.EmployeeService;
+import com.gurukul.students.dto.ClassSectionResponse;
+import com.gurukul.students.service.ClassSectionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,6 +28,7 @@ import java.util.UUID;
 public class EmployeeController {
 
 	private final EmployeeService employeeService;
+	private final ClassSectionService classSectionService;
 
 	@GetMapping
 	@Operation(summary = "List employees")
@@ -49,6 +52,12 @@ public class EmployeeController {
 	@Operation(summary = "Update employee")
 	public ApiResponse<EmployeeResponse> update(@PathVariable UUID id, @Valid @RequestBody EmployeeRequest request) {
 		return ApiResponse.success(employeeService.update(id, request), "Employee updated");
+	}
+
+	@GetMapping("/{id}/class-sections")
+	@Operation(summary = "List class-sections where this employee is the class teacher")
+	public ApiResponse<List<ClassSectionResponse>> listClassSections(@PathVariable UUID id) {
+		return ApiResponse.success(classSectionService.listByClassTeacherId(id));
 	}
 
 }
