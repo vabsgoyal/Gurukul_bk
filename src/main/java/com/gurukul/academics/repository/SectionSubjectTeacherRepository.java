@@ -13,6 +13,9 @@ public interface SectionSubjectTeacherRepository extends JpaRepository<SectionSu
 	@EntityGraph(attributePaths = {"subject", "teacher"})
 	List<SectionSubjectTeacher> findAllBySectionId(UUID sectionId);
 
+	@EntityGraph(attributePaths = {"section", "subject"})
+	List<SectionSubjectTeacher> findAllByTeacherId(UUID teacherId);
+
 	Optional<SectionSubjectTeacher> findBySectionIdAndSubjectIdAndTeacherId(UUID sectionId, UUID subjectId, UUID teacherId);
 
 }

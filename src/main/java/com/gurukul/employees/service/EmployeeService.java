@@ -66,6 +66,7 @@ public class EmployeeService {
 		employee.setBankAccount(request.getBankAccount());
 		employee.setContactPhone(request.getContactPhone());
 		employee.setContactEmail(request.getContactEmail());
+		employee.setEmployeeType(request.getEmployeeType());
 	}
 
 }

@@ -2,6 +2,7 @@ package com.gurukul.employees.dto;
 
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.entity.EmployeeStatus;
+import com.gurukul.employees.entity.EmployeeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -24,6 +25,7 @@ public class EmployeeResponse {
 	private String contactPhone;
 	private String contactEmail;
 	private EmployeeStatus status;
+	private EmployeeType employeeType;
 	private Instant createdAt;
 	private Instant updatedAt;
 
@@ -38,6 +40,7 @@ public class EmployeeResponse {
 				employee.getContactPhone(),
 				employee.getContactEmail(),
 				employee.getStatus(),
+				employee.getEmployeeType(),
 				employee.getCreatedAt(),
 				employee.getUpdatedAt()
 		);

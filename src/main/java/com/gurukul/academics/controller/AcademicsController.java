@@ -4,6 +4,7 @@ import com.gurukul.academics.dto.AcademicsDtos.SectionSubjectRequest;
 import com.gurukul.academics.dto.AcademicsDtos.SubjectAssignmentResponse;
 import com.gurukul.academics.dto.AcademicsDtos.SubjectRequest;
 import com.gurukul.academics.dto.AcademicsDtos.SubjectResponse;
+import com.gurukul.academics.dto.AcademicsDtos.TeacherAssignmentResponse;
 import com.gurukul.academics.service.AcademicsService;
 import com.gurukul.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,6 +56,12 @@ public class AcademicsController {
 	public ApiResponse<SubjectAssignmentResponse> assignSubjectToSection(
 			@PathVariable UUID sectionId, @Valid @RequestBody SectionSubjectRequest request) {
 		return ApiResponse.success(academicsService.assignSubjectToSection(sectionId, request), "Subject assigned");
+	}
+
+	@GetMapping("/api/v1/employees/{employeeId}/subject-assignments")
+	@Operation(summary = "List section+subject assignments for a teacher")
+	public ApiResponse<List<TeacherAssignmentResponse>> listAssignmentsForTeacher(@PathVariable UUID employeeId) {
+		return ApiResponse.success(academicsService.listAssignmentsForTeacher(employeeId));
 	}
 
 }

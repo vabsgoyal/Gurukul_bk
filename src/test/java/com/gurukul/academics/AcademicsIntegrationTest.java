@@ -75,6 +75,12 @@ class AcademicsIntegrationTest {
 						.header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[?(@.subjectId == '" + subjectId + "')]").exists());
+
+		mockMvc.perform(get("/api/v1/employees/" + teacherId + "/subject-assignments")
+						.header("X-School-Id", SCHOOL_ID))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[?(@.subjectId == '" + subjectId + "')]").exists())
+				.andExpect(jsonPath("$.data[?(@.sectionId == '" + CLASS_SECTION_A + "')]").exists());
 	}
 
 }

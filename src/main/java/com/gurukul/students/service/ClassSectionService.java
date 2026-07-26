@@ -2,8 +2,11 @@ package com.gurukul.students.service;
 
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
+import com.gurukul.employees.entity.Employee;
+import com.gurukul.employees.service.EmployeeService;
 import com.gurukul.students.dto.ClassSectionRequest;
 import com.gurukul.students.dto.ClassSectionResponse;
+import com.gurukul.students.dto.ClassTeacherAssignmentRequest;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.repository.ClassSectionRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import java.util.UUID;
 public class ClassSectionService {
 
 	private final ClassSectionRepository classSectionRepository;
+	private final EmployeeService employeeService;
 	private final SchoolContext schoolContext;
 
 	public List<ClassSectionResponse> list() {
@@ -41,6 +45,31 @@ public class ClassSectionService {
 	public ClassSectionResponse getById(UUID id) {
 		return ClassSectionResponse.from(classSectionRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Class-section not found")));
+	}
+
+	@Transactional
+	public ClassSectionResponse assignClassTeacher(UUID sectionId, ClassTeacherAssignmentRequest request) {
+		ClassSection section = classSectionRepository.findByIdAndSchoolId(sectionId, schoolContext.getSchoolId())
+				.orElseThrow(() -> new EntityNotFoundException("Class-section not found"));
+		Employee teacher = employeeService.getScopedEntity(request.getTeacherId());
+
+		if (classSectionRepository.existsBySchoolIdAndClassTeacherIdAndAcademicYearAndIdNot(
+				schoolContext.getSchoolId(), teacher.getId(), section.getAcademicYear(), sectionId)) {
+			throw new IllegalArgumentException(
+					"This teacher is already the class teacher of another section in this academic year");
+		}
+
+		section.setClassTeacher(teacher);
+		return ClassSectionResponse.from(classSectionRepository.save(section));
+	}
+
+	public List<ClassSectionResponse> listByClassTeacherId(UUID employeeId) {
+		employeeService.getScopedEntity(employeeId);
+		return classSectionRepository
+				.findAllBySchoolIdAndClassTeacherIdOrderByAcademicYearDesc(schoolContext.getSchoolId(), employeeId)
+				.stream()
+				.map(ClassSectionResponse::from)
+				.toList();
 	}
 
 	@Transactional
