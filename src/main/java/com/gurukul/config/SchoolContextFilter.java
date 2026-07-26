@@ -65,10 +65,14 @@ public class SchoolContextFilter extends OncePerRequestFilter {
 
 	private boolean isPublicEndpoint(HttpServletRequest request) {
 		String uri = request.getRequestURI();
-		if ("POST".equals(request.getMethod()) && "/api/v1/schools".equals(uri)) {
+		String method = request.getMethod();
+		if ("POST".equals(method) && "/api/v1/schools".equals(uri)) {
 			return true;
 		}
-		return "GET".equals(request.getMethod()) && SCHOOL_BY_ID_PATH.matcher(uri).matches();
+		if ("GET".equals(method) && "/api/v1/schools".equals(uri)) {
+			return true;
+		}
+		return "GET".equals(method) && SCHOOL_BY_ID_PATH.matcher(uri).matches();
 	}
 
 	private void writeError(HttpServletResponse response, int status, String message) throws IOException {

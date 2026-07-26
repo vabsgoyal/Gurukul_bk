@@ -117,12 +117,13 @@ class StudentEnrollmentIntegrationTest {
 								  "contactEmail": "other@school.example",
 								  "contactPhone": "9000000099",
 								  "principalName": "Dr. Other",
-								  "directorName": "Mr. Other"
+								  "directorName": "Mr. Other",
+								  "adminPhone": "9000000099"
 								}
 								"""))
 				.andExpect(status().isOk())
 				.andReturn();
-		String otherSchoolId = JsonPath.read(otherSchoolResult.getResponse().getContentAsString(), "$.data.id");
+		String otherSchoolId = JsonPath.read(otherSchoolResult.getResponse().getContentAsString(), "$.data.school.id");
 
 		mockMvc.perform(get("/api/v1/students/" + studentId).header("X-School-Id", otherSchoolId))
 				.andExpect(status().isNotFound());

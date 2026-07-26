@@ -35,9 +35,10 @@ class SchoolRegistrationIntegrationTest {
 				  "contactEmail": "%s",
 				  "contactPhone": "%s",
 				  "principalName": "Dr. Test Principal",
-				  "directorName": "Mr. Test Director"
+				  "directorName": "Mr. Test Director",
+				  "adminPhone": "%s"
 				}
-				""".formatted(name, address, email, phone);
+				""".formatted(name, address, email, phone, phone);
 	}
 
 	@Test
@@ -48,10 +49,12 @@ class SchoolRegistrationIntegrationTest {
 								"New Public School", "10 Main Street", "office@nps.example", "9123456789")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
-				.andExpect(jsonPath("$.data.name").value("New Public School"))
-				.andExpect(jsonPath("$.data.studentCount").value(0))
-				.andExpect(jsonPath("$.data.classSectionCount").value(0))
-				.andExpect(jsonPath("$.data.teacherCount").value(0))
+				.andExpect(jsonPath("$.data.school.name").value("New Public School"))
+				.andExpect(jsonPath("$.data.school.studentCount").value(0))
+				.andExpect(jsonPath("$.data.school.classSectionCount").value(0))
+				.andExpect(jsonPath("$.data.school.teacherCount").value(0))
+				.andExpect(jsonPath("$.data.admin.token").exists())
+				.andExpect(jsonPath("$.data.admin.role").value("ADMIN"))
 				.andExpect(jsonPath("$.message").value("School registered"));
 	}
 
@@ -82,7 +85,7 @@ class SchoolRegistrationIntegrationTest {
 				.andExpect(status().isOk())
 				.andReturn();
 
-		String schoolId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
+		String schoolId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.school.id");
 
 		mockMvc.perform(get("/api/v1/class-sections").header("X-School-Id", schoolId))
 				.andExpect(status().isOk())

@@ -13,4 +13,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
 	Optional<Employee> findByIdAndSchoolId(UUID id, UUID schoolId);
 
+	List<Employee> findAllBySchoolIdAndContactPhone(UUID schoolId, String contactPhone);
+
 }
