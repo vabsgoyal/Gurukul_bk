@@ -9,12 +9,16 @@ import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceRosterRespo
 import com.gurukul.attendance.entity.AttendanceStatus;
 import com.gurukul.attendance.entity.StaffAttendanceRecord;
 import com.gurukul.attendance.repository.StaffAttendanceRecordRepository;
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.repository.EmployeeRepository;
 import com.gurukul.employees.service.EmployeeService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +41,10 @@ public class StaffAttendanceService {
 	@Transactional
 	public StaffAttendanceRosterResponse markStaffAttendance(BulkStaffAttendanceRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Employee markedBy = employeeService.getScopedEntity(request.getMarkedByEmployeeId());
+		UUID markerId = request.getMarkedByEmployeeId() != null
+				? request.getMarkedByEmployeeId()
+				: AuthContext.current().getOwnerId();
+		Employee markedBy = employeeService.getScopedEntity(markerId);
 
 		for (StaffAttendanceEntryRequest entry : request.getRecords()) {
 			Employee employee = employeeService.getScopedEntity(entry.getEmployeeId());
@@ -84,6 +91,11 @@ public class StaffAttendanceService {
 	}
 
 	public EmployeeAttendanceHistoryResponse getEmployeeHistory(UUID employeeId, LocalDate from, LocalDate to) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.TEACHER && !principal.getOwnerId().equals(employeeId)) {
+			throw new AccessDeniedException("You can only view your own attendance");
+		}
+
 		UUID schoolId = schoolContext.getSchoolId();
 		Employee employee = employeeRepository.findByIdAndSchoolId(employeeId, schoolId)
 				.orElseThrow(() -> new EntityNotFoundException("Employee not found"));

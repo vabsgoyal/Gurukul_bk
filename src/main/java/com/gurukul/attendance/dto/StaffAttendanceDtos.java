@@ -25,9 +25,10 @@ public class StaffAttendanceDtos {
 	}
 
 	@Getter @Setter
+	@Schema(description = "markedByEmployeeId defaults to the logged-in admin when omitted")
 	public static class BulkStaffAttendanceRequest {
 		@NotNull private LocalDate date;
-		@NotNull private UUID markedByEmployeeId;
+		private UUID markedByEmployeeId;
 		@NotEmpty @Valid private List<StaffAttendanceEntryRequest> records;
 	}
 

@@ -1,0 +1,18 @@
+package com.gurukul.auth.repository;
+
+import com.gurukul.auth.entity.Credential;
+import com.gurukul.auth.entity.OwnerType;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface CredentialRepository extends JpaRepository<Credential, UUID> {
+
+	Optional<Credential> findBySchoolIdAndUsername(UUID schoolId, String username);
+
+	boolean existsBySchoolIdAndUsername(UUID schoolId, String username);
+
+	boolean existsByOwnerTypeAndOwnerId(OwnerType ownerType, UUID ownerId);
+
+}

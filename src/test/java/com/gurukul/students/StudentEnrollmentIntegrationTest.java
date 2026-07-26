@@ -50,7 +50,7 @@ class StudentEnrollmentIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(2)))
-				.andExpect(jsonPath("$.data[0].className").value("Grade 8"));
+				.andExpect(jsonPath("$.data[?(@.id == '" + SEED_CLASS_SECTION_ID + "')].className").value("Grade 8"));
 	}
 
 	@Test

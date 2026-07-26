@@ -49,6 +49,10 @@ public class StudentService {
 		return StudentResponse.from(findScoped(id));
 	}
 
+	public Student getScopedEntity(UUID id) {
+		return findScoped(id);
+	}
+
 	@Transactional
 	public StudentResponse create(StudentRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
