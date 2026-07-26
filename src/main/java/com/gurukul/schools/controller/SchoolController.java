@@ -2,7 +2,10 @@ package com.gurukul.schools.controller;
 
 import com.gurukul.common.ApiResponse;
 import com.gurukul.schools.dto.SchoolRegistrationRequest;
+import com.gurukul.schools.dto.SchoolRegistrationResponse;
 import com.gurukul.schools.dto.SchoolResponse;
+import com.gurukul.schools.dto.SchoolSearchResponse;
+import com.gurukul.schools.dto.SchoolUpdateRequest;
 import com.gurukul.schools.service.SchoolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,8 +19,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -43,7 +48,7 @@ public class SchoolController {
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "School registered"),
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed")
 	})
-	public ApiResponse<SchoolResponse> register(@Valid @RequestBody SchoolRegistrationRequest request) {
+	public ApiResponse<SchoolRegistrationResponse> register(@Valid @RequestBody SchoolRegistrationRequest request) {
 		return ApiResponse.success(schoolService.register(request), "School registered");
 	}
 
@@ -82,8 +87,23 @@ public class SchoolController {
 	public ApiResponse<SchoolResponse> update(
 			@Parameter(description = "School UUID", required = true)
 			@PathVariable UUID id,
-			@Valid @RequestBody SchoolRegistrationRequest request) {
+			@Valid @RequestBody SchoolUpdateRequest request) {
 		return ApiResponse.success(schoolService.update(id, request), "School updated");
+	}
+
+	@GetMapping
+	@Operation(
+			summary = "List / search schools",
+			description = """
+					Public directory of schools. Omit `name` to list all schools; provide it to filter by a
+					partial, case-insensitive match. Returns a minimal, PII-free shape - no contact details.
+					No X-School-Id header required.
+					"""
+	)
+	public ApiResponse<List<SchoolSearchResponse>> list(
+			@Parameter(description = "Optional partial school name filter", example = "Delhi Public")
+			@RequestParam(required = false) String name) {
+		return ApiResponse.success(schoolService.list(name));
 	}
 
 }

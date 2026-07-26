@@ -23,6 +23,8 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 	@EntityGraph(attributePaths = "classSection")
 	Optional<Student> findByIdAndSchoolId(UUID id, UUID schoolId);
 
+	List<Student> findAllBySchoolIdAndParentContact(UUID schoolId, String parentContact);
+
 	boolean existsBySchoolIdAndRollNumber(UUID schoolId, String rollNumber);
 
 	boolean existsBySchoolIdAndRollNumberAndIdNot(UUID schoolId, String rollNumber, UUID id);

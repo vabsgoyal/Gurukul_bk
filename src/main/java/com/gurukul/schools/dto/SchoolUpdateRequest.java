@@ -8,8 +8,8 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Schema(description = "Register a new school (tenant organization)")
-public class SchoolRegistrationRequest {
+@Schema(description = "Update a school's profile fields")
+public class SchoolUpdateRequest {
 
 	@NotBlank
 	@Schema(description = "Official school name", example = "Delhi Public School")
@@ -47,15 +47,5 @@ public class SchoolRegistrationRequest {
 	@NotBlank
 	@Schema(description = "Director full name", example = "Mr. Sanjay Mehta")
 	private String directorName;
-
-	@NotBlank
-	@Schema(description = "Phone number for the registering admin's login (OTP-based login uses this)", example = "9876543210")
-	private String adminPhone;
-
-	@Schema(description = "Optional admin username for password-based login; defaults to adminPhone if omitted")
-	private String adminUsername;
-
-	@Schema(description = "Optional admin password for password-based login; if omitted, only OTP login works for this admin")
-	private String adminPassword;
 
 }
