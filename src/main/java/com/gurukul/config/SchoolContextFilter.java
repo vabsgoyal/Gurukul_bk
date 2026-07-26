@@ -72,6 +72,9 @@ public class SchoolContextFilter extends OncePerRequestFilter {
 		if ("GET".equals(method) && "/api/v1/schools".equals(uri)) {
 			return true;
 		}
+		if ("POST".equals(method) && "/api/v1/ops/admin-backfill".equals(uri)) {
+			return true;
+		}
 		return "GET".equals(method) && SCHOOL_BY_ID_PATH.matcher(uri).matches();
 	}
 
