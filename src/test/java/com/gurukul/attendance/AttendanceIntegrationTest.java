@@ -1,10 +1,12 @@
 package com.gurukul.attendance;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -59,6 +61,9 @@ class AttendanceIntegrationTest {
 				.andReturn();
 		String teacherId = JsonPath.read(teacherResult.getResponse().getContentAsString(), "$.data.id");
 
+		String adminToken = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+		String bearer = "Bearer " + adminToken;
+
 		String markPayload = """
 				{
 				  "date": "2026-08-01",
@@ -71,6 +76,7 @@ class AttendanceIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/class-sections/" + CLASS_SECTION_B + "/attendance")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(markPayload))
 				.andExpect(status().isOk())
@@ -78,6 +84,7 @@ class AttendanceIntegrationTest {
 
 		mockMvc.perform(get("/api/v1/class-sections/" + CLASS_SECTION_B + "/attendance")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.param("date", "2026-08-01"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.entries[?(@.studentId == '" + studentId + "')].status").value("PRESENT"));
@@ -94,13 +101,15 @@ class AttendanceIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/class-sections/" + CLASS_SECTION_B + "/attendance")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(remarkPayload))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.entries[?(@.studentId == '" + studentId + "')].status").value("LATE"));
 
 		mockMvc.perform(get("/api/v1/students/" + studentId + "/attendance")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalRecords").value(1))
 				.andExpect(jsonPath("$.data.lateCount").value(1))

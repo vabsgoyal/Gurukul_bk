@@ -1,10 +1,12 @@
 package com.gurukul.students;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -49,9 +51,11 @@ class ClassTeacherAssignmentIntegrationTest {
 				.andExpect(jsonPath("$.data.employeeType").value("TEACHING"))
 				.andReturn();
 		String teacherId = JsonPath.read(teacherResult.getResponse().getContentAsString(), "$.data.id");
+		String bearer = "Bearer " + AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 
 		mockMvc.perform(patch("/api/v1/class-sections/" + sectionId + "/class-teacher")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"teacherId": "%s"}
@@ -98,15 +102,18 @@ class ClassTeacherAssignmentIntegrationTest {
 				.andExpect(status().isOk())
 				.andReturn();
 		String teacherId = JsonPath.read(teacherResult.getResponse().getContentAsString(), "$.data.id");
+		String bearer = "Bearer " + AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 
 		mockMvc.perform(patch("/api/v1/class-sections/" + sectionId1 + "/class-teacher")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"teacherId\": \"" + teacherId + "\"}"))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(patch("/api/v1/class-sections/" + sectionId2 + "/class-teacher")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"teacherId\": \"" + teacherId + "\"}"))
 				.andExpect(status().isBadRequest());

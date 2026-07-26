@@ -25,9 +25,11 @@ public class AttendanceDtos {
 	}
 
 	@Getter @Setter
+	@Schema(description = "teacherId is only used when the caller is an ADMIN marking attendance on behalf of a "
+			+ "specific teacher; when the caller is a TEACHER it's derived from their own login and this field is ignored")
 	public static class BulkAttendanceRequest {
 		@NotNull private LocalDate date;
-		@NotNull private UUID teacherId;
+		private UUID teacherId;
 		@NotEmpty @Valid private List<AttendanceEntryRequest> records;
 	}
 

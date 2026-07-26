@@ -9,6 +9,9 @@ import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceHistoryRespons
 import com.gurukul.attendance.entity.AttendanceRecord;
 import com.gurukul.attendance.entity.AttendanceStatus;
 import com.gurukul.attendance.repository.AttendanceRecordRepository;
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.entity.Employee;
@@ -18,6 +21,7 @@ import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
 import com.gurukul.students.service.ClassSectionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +46,7 @@ public class AttendanceService {
 	public SectionAttendanceResponse markSection(UUID sectionId, BulkAttendanceRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
-		Employee teacher = employeeService.getScopedEntity(request.getTeacherId());
+		Employee teacher = resolveMarkingTeacher(section, request.getTeacherId());
 
 		for (AttendanceEntryRequest entry : request.getRecords()) {
 			Student student = studentRepository.findByIdAndSchoolId(entry.getStudentId(), schoolId)
@@ -97,6 +101,11 @@ public class AttendanceService {
 	}
 
 	public StudentAttendanceHistoryResponse getStudentHistory(UUID studentId, LocalDate from, LocalDate to) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.STUDENT && !principal.getOwnerId().equals(studentId)) {
+			throw new AccessDeniedException("Students can only view their own attendance");
+		}
+
 		UUID schoolId = schoolContext.getSchoolId();
 		Student student = studentRepository.findByIdAndSchoolId(studentId, schoolId)
 				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
@@ -122,6 +131,20 @@ public class AttendanceService {
 				counts.getOrDefault(AttendanceStatus.HALF_DAY, 0L),
 				records.stream().map(AttendanceRecordResponse::from).toList()
 		);
+	}
+
+	private Employee resolveMarkingTeacher(ClassSection section, UUID requestedTeacherId) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.ADMIN) {
+			UUID teacherId = requestedTeacherId != null ? requestedTeacherId : principal.getOwnerId();
+			return employeeService.getScopedEntity(teacherId);
+		}
+		// Caller is a TEACHER (the only other role permitted to hit this endpoint) - must be this
+		// section's own class teacher; the requested teacherId in the body, if any, is ignored.
+		if (section.getClassTeacher() == null || !section.getClassTeacher().getId().equals(principal.getOwnerId())) {
+			throw new AccessDeniedException("Only this section's class teacher can mark its attendance");
+		}
+		return employeeService.getScopedEntity(principal.getOwnerId());
 	}
 
 }

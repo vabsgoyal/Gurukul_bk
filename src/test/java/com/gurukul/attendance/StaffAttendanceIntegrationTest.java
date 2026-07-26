@@ -1,10 +1,12 @@
 package com.gurukul.attendance;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -45,6 +47,8 @@ class StaffAttendanceIntegrationTest {
 				.andReturn();
 		String adminId = JsonPath.read(adminResult.getResponse().getContentAsString(), "$.data.id");
 
+		String bearer = "Bearer " + AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+
 		String markPayload = """
 				{
 				  "date": "2026-08-05",
@@ -57,6 +61,7 @@ class StaffAttendanceIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/staff-attendance")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(markPayload))
 				.andExpect(status().isOk())
@@ -64,6 +69,7 @@ class StaffAttendanceIntegrationTest {
 
 		mockMvc.perform(get("/api/v1/staff-attendance")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.param("date", "2026-08-05"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.entries[?(@.employeeId == '" + employeeId + "')].status").value("PRESENT"));
@@ -80,13 +86,15 @@ class StaffAttendanceIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/staff-attendance")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(remarkPayload))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.entries[?(@.employeeId == '" + employeeId + "')].status").value("HALF_DAY"));
 
 		mockMvc.perform(get("/api/v1/employees/" + employeeId + "/attendance")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, bearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalRecords").value(1))
 				.andExpect(jsonPath("$.data.halfDayCount").value(1))
