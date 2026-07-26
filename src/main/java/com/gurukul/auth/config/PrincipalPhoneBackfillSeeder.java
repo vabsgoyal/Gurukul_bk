@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,21 +22,26 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Dev/local/test only: backfills one ADMIN credential (username=admin, password=admin123) for
- * every school that doesn't already have one, so there's always a way to log in and provision
- * further credentials. Never runs under the "prod" profile - a fixed global password is a much
- * more dangerous exposure than PrincipalPhoneBackfillSeeder's phone-based login, so unlike that
- * one, this stays dev-only. Production must provision its first admin credential through a
- * separate, deliberate process (see AdminBackfillService, the ops-secret-gated equivalent).
+ * Runs in EVERY profile including prod - deliberately, per an explicit product decision to keep
+ * OTP login live in production despite it still using a hardcoded dummy code ("1234", see
+ * OtpService) rather than a real SMS-verified one. Backfills a shared, memorable Principal phone
+ * number (9999999999) with an explicit ADMIN credential for any school that doesn't have one yet,
+ * so every school - old or new - has a working way to log in as Principal via OTP.
+ *
+ * Kept separate from DevAdminSeeder on purpose: that one seeds a fixed global password
+ * (admin/admin123), a strictly more dangerous exposure than a phone number, and stays dev-only.
+ *
+ * Known accepted risk: this number is identical across every school and pairs with a dummy OTP
+ * that accepts "1234" for ANY phone on file - not just this one. Re-evaluate this seeder (and
+ * OtpService's dummy code) once a real SMS provider is integrated.
  */
 @Component
-@Profile("!prod")
 @RequiredArgsConstructor
 @Slf4j
-public class DevAdminSeeder implements ApplicationRunner {
+public class PrincipalPhoneBackfillSeeder implements ApplicationRunner {
 
-	private static final String DEV_USERNAME = "admin";
-	private static final String DEV_PASSWORD = "admin123";
+	private static final String PRINCIPAL_PHONE = "9999999999";
+	private static final String PRINCIPAL_EMPLOYEE_NAME = "Principal";
 
 	private final SchoolRepository schoolRepository;
 	private final EmployeeRepository employeeRepository;
@@ -53,35 +57,36 @@ public class DevAdminSeeder implements ApplicationRunner {
 	}
 
 	private void seedIfMissing(UUID schoolId) {
-		if (credentialRepository.existsBySchoolIdAndUsername(schoolId, DEV_USERNAME)) {
+		if (credentialRepository.existsBySchoolIdAndUsername(schoolId, PRINCIPAL_PHONE)) {
 			return;
 		}
 
-		Employee admin = employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
-				.filter(e -> "System Admin".equals(e.getName()))
+		Employee principal = employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
+				.filter(e -> PRINCIPAL_EMPLOYEE_NAME.equals(e.getName()))
 				.findFirst()
 				.orElseGet(() -> {
 					Employee employee = new Employee();
 					employee.setSchoolId(schoolId);
-					employee.setName("System Admin");
-					employee.setDesignation("Administrator");
+					employee.setName(PRINCIPAL_EMPLOYEE_NAME);
+					employee.setDesignation("Principal");
 					employee.setJoinDate(LocalDate.now());
 					employee.setStatus(EmployeeStatus.ACTIVE);
 					employee.setEmployeeType(EmployeeType.NON_TEACHING);
+					employee.setContactPhone(PRINCIPAL_PHONE);
 					return employeeRepository.save(employee);
 				});
 
 		Credential credential = new Credential();
 		credential.setSchoolId(schoolId);
 		credential.setOwnerType(OwnerType.EMPLOYEE);
-		credential.setOwnerId(admin.getId());
-		credential.setUsername(DEV_USERNAME);
-		credential.setPasswordHash(passwordEncoder.encode(DEV_PASSWORD));
+		credential.setOwnerId(principal.getId());
+		credential.setUsername(PRINCIPAL_PHONE);
+		credential.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
 		credential.setRole(Role.ADMIN);
 		credentialRepository.save(credential);
 
-		log.warn("Seeded DEV-ONLY admin credential for school {}: username={} password={} - never use in production",
-				schoolId, DEV_USERNAME, DEV_PASSWORD);
+		log.warn("Seeded Principal OTP login for school {}: phone={} otp=1234 - accepted-risk backdoor, "
+				+ "runs in every profile including prod until real SMS is integrated", schoolId, PRINCIPAL_PHONE);
 	}
 
 }
