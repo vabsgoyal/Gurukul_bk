@@ -118,7 +118,8 @@ class StudentEnrollmentIntegrationTest {
 								  "contactPhone": "9000000099",
 								  "principalName": "Dr. Other",
 								  "directorName": "Mr. Other",
-								  "adminPhone": "9000000099"
+								  "principalPhone": "9000000099",
+								  "adminPhone": "8000000099"
 								}
 								"""))
 				.andExpect(status().isOk())

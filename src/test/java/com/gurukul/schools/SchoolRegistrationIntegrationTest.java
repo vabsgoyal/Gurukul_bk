@@ -25,6 +25,7 @@ class SchoolRegistrationIntegrationTest {
 	private MockMvc mockMvc;
 
 	private static String schoolRegistrationJson(String name, String address, String email, String phone) {
+		String adminPhone = "8" + phone.substring(1);
 		return """
 				{
 				  "name": "%s",
@@ -36,14 +37,15 @@ class SchoolRegistrationIntegrationTest {
 				  "contactPhone": "%s",
 				  "principalName": "Dr. Test Principal",
 				  "directorName": "Mr. Test Director",
+				  "principalPhone": "%s",
 				  "adminPhone": "%s"
 				}
-				""".formatted(name, address, email, phone, phone);
+				""".formatted(name, address, email, phone, phone, adminPhone);
 	}
 
 	@Test
 	void registerSchoolWithoutHeader() throws Exception {
-		mockMvc.perform(post("/api/v1/schools")
+		MvcResult result = mockMvc.perform(post("/api/v1/schools")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(schoolRegistrationJson(
 								"New Public School", "10 Main Street", "office@nps.example", "9123456789")))
@@ -53,9 +55,16 @@ class SchoolRegistrationIntegrationTest {
 				.andExpect(jsonPath("$.data.school.studentCount").value(0))
 				.andExpect(jsonPath("$.data.school.classSectionCount").value(0))
 				.andExpect(jsonPath("$.data.school.teacherCount").value(0))
+				.andExpect(jsonPath("$.data.principal.token").exists())
+				.andExpect(jsonPath("$.data.principal.role").value("ADMIN"))
 				.andExpect(jsonPath("$.data.admin.token").exists())
 				.andExpect(jsonPath("$.data.admin.role").value("ADMIN"))
-				.andExpect(jsonPath("$.message").value("School registered"));
+				.andExpect(jsonPath("$.message").value("School registered"))
+				.andReturn();
+
+		String principalOwnerId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.principal.ownerId");
+		String adminOwnerId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.admin.ownerId");
+		org.assertj.core.api.Assertions.assertThat(principalOwnerId).isNotEqualTo(adminOwnerId);
 	}
 
 	@Test

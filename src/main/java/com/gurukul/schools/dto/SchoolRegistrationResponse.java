@@ -7,10 +7,11 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-@Schema(description = "Registered school plus an auto-issued admin login token")
+@Schema(description = "Registered school plus auto-issued Principal and Admin login tokens")
 public class SchoolRegistrationResponse {
 
 	private SchoolResponse school;
+	private LoginResponse principal;
 	private LoginResponse admin;
 
 }
