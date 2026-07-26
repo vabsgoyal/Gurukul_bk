@@ -43,6 +43,10 @@ public class SchoolService {
 
 	@Transactional
 	public SchoolRegistrationResponse register(SchoolRegistrationRequest request) {
+		if (request.getPrincipalPhone().equals(request.getAdminPhone())) {
+			throw new IllegalArgumentException("principalPhone and adminPhone must be different numbers");
+		}
+
 		School school = new School();
 		school.setName(request.getName());
 		school.setAddress(request.getAddress());
@@ -55,34 +59,39 @@ public class SchoolService {
 		school.setDirectorName(request.getDirectorName());
 		School saved = schoolRepository.save(school);
 
-		Employee admin = new Employee();
-		admin.setSchoolId(saved.getId());
-		admin.setName(request.getPrincipalName());
-		admin.setDesignation("Principal");
-		admin.setJoinDate(LocalDate.now());
-		admin.setStatus(EmployeeStatus.ACTIVE);
-		admin.setEmployeeType(EmployeeType.NON_TEACHING);
-		admin.setContactPhone(request.getAdminPhone());
-		admin = employeeRepository.save(admin);
+		LoginResponse principalLogin = createAdminLogin(saved.getId(), request.getPrincipalName(), "Principal",
+				request.getPrincipalPhone(), request.getPrincipalUsername(), request.getPrincipalPassword());
+		LoginResponse adminLogin = createAdminLogin(saved.getId(), request.getDirectorName(), "Administrator",
+				request.getAdminPhone(), request.getAdminUsername(), request.getAdminPassword());
+
+		return new SchoolRegistrationResponse(toResponse(saved), principalLogin, adminLogin);
+	}
+
+	private LoginResponse createAdminLogin(
+			UUID schoolId, String name, String designation, String phone, String username, String password) {
+		Employee employee = new Employee();
+		employee.setSchoolId(schoolId);
+		employee.setName(name);
+		employee.setDesignation(designation);
+		employee.setJoinDate(LocalDate.now());
+		employee.setStatus(EmployeeStatus.ACTIVE);
+		employee.setEmployeeType(EmployeeType.NON_TEACHING);
+		employee.setContactPhone(phone);
+		employee = employeeRepository.save(employee);
 
 		Credential credential = new Credential();
-		credential.setSchoolId(saved.getId());
+		credential.setSchoolId(schoolId);
 		credential.setOwnerType(OwnerType.EMPLOYEE);
-		credential.setOwnerId(admin.getId());
-		credential.setUsername(request.getAdminUsername() != null && !request.getAdminUsername().isBlank()
-				? request.getAdminUsername() : request.getAdminPhone());
-		String password = request.getAdminPassword() != null && !request.getAdminPassword().isBlank()
-				? request.getAdminPassword() : UUID.randomUUID().toString();
-		credential.setPasswordHash(passwordEncoder.encode(password));
+		credential.setOwnerId(employee.getId());
+		credential.setUsername(username != null && !username.isBlank() ? username : phone);
+		credential.setPasswordHash(passwordEncoder.encode(
+				password != null && !password.isBlank() ? password : UUID.randomUUID().toString()));
 		credential.setRole(Role.ADMIN);
 		credential = credentialRepository.save(credential);
 
 		String token = jwtService.generateToken(credential);
-		LoginResponse adminLogin = new LoginResponse(
-				token, "Bearer", credential.getOwnerType(), credential.getOwnerId(),
+		return new LoginResponse(token, "Bearer", credential.getOwnerType(), credential.getOwnerId(),
 				credential.getRole(), credential.getSchoolId(), credential.getUsername());
-
-		return new SchoolRegistrationResponse(toResponse(saved), adminLogin);
 	}
 
 	public SchoolResponse getById(UUID id) {

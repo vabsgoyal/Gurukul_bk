@@ -8,6 +8,7 @@ import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.entity.EmployeeStatus;
 import com.gurukul.employees.entity.EmployeeType;
 import com.gurukul.employees.repository.EmployeeRepository;
+import com.gurukul.schools.entity.School;
 import com.gurukul.schools.repository.SchoolRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,9 +23,10 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Dev/local/test only: seeds one ADMIN credential (username=admin, password=admin123) for the demo
- * school so there is a way to log in and provision further credentials. Never runs under the "prod"
- * profile - production must provision its first admin credential through a separate, deliberate process.
+ * Dev/local/test only: backfills one ADMIN credential (username=admin, password=admin123) for
+ * every school that doesn't already have one, so there's always a way to log in and provision
+ * further credentials. Never runs under the "prod" profile - production must provision its first
+ * admin credential through a separate, deliberate process.
  */
 @Component
 @Profile("!prod")
@@ -32,7 +34,6 @@ import java.util.UUID;
 @Slf4j
 public class DevAdminSeeder implements ApplicationRunner {
 
-	private static final UUID DEMO_SCHOOL_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 	private static final String DEV_USERNAME = "admin";
 	private static final String DEV_PASSWORD = "admin123";
 
@@ -44,19 +45,22 @@ public class DevAdminSeeder implements ApplicationRunner {
 	@Override
 	@Transactional
 	public void run(ApplicationArguments args) {
-		if (schoolRepository.findById(DEMO_SCHOOL_ID).isEmpty()) {
-			return;
+		for (School school : schoolRepository.findAll()) {
+			seedIfMissing(school.getId());
 		}
-		if (credentialRepository.existsBySchoolIdAndUsername(DEMO_SCHOOL_ID, DEV_USERNAME)) {
+	}
+
+	private void seedIfMissing(UUID schoolId) {
+		if (credentialRepository.existsBySchoolIdAndUsername(schoolId, DEV_USERNAME)) {
 			return;
 		}
 
-		Employee admin = employeeRepository.findAllBySchoolIdOrderByNameAsc(DEMO_SCHOOL_ID).stream()
+		Employee admin = employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
 				.filter(e -> "System Admin".equals(e.getName()))
 				.findFirst()
 				.orElseGet(() -> {
 					Employee employee = new Employee();
-					employee.setSchoolId(DEMO_SCHOOL_ID);
+					employee.setSchoolId(schoolId);
 					employee.setName("System Admin");
 					employee.setDesignation("Administrator");
 					employee.setJoinDate(LocalDate.now());
@@ -66,7 +70,7 @@ public class DevAdminSeeder implements ApplicationRunner {
 				});
 
 		Credential credential = new Credential();
-		credential.setSchoolId(DEMO_SCHOOL_ID);
+		credential.setSchoolId(schoolId);
 		credential.setOwnerType(OwnerType.EMPLOYEE);
 		credential.setOwnerId(admin.getId());
 		credential.setUsername(DEV_USERNAME);
@@ -74,8 +78,8 @@ public class DevAdminSeeder implements ApplicationRunner {
 		credential.setRole(Role.ADMIN);
 		credentialRepository.save(credential);
 
-		log.warn("Seeded DEV-ONLY admin credential for demo school {}: username={} password={} - never use in production",
-				DEMO_SCHOOL_ID, DEV_USERNAME, DEV_PASSWORD);
+		log.warn("Seeded DEV-ONLY admin credential for school {}: username={} password={} - never use in production",
+				schoolId, DEV_USERNAME, DEV_PASSWORD);
 	}
 
 }
