@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -34,6 +35,12 @@ public class EmployeeController {
 	@Operation(summary = "List employees")
 	public ApiResponse<List<EmployeeResponse>> list() {
 		return ApiResponse.success(employeeService.list());
+	}
+
+	@GetMapping("/search")
+	@Operation(summary = "Search employees by name", description = "Fuzzy, typo-tolerant match against name for the current school.")
+	public ApiResponse<List<EmployeeResponse>> search(@RequestParam String q) {
+		return ApiResponse.success(employeeService.search(q));
 	}
 
 	@GetMapping("/{id}")
