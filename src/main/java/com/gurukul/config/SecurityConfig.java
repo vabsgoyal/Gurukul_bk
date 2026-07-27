@@ -55,6 +55,19 @@ public class SecurityConfig {
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")
+						// Chat: conversations/messages/bot need to know the sender's identity, so all require
+						// auth. Student-vs-student pairing is rejected in the service layer (depends on
+						// resolving both parties' owner types, which method+path matching can't express).
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/bot/conversation").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// Announcements: creation role-gated here; the fine-grained "which section" check
+						// happens in AnnouncementService via the caller's AuthPrincipal.
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
+						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
 						// Everything else is unchanged (no auth) for now - see auth ticket for phased retrofit scope.
 						.anyRequest().permitAll());
 		return http.build();
