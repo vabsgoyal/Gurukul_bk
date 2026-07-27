@@ -10,5 +10,13 @@ PORT="${PORT:-8080}"
 
 aws s3 cp "$S3_URI" "$JAR_PATH" --region "$AWS_REGION"
 sudo systemctl restart gurukul-backend
-sleep 25
-curl -sf "http://localhost:${PORT}/actuator/health"
+
+for i in $(seq 1 18); do
+	if curl -sf "http://localhost:${PORT}/actuator/health"; then
+		exit 0
+	fi
+	sleep 5
+done
+
+echo "Health check failed after 90s" >&2
+exit 1
