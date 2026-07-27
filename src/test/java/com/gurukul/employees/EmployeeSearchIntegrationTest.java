@@ -84,7 +84,9 @@ class EmployeeSearchIntegrationTest {
 				  "contactEmail": "other-emp-search@school.example",
 				  "contactPhone": "9000000097",
 				  "principalName": "Dr. Other",
-				  "directorName": "Mr. Other"
+				  "directorName": "Mr. Other",
+				  "principalPhone": "9000000097",
+				  "adminPhone": "8000000097"
 				}
 				""";
 
@@ -94,7 +96,7 @@ class EmployeeSearchIntegrationTest {
 				.andExpect(status().isOk())
 				.andReturn();
 		String otherSchoolId = com.jayway.jsonpath.JsonPath.read(
-				result.getResponse().getContentAsString(), "$.data.id");
+				result.getResponse().getContentAsString(), "$.data.school.id");
 
 		mockMvc.perform(get("/api/v1/employees/search")
 						.header("X-School-Id", otherSchoolId)
