@@ -1,6 +1,7 @@
 package com.gurukul.students.service;
 
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.students.dto.StudentClassSectionUpdateRequest;
 import com.gurukul.students.dto.StudentRequest;
@@ -14,12 +15,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class StudentService {
+
+	private static final int SEARCH_RESULT_LIMIT = 50;
 
 	private final StudentRepository studentRepository;
 	private final SchoolContext schoolContext;
@@ -30,6 +34,34 @@ public class StudentService {
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
 				.map(StudentResponse::from)
 				.toList();
+	}
+
+	public List<StudentResponse> search(String query) {
+		requireQuery(query);
+		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
+				.filter(s -> FuzzyMatcher.anyFieldMatches(query, s.getName(), s.getRollNumber()))
+				.sorted(Comparator.comparingDouble(
+						(Student s) -> FuzzyMatcher.bestScore(query, s.getName(), s.getRollNumber())).reversed())
+				.limit(SEARCH_RESULT_LIMIT)
+				.map(StudentResponse::from)
+				.toList();
+	}
+
+	public List<StudentResponse> searchByParent(String query) {
+		requireQuery(query);
+		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
+				.filter(s -> FuzzyMatcher.anyFieldMatches(query, s.getParentName(), s.getParentContact(), s.getName()))
+				.sorted(Comparator.comparingDouble((Student s) -> FuzzyMatcher.bestScore(
+						query, s.getParentName(), s.getParentContact(), s.getName())).reversed())
+				.limit(SEARCH_RESULT_LIMIT)
+				.map(StudentResponse::from)
+				.toList();
+	}
+
+	private void requireQuery(String query) {
+		if (query == null || query.isBlank()) {
+			throw new IllegalArgumentException("Search query must not be blank");
+		}
 	}
 
 	public List<StudentResponse> listByClassSection(String className, String section, String academicYear) {

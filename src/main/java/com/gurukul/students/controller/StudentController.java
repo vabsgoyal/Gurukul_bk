@@ -76,6 +76,40 @@ public class StudentController {
 		return ApiResponse.success(studentService.listByClassSection(className, section, academicYear));
 	}
 
+	@GetMapping("/search")
+	@Operation(
+			summary = "Search students by name or roll number",
+			description = "Fuzzy, typo-tolerant match against name and roll number for the current school."
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Matching students returned"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Blank query")
+	})
+	public ApiResponse<List<StudentResponse>> search(
+			@Parameter(description = "Search term", required = true, example = "Rahul")
+			@RequestParam String q) {
+		return ApiResponse.success(studentService.search(q));
+	}
+
+	@GetMapping("/search-parents")
+	@Operation(
+			summary = "Search students by parent name, parent contact, or student name",
+			description = """
+					Used by teachers to look up a parent/guardian. There is no separate parent record —
+					this matches against the parentName, parentContact, and name fields on Student.
+					Fuzzy, typo-tolerant match.
+					"""
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Matching students returned"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Blank query")
+	})
+	public ApiResponse<List<StudentResponse>> searchParents(
+			@Parameter(description = "Search term", required = true, example = "9876543210")
+			@RequestParam String q) {
+		return ApiResponse.success(studentService.searchByParent(q));
+	}
+
 	@GetMapping("/{id}")
 	@Operation(
 			summary = "Get student by ID",

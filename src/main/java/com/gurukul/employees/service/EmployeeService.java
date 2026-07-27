@@ -1,6 +1,7 @@
 package com.gurukul.employees.service;
 
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.dto.EmployeeRequest;
 import com.gurukul.employees.dto.EmployeeResponse;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,11 +20,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EmployeeService {
 
+	private static final int SEARCH_RESULT_LIMIT = 50;
+
 	private final EmployeeRepository employeeRepository;
 	private final SchoolContext schoolContext;
 
 	public List<EmployeeResponse> list() {
 		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolContext.getSchoolId()).stream()
+				.map(EmployeeResponse::from)
+				.toList();
+	}
+
+	public List<EmployeeResponse> search(String query) {
+		if (query == null || query.isBlank()) {
+			throw new IllegalArgumentException("Search query must not be blank");
+		}
+		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolContext.getSchoolId()).stream()
+				.filter(e -> FuzzyMatcher.anyFieldMatches(query, e.getName()))
+				.sorted(Comparator.comparingDouble((Employee e) -> FuzzyMatcher.bestScore(query, e.getName())).reversed())
+				.limit(SEARCH_RESULT_LIMIT)
 				.map(EmployeeResponse::from)
 				.toList();
 	}
