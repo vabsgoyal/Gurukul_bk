@@ -67,7 +67,7 @@ class BotReplyServiceTest {
 
 	@Test
 	void blankApiKeyShortCircuitsWithoutCallingAnthropic() {
-		AnthropicProperties properties = new AnthropicProperties("", "claude-opus-5", "MEDIUM", 512, 5, 10);
+		AnthropicProperties properties = new AnthropicProperties("direct", "", "claude-opus-5", "MEDIUM", 512, 5, 10);
 		BotReplyService service = new BotReplyService(
 				anthropicClient, properties, toolRegistry, principalContextRunner, messageService, messagingTemplate);
 
@@ -89,7 +89,7 @@ class BotReplyServiceTest {
 
 	@Test
 	void endTurnResponseIsPersistedAndBroadcastVerbatim() {
-		AnthropicProperties properties = new AnthropicProperties("test-key", "claude-opus-5", "MEDIUM", 512, 5, 10);
+		AnthropicProperties properties = new AnthropicProperties("direct", "test-key", "claude-opus-5", "MEDIUM", 512, 5, 10);
 		BotReplyService service = new BotReplyService(
 				anthropicClient, properties, toolRegistry, principalContextRunner, messageService, messagingTemplate);
 

@@ -75,7 +75,7 @@ public class BotReplyService {
 	private final SimpMessagingTemplate messagingTemplate;
 
 	public Message generateReply(Conversation conversation, Message incomingMessage, AuthPrincipal principal) {
-		if (properties.apiKey() == null || properties.apiKey().isBlank()) {
+		if (!properties.isConfigured()) {
 			return reply(conversation, "The helpdesk bot isn't configured yet - please contact your school admin.");
 		}
 		try {
