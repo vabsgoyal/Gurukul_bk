@@ -19,6 +19,21 @@
 		<springdoc.version>3.0.2</springdoc.version>
 	</properties>
 
+	<dependencyManagement>
+		<dependencies>
+			<!-- Pins the AWS SDK v2 version used by both anthropic-java-bedrock and the RDS IAM
+			     JDBC wrapper's `rds` dependency below, so the classpath doesn't end up with a
+			     mismatched mix (which surfaces as NoClassDefFoundError at runtime). -->
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>2.33.1</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -118,7 +133,6 @@
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>rds</artifactId>
-			<version>2.31.62</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
