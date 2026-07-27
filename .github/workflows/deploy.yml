@@ -60,12 +60,13 @@ jobs:
       - name: Deploy to EC2 via SSM
         env:
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Gurukul JAR deploy ${GITHUB_SHA}" \
-            --parameters 'commands=["/opt/gurukul/deploy-from-s3.sh"]' \
+            --parameters "{\"commands\":[\"sudo sed -i '/^ANTHROPIC_API_KEY=/d' /etc/gurukul/backend.env; echo 'ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}' | sudo tee -a /etc/gurukul/backend.env >/dev/null; /opt/gurukul/deploy-from-s3.sh\"]}" \
             --region "${AWS_REGION}" \
             --output text \
             --query 'Command.CommandId' > command_id.txt
