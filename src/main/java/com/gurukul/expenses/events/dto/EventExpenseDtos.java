@@ -75,6 +75,7 @@ public class EventExpenseDtos {
 	}
 
 	@Getter @Setter
+	@Schema(name = "EventExpensePayRequest")
 	public static class PayRequest {
 		@NotNull private UUID vendorId;
 		@NotNull private PaymentMethod paymentMethod;
@@ -83,6 +84,7 @@ public class EventExpenseDtos {
 	}
 
 	@Getter @Setter
+	@Schema(name = "EventExpenseApprovalActionRequest")
 	public static class ApprovalActionRequest {
 		private String actor;
 		private String comment;

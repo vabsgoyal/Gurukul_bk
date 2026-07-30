@@ -58,6 +58,7 @@ public class InfraExpenseDtos {
 	}
 
 	@Getter @Setter
+	@Schema(name = "InfraExpensePayRequest")
 	public static class PayRequest {
 		@NotNull private PaymentMethod paymentMethod;
 		private String paymentReference;
@@ -65,6 +66,7 @@ public class InfraExpenseDtos {
 	}
 
 	@Getter @Setter
+	@Schema(name = "InfraExpenseApprovalActionRequest")
 	public static class ApprovalActionRequest {
 		private String actor;
 		private String comment;
