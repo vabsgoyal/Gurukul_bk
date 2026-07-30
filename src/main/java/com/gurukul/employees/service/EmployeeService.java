@@ -1,5 +1,9 @@
 package com.gurukul.employees.service;
 
+import com.gurukul.auth.entity.Credential;
+import com.gurukul.auth.entity.OwnerType;
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.repository.CredentialRepository;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.SchoolContext;
@@ -14,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,11 +29,14 @@ public class EmployeeService {
 	private static final int SEARCH_RESULT_LIMIT = 50;
 
 	private final EmployeeRepository employeeRepository;
+	private final CredentialRepository credentialRepository;
 	private final SchoolContext schoolContext;
 
 	public List<EmployeeResponse> list() {
-		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolContext.getSchoolId()).stream()
-				.map(EmployeeResponse::from)
+		UUID schoolId = schoolContext.getSchoolId();
+		Map<UUID, Role> roles = rolesByEmployeeId(schoolId);
+		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
+				.map(e -> EmployeeResponse.from(e, roles.get(e.getId())))
 				.toList();
 	}
 
@@ -35,16 +44,30 @@ public class EmployeeService {
 		if (query == null || query.isBlank()) {
 			throw new IllegalArgumentException("Search query must not be blank");
 		}
-		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolContext.getSchoolId()).stream()
+		UUID schoolId = schoolContext.getSchoolId();
+		Map<UUID, Role> roles = rolesByEmployeeId(schoolId);
+		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
 				.filter(e -> FuzzyMatcher.anyFieldMatches(query, e.getName()))
 				.sorted(Comparator.comparingDouble((Employee e) -> FuzzyMatcher.bestScore(query, e.getName())).reversed())
 				.limit(SEARCH_RESULT_LIMIT)
-				.map(EmployeeResponse::from)
+				.map(e -> EmployeeResponse.from(e, roles.get(e.getId())))
 				.toList();
 	}
 
 	public EmployeeResponse getById(UUID id) {
-		return EmployeeResponse.from(findScoped(id));
+		Employee employee = findScoped(id);
+		return EmployeeResponse.from(employee, roleOf(id));
+	}
+
+	private Role roleOf(UUID employeeId) {
+		return credentialRepository.findByOwnerTypeAndOwnerId(OwnerType.EMPLOYEE, employeeId)
+				.map(Credential::getRole)
+				.orElse(null);
+	}
+
+	private Map<UUID, Role> rolesByEmployeeId(UUID schoolId) {
+		return credentialRepository.findAllBySchoolIdAndOwnerType(schoolId, OwnerType.EMPLOYEE).stream()
+				.collect(Collectors.toMap(Credential::getOwnerId, Credential::getRole, (a, b) -> a));
 	}
 
 	@Transactional
@@ -53,7 +76,8 @@ public class EmployeeService {
 		employee.setSchoolId(schoolContext.getSchoolId());
 		applyRequest(employee, request);
 		employee.setStatus(request.getStatus() != null ? request.getStatus() : EmployeeStatus.ACTIVE);
-		return EmployeeResponse.from(employeeRepository.save(employee));
+		Employee saved = employeeRepository.save(employee);
+		return EmployeeResponse.from(saved, null);
 	}
 
 	@Transactional
@@ -63,7 +87,9 @@ public class EmployeeService {
 		if (request.getStatus() != null) {
 			employee.setStatus(request.getStatus());
 		}
-		return EmployeeResponse.from(employeeRepository.save(employee));
+		Employee saved = employeeRepository.save(employee);
+		Role role = credentialRepository.findByOwnerTypeAndOwnerId(OwnerType.EMPLOYEE, id).map(c -> c.getRole()).orElse(null);
+		return EmployeeResponse.from(saved, role);
 	}
 
 	public Employee getScopedEntity(UUID id) {

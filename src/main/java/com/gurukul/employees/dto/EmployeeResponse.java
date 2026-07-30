@@ -1,5 +1,6 @@
 package com.gurukul.employees.dto;
 
+import com.gurukul.auth.entity.Role;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.entity.EmployeeStatus;
 import com.gurukul.employees.entity.EmployeeType;
@@ -26,10 +27,14 @@ public class EmployeeResponse {
 	private String contactEmail;
 	private EmployeeStatus status;
 	private EmployeeType employeeType;
+
+	@Schema(description = "Login role, if credentials have been provisioned for this employee (null otherwise)")
+	private Role role;
+
 	private Instant createdAt;
 	private Instant updatedAt;
 
-	public static EmployeeResponse from(Employee employee) {
+	public static EmployeeResponse from(Employee employee, Role role) {
 		return new EmployeeResponse(
 				employee.getId(),
 				employee.getSchoolId(),
@@ -41,6 +46,7 @@ public class EmployeeResponse {
 				employee.getContactEmail(),
 				employee.getStatus(),
 				employee.getEmployeeType(),
+				role,
 				employee.getCreatedAt(),
 				employee.getUpdatedAt()
 		);
