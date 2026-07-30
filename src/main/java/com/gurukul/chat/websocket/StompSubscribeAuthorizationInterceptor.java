@@ -1,5 +1,6 @@
 package com.gurukul.chat.websocket;
 
+import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.chat.service.AnnouncementService;
 import com.gurukul.chat.service.ConversationService;
@@ -31,6 +32,8 @@ public class StompSubscribeAuthorizationInterceptor implements ChannelIntercepto
 			Pattern.compile("^/topic/schools/([0-9a-fA-F-]{36})/announcements$");
 	private static final Pattern SECTION_ANNOUNCEMENTS_TOPIC =
 			Pattern.compile("^/topic/sections/([0-9a-fA-F-]{36})/announcements$");
+	private static final Pattern USER_CALLS_TOPIC =
+			Pattern.compile("^/topic/users/([0-9a-fA-F-]{36})/(EMPLOYEE|STUDENT)/([0-9a-fA-F-]{36})/calls$");
 
 	private final ConversationService conversationService;
 	private final AnnouncementService announcementService;
@@ -66,6 +69,17 @@ public class StompSubscribeAuthorizationInterceptor implements ChannelIntercepto
 		if (sectionMatch.matches()) {
 			if (!announcementService.isSectionVisibleTo(principal, UUID.fromString(sectionMatch.group(1)))) {
 				throw new StompAuthenticationException("Not authorized for this section's announcements");
+			}
+			return message;
+		}
+
+		Matcher userCallsMatch = USER_CALLS_TOPIC.matcher(destination);
+		if (userCallsMatch.matches()) {
+			boolean isOwnTopic = principal.getSchoolId().toString().equalsIgnoreCase(userCallsMatch.group(1))
+					&& principal.getOwnerType() == OwnerType.valueOf(userCallsMatch.group(2))
+					&& principal.getOwnerId().toString().equalsIgnoreCase(userCallsMatch.group(3));
+			if (!isOwnTopic) {
+				throw new StompAuthenticationException("You may only subscribe to your own call topic");
 			}
 			return message;
 		}

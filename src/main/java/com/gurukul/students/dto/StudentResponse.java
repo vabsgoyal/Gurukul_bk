@@ -57,6 +57,12 @@ public class StudentResponse {
 	@Schema(description = "Display label for class-section", example = "Grade 8 - A (2026-27)")
 	private String classSectionLabel;
 
+	@Schema(description = "This class-section's assigned class teacher, if any")
+	private UUID classTeacherId;
+
+	@Schema(description = "Class teacher's name, if assigned")
+	private String classTeacherName;
+
 	@Schema(description = "Admission date", example = "2026-04-01")
 	private LocalDate admissionDate;
 
@@ -85,6 +91,8 @@ public class StudentResponse {
 				student.getClassSection().getSection(),
 				student.getClassSection().getAcademicYear(),
 				student.getClassSection().getDisplayLabel(),
+				student.getClassSection().getClassTeacher() != null ? student.getClassSection().getClassTeacher().getId() : null,
+				student.getClassSection().getClassTeacher() != null ? student.getClassSection().getClassTeacher().getName() : null,
 				student.getAdmissionDate(),
 				student.getStatus(),
 				student.getCreatedAt(),
