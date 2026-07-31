@@ -16,6 +16,7 @@ import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.service.EmployeeService;
+import com.gurukul.gamification.service.GamificationService;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
@@ -41,6 +42,7 @@ public class AttendanceService {
 	private final ClassSectionService classSectionService;
 	private final EmployeeService employeeService;
 	private final SchoolContext schoolContext;
+	private final GamificationService gamificationService;
 
 	@Transactional
 	public SectionAttendanceResponse markSection(UUID sectionId, BulkAttendanceRequest request) {
@@ -69,6 +71,7 @@ public class AttendanceService {
 			record.setMarkedByTeacher(teacher);
 			record.setRemarks(entry.getRemarks());
 			attendanceRecordRepository.save(record);
+			gamificationService.recordAttendanceXp(schoolId, student.getId(), request.getDate(), entry.getStatus());
 		}
 
 		return getSectionRoster(sectionId, request.getDate());
