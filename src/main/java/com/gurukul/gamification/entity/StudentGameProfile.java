@@ -3,6 +3,8 @@ package com.gurukul.gamification.entity;
 import com.gurukul.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -29,5 +31,15 @@ public class StudentGameProfile extends BaseEntity {
 
 	@Column(name = "longest_streak_days", nullable = false)
 	private int longestStreakDays;
+
+	/**
+	 * This week's league tier - weekly XP itself is never stored here, it's always computed live
+	 * from XpEvent for the current week (see LeagueService), so there's nothing to keep in sync
+	 * when XP is awarded from any source. Only the tier, which the weekly promotion sweep updates,
+	 * needs to persist.
+	 */
+	@Enumerated(EnumType.STRING)
+	@Column(name = "current_tier", nullable = false)
+	private LeagueTier currentTier = LeagueTier.BRONZE;
 
 }
