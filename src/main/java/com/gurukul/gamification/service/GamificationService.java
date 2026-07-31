@@ -98,7 +98,8 @@ public class GamificationService {
 		profile.setLongestStreakDays(Math.max(profile.getLongestStreakDays(), streak));
 	}
 
-	private StudentGameProfile getOrCreateProfile(UUID schoolId, UUID studentId) {
+	/** Also used by LeagueService, which needs the same get-or-create for peers on a leaderboard. */
+	public StudentGameProfile getOrCreateProfile(UUID schoolId, UUID studentId) {
 		return profileRepository.findBySchoolIdAndStudentId(schoolId, studentId)
 				.orElseGet(() -> {
 					StudentGameProfile profile = new StudentGameProfile();
