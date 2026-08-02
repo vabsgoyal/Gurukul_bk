@@ -17,6 +17,8 @@ import com.gurukul.gamification.entity.QuizQuestion;
 import com.gurukul.gamification.repository.PracticeAnswerRepository;
 import com.gurukul.gamification.repository.PracticeSessionRepository;
 import com.gurukul.gamification.repository.QuizQuestionRepository;
+import com.gurukul.students.entity.Student;
+import com.gurukul.students.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,7 @@ public class PracticeService {
 	private final PracticeAnswerRepository answerRepository;
 	private final QuizQuestionRepository quizQuestionRepository;
 	private final SubjectRepository subjectRepository;
+	private final StudentRepository studentRepository;
 
 	@Transactional
 	public PracticeSessionResponse createSession(AuthPrincipal principal, CreatePracticeSessionRequest request) {
@@ -53,10 +56,14 @@ public class PracticeService {
 		UUID schoolId = principal.getSchoolId();
 		Subject subject = subjectRepository.findByIdAndSchoolId(request.getSubjectId(), schoolId)
 				.orElseThrow(() -> new EntityNotFoundException("Subject not found"));
+		Student student = studentRepository.findByIdAndSchoolId(principal.getOwnerId(), schoolId)
+				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
+		String className = student.getClassSection().getClassName();
 
-		List<QuizQuestion> pool = new ArrayList<>(quizQuestionRepository.findAllBySchoolIdAndSubjectId(schoolId, subject.getId()));
+		List<QuizQuestion> pool = new ArrayList<>(
+				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(schoolId, subject.getId(), className));
 		if (pool.isEmpty()) {
-			throw new IllegalStateException("No " + subject.getName() + " questions available yet");
+			throw new IllegalStateException("No " + className + " " + subject.getName() + " questions available yet");
 		}
 		Collections.shuffle(pool, new SecureRandom());
 		List<QuizQuestion> picked = pool.subList(0, Math.min(QUESTIONS_PER_SESSION, pool.size()));
