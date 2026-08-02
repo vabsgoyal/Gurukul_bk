@@ -43,6 +43,9 @@ public class BattleRoom extends BaseEntity {
 	@Column(name = "created_by_student_id", nullable = false)
 	private UUID createdByStudentId;
 
+	@Column(name = "room_code", length = 6)
+	private String roomCode;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private BattleRoomStatus status;
