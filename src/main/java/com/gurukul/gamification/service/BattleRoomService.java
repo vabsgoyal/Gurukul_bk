@@ -8,6 +8,7 @@ import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.gamification.dto.ArenaDtos.PublicQuizQuestionResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleParticipantResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomResponse;
+import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomSummaryResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BuzzResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.CreateBattleRoomRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.MatchBattleRoomRequest;
@@ -175,6 +176,27 @@ public class BattleRoomService {
 	public BattleRoomResponse getRoom(AuthPrincipal principal, UUID roomId) {
 		requireStudent(principal);
 		return buildResponse(requireParticipant(principal, roomId));
+	}
+
+	/**
+	 * Browse list for a student's own class: every WAITING/ACTIVE room (COMPLETED/CANCELLED ones
+	 * are never worth listing here), optionally filtered to one subject. Class/academicYear are
+	 * derived from the caller's own enrollment, same as everywhere else in this service - never
+	 * client-supplied.
+	 */
+	@Transactional(readOnly = true)
+	public List<BattleRoomSummaryResponse> listBrowsableRooms(AuthPrincipal principal, UUID subjectId) {
+		requireStudent(principal);
+		Student student = requireOwnStudent(principal);
+		List<BattleRoom> rooms = battleRoomRepository.findBrowsableRoomsForClass(
+				principal.getSchoolId(), student.getClassSection().getClassName(),
+				student.getClassSection().getAcademicYear(), subjectId);
+
+		return rooms.stream()
+				.map(room -> new BattleRoomSummaryResponse(
+						room.getId(), room.getRoomCode(), room.getSubject().getName(), room.getClassName(),
+						room.getStatus(), (int) participantRepository.countByRoomId(room.getId()), room.getMaxPlayers()))
+				.toList();
 	}
 
 	@Transactional

@@ -3,6 +3,7 @@ package com.gurukul.gamification.controller;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomResponse;
+import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomSummaryResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.CreateBattleRoomRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.JoinByCodeRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.MatchBattleRoomRequest;
@@ -14,8 +15,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -59,6 +62,15 @@ public class BattleRoomController {
 	@Operation(summary = "Room/lobby state - also the final leaderboard once completed")
 	public ApiResponse<BattleRoomResponse> get(@PathVariable UUID id) {
 		return ApiResponse.success(battleRoomService.getRoom(AuthContext.current(), id));
+	}
+
+	@GetMapping("/api/v1/gamification/battle-rooms")
+	@Operation(summary = "Browse open rooms for your own class",
+			description = "Every WAITING or ACTIVE room for your class (any section), optionally filtered to one "
+					+ "subject. Only WAITING rooms can be joined - ACTIVE ones are listed so students can see a "
+					+ "battle is in progress, but joining mid-battle isn't supported.")
+	public ApiResponse<List<BattleRoomSummaryResponse>> list(@RequestParam(required = false) UUID subjectId) {
+		return ApiResponse.success(battleRoomService.listBrowsableRooms(AuthContext.current(), subjectId));
 	}
 
 }
