@@ -35,7 +35,8 @@ SELECT
     s.parent_contact AS old_parent_contact,
     substring(s.roll_number FROM 5)::bigint AS global_rn
 FROM student s
-WHERE s.school_id = '99999999-9999-9999-9999-999999999999';
+WHERE s.school_id = '99999999-9999-9999-9999-999999999999'
+  AND s.roll_number ~ '^JNV-[0-9]{5}$';
 
 UPDATE student st
 SET
@@ -57,13 +58,18 @@ WHERE c.school_id = '99999999-9999-9999-9999-999999999999'
   AND c.owner_id = f.id;
 
 -- Employees: derive rn from bank_account ('JNVBANK00000001' -> 1), recompute name/contact_phone/
--- contact_email (email is name-derived, so it must follow the corrected name).
+-- contact_email (email is name-derived, so it must follow the corrected name). Restricted to rows
+-- V25 actually created (bank_account matching its 'JNVBANK########' format) - runtime seeders
+-- (DevAdminSeeder/PrincipalPhoneBackfillSeeder) may have since added their own Principal/
+-- Administrator employees for this school with a different (or null) bank_account, which must be
+-- left untouched rather than crash this migration with a null derived rn.
 CREATE TEMP TABLE t_employee_fix AS
 SELECT
     e.id,
     substring(e.bank_account FROM 8)::bigint AS rn
 FROM employee e
-WHERE e.school_id = '99999999-9999-9999-9999-999999999999';
+WHERE e.school_id = '99999999-9999-9999-9999-999999999999'
+  AND e.bank_account ~ '^JNVBANK[0-9]{8}$';
 
 UPDATE employee emp
 SET
