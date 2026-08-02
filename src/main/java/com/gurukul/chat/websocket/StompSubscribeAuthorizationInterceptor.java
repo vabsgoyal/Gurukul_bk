@@ -4,7 +4,8 @@ import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.chat.service.AnnouncementService;
 import com.gurukul.chat.service.ConversationService;
-import lombok.RequiredArgsConstructor;
+import com.gurukul.gamification.service.BattleRoomService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.lang.NonNull;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -19,12 +20,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Authorizes STOMP SUBSCRIBE frames against the three chat topic shapes. Reuses
+ * Authorizes STOMP SUBSCRIBE frames against the chat/battle-room topic shapes. Reuses
  * ConversationService.requireParticipant and AnnouncementService's visibility checks so live WS
  * delivery and REST history/listing never disagree.
  */
 @Component
-@RequiredArgsConstructor
 public class StompSubscribeAuthorizationInterceptor implements ChannelInterceptor {
 
 	private static final Pattern CONVERSATION_TOPIC = Pattern.compile("^/topic/conversations/([0-9a-fA-F-]{36})$");
@@ -34,9 +34,23 @@ public class StompSubscribeAuthorizationInterceptor implements ChannelIntercepto
 			Pattern.compile("^/topic/sections/([0-9a-fA-F-]{36})/announcements$");
 	private static final Pattern USER_CALLS_TOPIC =
 			Pattern.compile("^/topic/users/([0-9a-fA-F-]{36})/(EMPLOYEE|STUDENT)/([0-9a-fA-F-]{36})/calls$");
+	private static final Pattern BATTLE_ROOM_TOPIC = Pattern.compile("^/topic/battle-rooms/([0-9a-fA-F-]{36})$");
 
 	private final ConversationService conversationService;
 	private final AnnouncementService announcementService;
+	private final BattleRoomService battleRoomService;
+
+	// BattleRoomService depends on SimpMessagingTemplate, which depends on this class's own
+	// WebSocketConfig - injecting it eagerly here creates a circular bean dependency. @Lazy makes
+	// Spring hand this constructor a proxy instead, deferring real initialization past startup.
+	public StompSubscribeAuthorizationInterceptor(
+			ConversationService conversationService,
+			AnnouncementService announcementService,
+			@Lazy BattleRoomService battleRoomService) {
+		this.conversationService = conversationService;
+		this.announcementService = announcementService;
+		this.battleRoomService = battleRoomService;
+	}
 
 	@Override
 	public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
@@ -80,6 +94,14 @@ public class StompSubscribeAuthorizationInterceptor implements ChannelIntercepto
 					&& principal.getOwnerId().toString().equalsIgnoreCase(userCallsMatch.group(3));
 			if (!isOwnTopic) {
 				throw new StompAuthenticationException("You may only subscribe to your own call topic");
+			}
+			return message;
+		}
+
+		Matcher battleRoomMatch = BATTLE_ROOM_TOPIC.matcher(destination);
+		if (battleRoomMatch.matches()) {
+			if (!battleRoomService.isParticipant(principal, UUID.fromString(battleRoomMatch.group(1)))) {
+				throw new StompAuthenticationException("You are not part of this battle room");
 			}
 			return message;
 		}

@@ -14,6 +14,9 @@ public enum XpSource {
 	@Schema(description = "Won a Gurukul Arena quiz battle")
 	QUIZ_WIN,
 
+	@Schema(description = "Won a live Battle Room")
+	BATTLE_ROOM_WIN,
+
 	@Schema(description = "Teacher-awarded class participation")
 	PARTICIPATION,
 
