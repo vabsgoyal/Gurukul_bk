@@ -62,11 +62,25 @@ jobs:
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # Always push the repo's deploy-from-s3.sh to the instance before running it, so the
+          # instance can never silently drift from what's committed (it previously did - a stale
+          # copy with a flat "sleep 25" instead of a real health-check retry loop caused
+          # intermittent false-failures on this exact step for several deploys).
+          SCRIPT_B64=$(base64 -w0 deploy/aws/deploy-from-s3.sh)
+          COMMANDS=$(jq -n --arg key "$ANTHROPIC_API_KEY" --arg script "$SCRIPT_B64" '[
+            "sudo sed -i /^ANTHROPIC_API_KEY=/d /etc/gurukul/backend.env",
+            "echo \"ANTHROPIC_API_KEY=\($key)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "echo \($script) | base64 -d | sudo tee /opt/gurukul/deploy-from-s3.sh >/dev/null",
+            "sudo chmod +x /opt/gurukul/deploy-from-s3.sh",
+            "/opt/gurukul/deploy-from-s3.sh"
+          ]')
+          PARAMS=$(jq -n --argjson cmds "$COMMANDS" '{commands: $cmds}')
+
           aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Gurukul JAR deploy ${GITHUB_SHA}" \
-            --parameters "{\"commands\":[\"sudo sed -i '/^ANTHROPIC_API_KEY=/d' /etc/gurukul/backend.env; echo 'ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}' | sudo tee -a /etc/gurukul/backend.env >/dev/null; /opt/gurukul/deploy-from-s3.sh\"]}" \
+            --parameters "$PARAMS" \
             --region "${AWS_REGION}" \
             --output text \
             --query 'Command.CommandId' > command_id.txt
