@@ -12,4 +12,6 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, UUID
 
 	long countBySchoolIdAndSubjectId(UUID schoolId, UUID subjectId);
 
+	List<QuizQuestion> findAllBySchoolIdAndSubjectIdAndClassName(UUID schoolId, UUID subjectId, String className);
+
 }

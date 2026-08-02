@@ -42,9 +42,9 @@ public class ArenaController {
 	}
 
 	@GetMapping("/api/v1/gamification/arena/questions")
-	@Operation(summary = "List a subject's question bank (teacher or admin only)")
-	public ApiResponse<List<QuizQuestionResponse>> listQuestions(@RequestParam UUID subjectId) {
-		return ApiResponse.success(arenaService.listQuestions(AuthContext.current(), subjectId));
+	@Operation(summary = "List a class + subject's question bank (teacher or admin only)")
+	public ApiResponse<List<QuizQuestionResponse>> listQuestions(@RequestParam UUID subjectId, @RequestParam String className) {
+		return ApiResponse.success(arenaService.listQuestions(AuthContext.current(), subjectId, className));
 	}
 
 	@PostMapping("/api/v1/gamification/arena/challenges")

@@ -19,6 +19,10 @@ public class ArenaDtos {
 	@Schema(name = "CreateQuizQuestionRequest")
 	public static class CreateQuizQuestionRequest {
 		@NotNull private UUID subjectId;
+		@NotBlank
+		@Schema(description = "Grade this question is scoped to, e.g. \"Grade 8\" - shared across all "
+				+ "that grade's sections", example = "Grade 8")
+		private String className;
 		@NotBlank private String questionText;
 		@NotBlank private String optionA;
 		@NotBlank private String optionB;
@@ -31,6 +35,7 @@ public class ArenaDtos {
 	@Schema(name = "QuizQuestionResponse", description = "Teacher/admin view - includes the correct answer")
 	public static class QuizQuestionResponse {
 		private UUID id;
+		private String className;
 		private String questionText;
 		private String optionA;
 		private String optionB;
@@ -40,7 +45,7 @@ public class ArenaDtos {
 
 		public static QuizQuestionResponse from(QuizQuestion q) {
 			return new QuizQuestionResponse(
-					q.getId(), q.getQuestionText(), q.getOptionA(), q.getOptionB(), q.getOptionC(), q.getOptionD(), q.getCorrectOption());
+					q.getId(), q.getClassName(), q.getQuestionText(), q.getOptionA(), q.getOptionB(), q.getOptionC(), q.getOptionD(), q.getCorrectOption());
 		}
 	}
 

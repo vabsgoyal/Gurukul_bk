@@ -75,6 +75,7 @@ public class ArenaService {
 		QuizQuestion question = new QuizQuestion();
 		question.setSchoolId(schoolId);
 		question.setSubject(subject);
+		question.setClassName(request.getClassName());
 		question.setQuestionText(request.getQuestionText());
 		question.setOptionA(request.getOptionA());
 		question.setOptionB(request.getOptionB());
@@ -85,11 +86,11 @@ public class ArenaService {
 		return QuizQuestionResponse.from(quizQuestionRepository.save(question));
 	}
 
-	public List<QuizQuestionResponse> listQuestions(AuthPrincipal principal, UUID subjectId) {
+	public List<QuizQuestionResponse> listQuestions(AuthPrincipal principal, UUID subjectId, String className) {
 		if (principal.getRole() != Role.ADMIN && principal.getRole() != Role.TEACHER) {
 			throw new AccessDeniedException("Only a teacher or admin can view the question bank");
 		}
-		return quizQuestionRepository.findAllBySchoolIdAndSubjectId(principal.getSchoolId(), subjectId).stream()
+		return quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(principal.getSchoolId(), subjectId, className).stream()
 				.map(QuizQuestionResponse::from)
 				.toList();
 	}
@@ -114,10 +115,14 @@ public class ArenaService {
 		Subject subject = subjectRepository.findByIdAndSchoolId(request.getSubjectId(), schoolId)
 				.orElseThrow(() -> new EntityNotFoundException("Subject not found"));
 
-		List<QuizQuestion> pool = new ArrayList<>(quizQuestionRepository.findAllBySchoolIdAndSubjectId(schoolId, subject.getId()));
+		// Class is derived from the challenger's own enrollment, never client-supplied - otherwise
+		// a student could spoof an easier grade's question bank.
+		String className = challenger.getClassSection().getClassName();
+		List<QuizQuestion> pool = new ArrayList<>(
+				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(schoolId, subject.getId(), className));
 		if (pool.size() < QUESTIONS_PER_CHALLENGE) {
 			throw new IllegalStateException(
-					"Not enough " + subject.getName() + " questions yet (need at least " + QUESTIONS_PER_CHALLENGE + ")");
+					"Not enough " + className + " " + subject.getName() + " questions yet (need at least " + QUESTIONS_PER_CHALLENGE + ")");
 		}
 		Collections.shuffle(pool, new SecureRandom());
 		List<QuizQuestion> picked = pool.subList(0, QUESTIONS_PER_CHALLENGE);
@@ -134,6 +139,7 @@ public class ArenaService {
 		return toSummary(challenge, principal);
 	}
 
+	@Transactional(readOnly = true)
 	public List<ChallengeSummaryResponse> listMyChallenges(AuthPrincipal principal) {
 		requireStudent(principal);
 		return quizChallengeRepository.findAllForStudent(principal.getSchoolId(), principal.getOwnerId()).stream()
@@ -141,6 +147,7 @@ public class ArenaService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public ChallengeDetailResponse getChallenge(AuthPrincipal principal, UUID challengeId) {
 		requireStudent(principal);
 		QuizChallenge challenge = requireParticipant(principal, challengeId);
