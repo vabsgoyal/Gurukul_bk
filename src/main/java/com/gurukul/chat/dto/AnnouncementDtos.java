@@ -17,6 +17,7 @@ public class AnnouncementDtos {
 	public static class CreateAnnouncementRequest {
 		@NotNull private AnnouncementScope scope;
 		private UUID sectionId;
+		private String className;
 		@NotBlank private String title;
 		@NotBlank private String body;
 	}
@@ -26,6 +27,7 @@ public class AnnouncementDtos {
 		private UUID id;
 		private AnnouncementScope scope;
 		private UUID sectionId;
+		private String className;
 		private UUID authorEmployeeId;
 		private String title;
 		private String body;
@@ -36,6 +38,7 @@ public class AnnouncementDtos {
 					announcement.getId(),
 					announcement.getScope(),
 					announcement.getSectionId(),
+					announcement.getClassName(),
 					announcement.getAuthorEmployeeId(),
 					announcement.getTitle(),
 					announcement.getBody(),

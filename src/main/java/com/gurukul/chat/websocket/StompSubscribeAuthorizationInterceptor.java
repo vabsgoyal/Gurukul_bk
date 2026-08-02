@@ -32,6 +32,8 @@ public class StompSubscribeAuthorizationInterceptor implements ChannelIntercepto
 			Pattern.compile("^/topic/schools/([0-9a-fA-F-]{36})/announcements$");
 	private static final Pattern SECTION_ANNOUNCEMENTS_TOPIC =
 			Pattern.compile("^/topic/sections/([0-9a-fA-F-]{36})/announcements$");
+	private static final Pattern GRADE_ANNOUNCEMENTS_TOPIC =
+			Pattern.compile("^/topic/schools/([0-9a-fA-F-]{36})/classes/([^/]+)/announcements$");
 	private static final Pattern USER_CALLS_TOPIC =
 			Pattern.compile("^/topic/users/([0-9a-fA-F-]{36})/(EMPLOYEE|STUDENT)/([0-9a-fA-F-]{36})/calls$");
 	private static final Pattern BATTLE_ROOM_TOPIC = Pattern.compile("^/topic/battle-rooms/([0-9a-fA-F-]{36})$");
@@ -83,6 +85,18 @@ public class StompSubscribeAuthorizationInterceptor implements ChannelIntercepto
 		if (sectionMatch.matches()) {
 			if (!announcementService.isSectionVisibleTo(principal, UUID.fromString(sectionMatch.group(1)))) {
 				throw new StompAuthenticationException("Not authorized for this section's announcements");
+			}
+			return message;
+		}
+
+		Matcher gradeMatch = GRADE_ANNOUNCEMENTS_TOPIC.matcher(destination);
+		if (gradeMatch.matches()) {
+			if (!principal.getSchoolId().toString().equalsIgnoreCase(gradeMatch.group(1))) {
+				throw new StompAuthenticationException("Not authorized for this school's announcements");
+			}
+			String className = AnnouncementService.decodeClassNameFromTopic(gradeMatch.group(2));
+			if (!announcementService.isGradeVisibleTo(principal, className)) {
+				throw new StompAuthenticationException("Not authorized for this grade's announcements");
 			}
 			return message;
 		}
