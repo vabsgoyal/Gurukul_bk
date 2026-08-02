@@ -9,6 +9,9 @@ public enum AnnouncementScope {
 	SCHOOL,
 
 	@Schema(description = "Visible to a single class-section's students and teachers")
-	CLASS
+	CLASS,
+
+	@Schema(description = "Visible to every section of a grade (e.g. all of \"Grade 8\") together")
+	GRADE
 
 }

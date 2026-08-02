@@ -16,4 +16,6 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, UUID
 
 	List<Announcement> findAllBySectionIdOrderByCreatedAtDesc(UUID sectionId);
 
+	List<Announcement> findAllBySchoolIdAndClassNameOrderByCreatedAtDesc(UUID schoolId, String className);
+
 }

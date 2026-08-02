@@ -65,7 +65,7 @@ public class AnnouncementService {
 				throw new AccessDeniedException("Only an admin can post a school-wide announcement");
 			}
 			announcement.setSectionId(null);
-		} else {
+		} else if (request.getScope() == AnnouncementScope.CLASS) {
 			if (request.getSectionId() == null) {
 				throw new IllegalArgumentException("sectionId is required for a class-level announcement");
 			}
@@ -78,6 +78,22 @@ public class AnnouncementService {
 						"Only an admin or this section's class teacher can post a class-level announcement");
 			}
 			announcement.setSectionId(section.getId());
+		} else {
+			if (request.getClassName() == null || request.getClassName().isBlank()) {
+				throw new IllegalArgumentException("className is required for a grade-level announcement");
+			}
+			List<ClassSection> sections =
+					classSectionRepository.findAllBySchoolIdAndClassNameOrderBySectionAsc(schoolId, request.getClassName());
+			if (sections.isEmpty()) {
+				throw new EntityNotFoundException("No sections found for that class");
+			}
+			boolean isClassTeacherOfGrade = sections.stream().anyMatch(s ->
+					s.getClassTeacher() != null && s.getClassTeacher().getId().equals(principal.getOwnerId()));
+			if (principal.getRole() != Role.ADMIN && !(principal.getRole() == Role.TEACHER && isClassTeacherOfGrade)) {
+				throw new AccessDeniedException(
+						"Only an admin or one of this grade's class teachers can post a grade-level announcement");
+			}
+			announcement.setClassName(request.getClassName());
 		}
 
 		Announcement saved = announcementRepository.save(announcement);
@@ -86,7 +102,7 @@ public class AnnouncementService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<Announcement> listVisible(AuthPrincipal principal, UUID sectionId) {
+	public List<Announcement> listVisible(AuthPrincipal principal, UUID sectionId, String className) {
 		UUID schoolId = principal.getSchoolId();
 		List<Announcement> result = new java.util.ArrayList<>(
 				announcementRepository.findAllBySchoolIdAndScopeOrderByCreatedAtDesc(schoolId, AnnouncementScope.SCHOOL));
@@ -96,6 +112,12 @@ public class AnnouncementService {
 				throw new AccessDeniedException("You do not have visibility into this section's announcements");
 			}
 			result.addAll(announcementRepository.findAllBySectionIdOrderByCreatedAtDesc(sectionId));
+		}
+		if (className != null && !className.isBlank()) {
+			if (!isGradeVisibleTo(principal, className)) {
+				throw new AccessDeniedException("You do not have visibility into this grade's announcements");
+			}
+			result.addAll(announcementRepository.findAllBySchoolIdAndClassNameOrderByCreatedAtDesc(schoolId, className));
 		}
 		return result;
 	}
@@ -123,10 +145,48 @@ public class AnnouncementService {
 		return principal.getSchoolId().equals(schoolId);
 	}
 
+	/**
+	 * Grade-level: ADMIN, any TEACHER, or a STUDENT currently enrolled in any section of that
+	 * className. Doesn't distinguish academic year - Student only tracks one current enrollment,
+	 * so "which grade am I in right now" is all that matters for this live-visibility check.
+	 */
+	@Transactional(readOnly = true)
+	public boolean isGradeVisibleTo(AuthPrincipal principal, String className) {
+		if (principal.getRole() == Role.ADMIN || principal.getRole() == Role.TEACHER) {
+			return true;
+		}
+		Student student = studentRepository.findByIdAndSchoolId(principal.getOwnerId(), principal.getSchoolId())
+				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
+		return student.getClassSection().getClassName().equals(className);
+	}
+
+	/**
+	 * Topic path segments can't contain spaces or "/". Deliberately NOT java.net.URLEncoder: it
+	 * encodes space as "+" (application/x-www-form-urlencoded rules), which silently mismatches
+	 * any client that percent-encodes spaces as "%20" (the normal URI convention) - the STOMP
+	 * broker matches destinations by exact string, so that mismatch means a subscriber's messages
+	 * would just never arrive, with no error on either side. A plain, predictable substitution
+	 * avoids the ambiguity entirely; class names in this system (e.g. "Grade 8") don't contain
+	 * underscores in practice.
+	 */
+	public static String encodeClassNameForTopic(String className) {
+		return className.replace(" ", "_");
+	}
+
+	public static String decodeClassNameFromTopic(String encoded) {
+		return encoded.replace("_", " ");
+	}
+
 	private void broadcast(Announcement announcement) {
-		String destination = announcement.getScope() == AnnouncementScope.SCHOOL
-				? "/topic/schools/" + announcement.getSchoolId() + "/announcements"
-				: "/topic/sections/" + announcement.getSectionId() + "/announcements";
+		String destination;
+		if (announcement.getScope() == AnnouncementScope.SCHOOL) {
+			destination = "/topic/schools/" + announcement.getSchoolId() + "/announcements";
+		} else if (announcement.getScope() == AnnouncementScope.CLASS) {
+			destination = "/topic/sections/" + announcement.getSectionId() + "/announcements";
+		} else {
+			destination = "/topic/schools/" + announcement.getSchoolId() + "/classes/"
+					+ encodeClassNameForTopic(announcement.getClassName()) + "/announcements";
+		}
 		messagingTemplate.convertAndSend(destination,
 				com.gurukul.chat.dto.AnnouncementDtos.AnnouncementResponse.from(announcement));
 	}

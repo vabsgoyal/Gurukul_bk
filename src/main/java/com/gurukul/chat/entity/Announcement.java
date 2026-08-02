@@ -12,9 +12,10 @@ import lombok.Setter;
 import java.util.UUID;
 
 /**
- * sectionId is null exactly when scope = SCHOOL (see V19 CHECK constraint). Not FK-mapped to
+ * Exactly one of sectionId/className is set, matching scope (SCHOOL: neither; CLASS: sectionId
+ * only; GRADE: className only) - see V19/V31 CHECK constraint. sectionId is not FK-mapped to
  * ClassSection on the Java side to avoid a lazy-load surprise in the chat hot path - plain UUID,
- * FK enforced at the DB level only (see V19).
+ * FK enforced at the DB level only.
  */
 @Getter
 @Setter
@@ -28,6 +29,9 @@ public class Announcement extends BaseEntity {
 
 	@Column(name = "section_id")
 	private UUID sectionId;
+
+	@Column(name = "class_name")
+	private String className;
 
 	@Column(name = "author_employee_id", nullable = false)
 	private UUID authorEmployeeId;

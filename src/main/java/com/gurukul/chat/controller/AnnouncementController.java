@@ -21,8 +21,9 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "Chat - Announcements", description = "School-wide and class-level announcements. "
-		+ "ADMIN can post school-wide; ADMIN or a section's assigned class teacher can post to that section. "
+@Tag(name = "Chat - Announcements", description = "School-wide, grade-level, and section-level announcements. "
+		+ "ADMIN can post school-wide; ADMIN or a section's assigned class teacher can post to that section; "
+		+ "ADMIN or any class teacher within a grade can post to that whole grade (all its sections together). "
 		+ "Requires X-School-Id and Authorization headers.")
 public class AnnouncementController {
 
@@ -39,10 +40,13 @@ public class AnnouncementController {
 	@GetMapping("/api/v1/chat/announcements")
 	@Operation(summary = "List announcements visible to me",
 			description = "Always includes all school-wide announcements. Pass sectionId to also include that "
-					+ "section's class-level announcements, if you have visibility into it.")
-	public ApiResponse<List<AnnouncementResponse>> list(@RequestParam(required = false) UUID sectionId) {
+					+ "section's announcements, and/or className to also include that grade's (all sections "
+					+ "together), if you have visibility into them.")
+	public ApiResponse<List<AnnouncementResponse>> list(
+			@RequestParam(required = false) UUID sectionId,
+			@RequestParam(required = false) String className) {
 		AuthPrincipal principal = AuthContext.current();
-		List<AnnouncementResponse> responses = announcementService.listVisible(principal, sectionId).stream()
+		List<AnnouncementResponse> responses = announcementService.listVisible(principal, sectionId, className).stream()
 				.map(AnnouncementResponse::from)
 				.toList();
 		return ApiResponse.success(responses);
