@@ -1,8 +1,11 @@
 -- Short, human-shareable room codes for Battle Rooms - the UUID id stays the DB/WS-topic identity,
--- room_code is purely for a student to read aloud/type when inviting classmates. Nullable + a
--- partial unique index (rather than NOT NULL) since this alters an already-shipped table.
+-- room_code is purely for a student to read aloud/type when inviting classmates. Left nullable
+-- since this alters an already-shipped table; a plain UNIQUE constraint (not a partial index -
+-- H2, used by tests, doesn't support indexes with a WHERE clause) is fine here because standard
+-- SQL treats every NULL as distinct for uniqueness purposes, so old NULL-room_code rows can't
+-- collide with each other or with newly-generated codes.
 ALTER TABLE battle_room ADD COLUMN room_code VARCHAR(6);
-CREATE UNIQUE INDEX uq_battle_room_code ON battle_room(school_id, room_code) WHERE room_code IS NOT NULL;
+ALTER TABLE battle_room ADD CONSTRAINT uq_battle_room_code UNIQUE (school_id, room_code);
 
 -- Practice Mode: solo, no-stakes prep - a student picks a subject and works through questions
 -- from the same quiz_question bank Arena/Battle Rooms use, at their own pace, with no XP reward
