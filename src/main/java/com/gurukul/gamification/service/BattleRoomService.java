@@ -56,6 +56,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BattleRoomService {
 
+	// Excludes 0/O and 1/I to avoid read-aloud/typing ambiguity for students sharing a code.
+	private static final String ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	private static final int ROOM_CODE_LENGTH = 6;
+	private static final SecureRandom RANDOM = new SecureRandom();
+
 	private final BattleRoomRepository battleRoomRepository;
 	private final BattleRoomParticipantRepository participantRepository;
 	private final BattleBuzzWinnerRepository buzzWinnerRepository;
@@ -124,6 +129,7 @@ public class BattleRoomService {
 		room.setJoinWindowSeconds(defaultJoinWindowSeconds);
 		room.setQuestionCount(defaultQuestionCount);
 		room.setCurrentQuestionIndex(0);
+		room.setRoomCode(generateRoomCode(principal.getSchoolId()));
 		room = battleRoomRepository.save(room);
 
 		addParticipant(room, creator.getId());
@@ -156,6 +162,13 @@ public class BattleRoomService {
 		addParticipant(room, student.getId());
 		broadcast(room);
 		return buildResponse(room);
+	}
+
+	@Transactional
+	public BattleRoomResponse joinByCode(AuthPrincipal principal, String code) {
+		BattleRoom room = battleRoomRepository.findBySchoolIdAndRoomCode(principal.getSchoolId(), code.trim().toUpperCase())
+				.orElseThrow(() -> new EntityNotFoundException("No room found for that code"));
+		return joinRoom(principal, room.getId());
 	}
 
 	@Transactional(readOnly = true)
@@ -329,6 +342,20 @@ public class BattleRoomService {
 		}
 	}
 
+	private String generateRoomCode(UUID schoolId) {
+		for (int attempt = 0; attempt < 10; attempt++) {
+			StringBuilder code = new StringBuilder(ROOM_CODE_LENGTH);
+			for (int i = 0; i < ROOM_CODE_LENGTH; i++) {
+				code.append(ROOM_CODE_ALPHABET.charAt(RANDOM.nextInt(ROOM_CODE_ALPHABET.length())));
+			}
+			String candidate = code.toString();
+			if (battleRoomRepository.findBySchoolIdAndRoomCode(schoolId, candidate).isEmpty()) {
+				return candidate;
+			}
+		}
+		throw new IllegalStateException("Could not generate a unique room code, please try again");
+	}
+
 	private void addParticipant(BattleRoom room, UUID studentId) {
 		BattleRoomParticipant participant = new BattleRoomParticipant();
 		participant.setSchoolId(room.getSchoolId());
@@ -373,7 +400,7 @@ public class BattleRoomService {
 				: null;
 
 		return new BattleRoomResponse(
-				room.getId(), room.getClassName(), room.getSubject().getName(), room.getStatus(),
+				room.getId(), room.getRoomCode(), room.getClassName(), room.getSubject().getName(), room.getStatus(),
 				room.getMinPlayers(), room.getMaxPlayers(), room.getJoinWindowSeconds(), room.getQuestionCount(),
 				room.getCurrentQuestionIndex(), participants, currentQuestion, currentBuzzWinnerStudentId,
 				lastAnswerCorrect, room.getWinnerStudentId(), winnerName);

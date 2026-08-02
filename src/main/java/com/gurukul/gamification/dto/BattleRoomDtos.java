@@ -3,6 +3,7 @@ package com.gurukul.gamification.dto;
 import com.gurukul.gamification.entity.BattleRoomStatus;
 import com.gurukul.gamification.entity.QuizOption;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -26,6 +27,12 @@ public class BattleRoomDtos {
 	}
 
 	@Getter @Setter
+	@Schema(name = "JoinByCodeRequest")
+	public static class JoinByCodeRequest {
+		@NotBlank private String code;
+	}
+
+	@Getter @Setter
 	@Schema(name = "SubmitBattleAnswerRequest")
 	public static class SubmitBattleAnswerRequest {
 		@NotNull private QuizOption selectedOption;
@@ -44,6 +51,7 @@ public class BattleRoomDtos {
 			+ "/topic/battle-rooms/{roomId} on every state change")
 	public static class BattleRoomResponse {
 		private UUID id;
+		private String roomCode;
 		private String className;
 		private String subjectName;
 		private BattleRoomStatus status;

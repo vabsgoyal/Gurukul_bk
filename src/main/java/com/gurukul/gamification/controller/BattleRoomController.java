@@ -4,6 +4,7 @@ import com.gurukul.auth.security.AuthContext;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.CreateBattleRoomRequest;
+import com.gurukul.gamification.dto.BattleRoomDtos.JoinByCodeRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.MatchBattleRoomRequest;
 import com.gurukul.gamification.service.BattleRoomService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,9 +44,15 @@ public class BattleRoomController {
 	}
 
 	@PostMapping("/api/v1/gamification/battle-rooms/{id}/join")
-	@Operation(summary = "Join a specific room by id (invite link/code)")
+	@Operation(summary = "Join a specific room by id (invite link)")
 	public ApiResponse<BattleRoomResponse> join(@PathVariable UUID id) {
 		return ApiResponse.success(battleRoomService.joinRoom(AuthContext.current(), id));
+	}
+
+	@PostMapping("/api/v1/gamification/battle-rooms/join-by-code")
+	@Operation(summary = "Join a room via its 6-character shareable code")
+	public ApiResponse<BattleRoomResponse> joinByCode(@Valid @RequestBody JoinByCodeRequest request) {
+		return ApiResponse.success(battleRoomService.joinByCode(AuthContext.current(), request.getCode()));
 	}
 
 	@GetMapping("/api/v1/gamification/battle-rooms/{id}")

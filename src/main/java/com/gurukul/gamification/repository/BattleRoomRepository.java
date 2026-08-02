@@ -12,6 +12,8 @@ public interface BattleRoomRepository extends JpaRepository<BattleRoom, UUID> {
 
 	Optional<BattleRoom> findByIdAndSchoolId(UUID id, UUID schoolId);
 
+	Optional<BattleRoom> findBySchoolIdAndRoomCode(UUID schoolId, String roomCode);
+
 	List<BattleRoom> findAllByStatus(BattleRoomStatus status);
 
 	/** Auto-match target: oldest still-open room for this class+subject, if any. */
