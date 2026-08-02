@@ -30,12 +30,14 @@ public class StudentService {
 	private final ClassSectionService classSectionService;
 	private final FeeStructureService feeStructureService;
 
+	@Transactional(readOnly = true)
 	public List<StudentResponse> list() {
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
 				.map(StudentResponse::from)
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public List<StudentResponse> search(String query) {
 		requireQuery(query);
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
@@ -47,6 +49,7 @@ public class StudentService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public List<StudentResponse> searchByParent(String query) {
 		requireQuery(query);
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
@@ -64,11 +67,13 @@ public class StudentService {
 		}
 	}
 
+	@Transactional(readOnly = true)
 	public List<StudentResponse> listByClassSection(String className, String section, String academicYear) {
 		ClassSection classSection = classSectionService.getScopedClassSection(className, section, academicYear);
 		return listByClassSectionId(classSection.getId());
 	}
 
+	@Transactional(readOnly = true)
 	public List<StudentResponse> listByClassSectionId(UUID classSectionId) {
 		classSectionService.getScopedClassSection(classSectionId);
 		return studentRepository.findAllBySchoolIdAndClassSectionId(schoolContext.getSchoolId(), classSectionId)
@@ -77,6 +82,7 @@ public class StudentService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public StudentResponse getById(UUID id) {
 		return StudentResponse.from(findScoped(id));
 	}
