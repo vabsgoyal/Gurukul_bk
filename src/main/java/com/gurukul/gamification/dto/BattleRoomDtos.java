@@ -73,6 +73,19 @@ public class BattleRoomDtos {
 	}
 
 	@Getter @AllArgsConstructor
+	@Schema(name = "BattleRoomSummaryResponse", description = "Lightweight row for browsing open rooms - "
+			+ "use GET /battle-rooms/{id} for the full state once a student taps in")
+	public static class BattleRoomSummaryResponse {
+		private UUID id;
+		private String roomCode;
+		private String subjectName;
+		private String className;
+		private BattleRoomStatus status;
+		private int participantCount;
+		private int maxPlayers;
+	}
+
+	@Getter @AllArgsConstructor
 	@Schema(name = "BuzzResponse")
 	public static class BuzzResponse {
 		private boolean won;
