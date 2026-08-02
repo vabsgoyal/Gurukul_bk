@@ -66,6 +66,23 @@ public class GamificationService {
 		profileRepository.save(profile);
 	}
 
+	/** Generic XP award for sources without attendance's per-date edit/idempotency need (e.g. a quiz win). */
+	@Transactional
+	public void awardXp(UUID schoolId, UUID studentId, XpSource source, int amount) {
+		if (amount <= 0) {
+			return;
+		}
+		StudentGameProfile profile = getOrCreateProfile(schoolId, studentId);
+		XpEvent event = new XpEvent();
+		event.setSchoolId(schoolId);
+		event.setStudentId(studentId);
+		event.setSource(source);
+		event.setAmount(amount);
+		xpEventRepository.save(event);
+		profile.setTotalXp(profile.getTotalXp() + amount);
+		profileRepository.save(profile);
+	}
+
 	public GameProfileResponse getMyProfile(AuthPrincipal principal) {
 		if (principal.getOwnerType() != OwnerType.STUDENT) {
 			throw new AccessDeniedException("Only a student account has a game profile");
