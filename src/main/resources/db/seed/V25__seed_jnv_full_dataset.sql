@@ -726,9 +726,8 @@ INSERT INTO credential (id, school_id, owner_type, owner_id, username, password_
 SELECT
     gen_random_uuid(), '99999999-9999-9999-9999-999999999999', 'EMPLOYEE', id, contact_phone,
     '$2a$10$JUk9x9LMYVT951gsh4VZDOZrGxuGRX/DKqDwsX4fxMZsfArokccNe',
-    CASE WHEN designation IN ('Vice Principal') THEN 'ADMIN'
-         WHEN role_tag IN ('CLASS_TEACHER', 'SPECIALIST') THEN 'TEACHER'
-         ELSE 'STAFF' END,
+    CASE WHEN role_tag IN ('CLASS_TEACHER', 'SPECIALIST') THEN 'TEACHER'
+         ELSE 'ADMIN' END,
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM t_employee
 WHERE (SELECT should_seed FROM jnv_seed_guard);
