@@ -24,6 +24,9 @@ public class QuizQuestion extends BaseEntity {
 	@JoinColumn(name = "subject_id", nullable = false)
 	private Subject subject;
 
+	@Column(name = "class_name")
+	private String className;
+
 	@Column(name = "question_text", nullable = false, length = 500)
 	private String questionText;
 
