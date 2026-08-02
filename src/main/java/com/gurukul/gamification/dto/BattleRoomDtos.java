@@ -9,6 +9,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,6 +59,9 @@ public class BattleRoomDtos {
 		private int minPlayers;
 		private int maxPlayers;
 		private int joinWindowSeconds;
+		@Schema(description = "Absolute deadline for the join window (only meaningful while WAITING) - "
+				+ "compute remaining time client-side as joinWindowEndsAt - now(), don't rely on push cadence")
+		private Instant joinWindowEndsAt;
 		private int questionCount;
 		private int currentQuestionIndex;
 		private List<BattleParticipantResponse> participants;

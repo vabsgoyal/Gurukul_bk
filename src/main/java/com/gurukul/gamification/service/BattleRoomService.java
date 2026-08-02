@@ -399,11 +399,13 @@ public class BattleRoomService {
 				? studentName(room.getSchoolId(), room.getWinnerStudentId())
 				: null;
 
+		Instant joinWindowEndsAt = room.getCreatedAt().plusSeconds(room.getJoinWindowSeconds());
+
 		return new BattleRoomResponse(
 				room.getId(), room.getRoomCode(), room.getClassName(), room.getSubject().getName(), room.getStatus(),
-				room.getMinPlayers(), room.getMaxPlayers(), room.getJoinWindowSeconds(), room.getQuestionCount(),
-				room.getCurrentQuestionIndex(), participants, currentQuestion, currentBuzzWinnerStudentId,
-				lastAnswerCorrect, room.getWinnerStudentId(), winnerName);
+				room.getMinPlayers(), room.getMaxPlayers(), room.getJoinWindowSeconds(), joinWindowEndsAt,
+				room.getQuestionCount(), room.getCurrentQuestionIndex(), participants, currentQuestion,
+				currentBuzzWinnerStudentId, lastAnswerCorrect, room.getWinnerStudentId(), winnerName);
 	}
 
 	private String studentName(UUID schoolId, UUID studentId) {
