@@ -5,6 +5,7 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.calls.dto.CallEvent;
 import com.gurukul.calls.entity.CallLog;
 import com.gurukul.calls.entity.CallOutcome;
+import com.gurukul.calls.jitsi.JitsiBotService;
 import com.gurukul.calls.repository.CallLogRepository;
 import com.gurukul.common.EntityNotFoundException;
 import org.springframework.scheduling.TaskScheduler;
@@ -33,18 +34,21 @@ public class CallSessionService {
 	private final ActiveCallRegistry activeCallRegistry;
 	private final CallEventPublisher eventPublisher;
 	private final TaskScheduler taskScheduler;
+	private final JitsiBotService jitsiBotService;
 
 	public CallSessionService(
 			CallLogRepository callLogRepository,
 			CallAuthorizationService callAuthorizationService,
 			ActiveCallRegistry activeCallRegistry,
 			CallEventPublisher eventPublisher,
-			TaskScheduler taskScheduler) {
+			TaskScheduler taskScheduler,
+			JitsiBotService jitsiBotService) {
 		this.callLogRepository = callLogRepository;
 		this.callAuthorizationService = callAuthorizationService;
 		this.activeCallRegistry = activeCallRegistry;
 		this.eventPublisher = eventPublisher;
 		this.taskScheduler = taskScheduler;
+		this.jitsiBotService = jitsiBotService;
 	}
 
 	@Transactional
@@ -68,6 +72,12 @@ public class CallSessionService {
 
 		activeCallRegistry.markActive(callerType, callerId, callLog.getId());
 		activeCallRegistry.markActive(calleeType, calleeId, callLog.getId());
+
+		// Must happen before the callee is notified below - otherwise a fast callee could join the
+		// Jitsi room before the bot has finished "starting" it. Best-effort/no-op when unconfigured
+		// (see JitsiBotService); holds this transaction's DB connection open a little longer when
+		// it does run, an accepted tradeoff at this app's current single-instance scale.
+		jitsiBotService.warmRoom(callLog.getRoomName());
 
 		eventPublisher.sendTo(schoolId, calleeType, calleeId, CallEvent.incomingCall(callLog, callerType, callerId));
 		taskScheduler.schedule(() -> handleRingTimeout(callLog.getId()), Instant.now().plus(RING_TIMEOUT));
