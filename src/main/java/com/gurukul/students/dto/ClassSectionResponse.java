@@ -30,6 +30,12 @@ public class ClassSectionResponse {
 	@Schema(description = "Human-readable label", example = "Grade 8 - A (2026-27)")
 	private String displayLabel;
 
+	@Schema(description = "This section's assigned class teacher, if any - null until assigned via PATCH .../class-teacher")
+	private UUID classTeacherId;
+
+	@Schema(description = "Class teacher's name, for display - null when classTeacherId is null")
+	private String classTeacherName;
+
 	public static ClassSectionResponse from(ClassSection classSection) {
 		return new ClassSectionResponse(
 				classSection.getId(),
@@ -37,7 +43,9 @@ public class ClassSectionResponse {
 				classSection.getClassName(),
 				classSection.getSection(),
 				classSection.getAcademicYear(),
-				classSection.getDisplayLabel()
+				classSection.getDisplayLabel(),
+				classSection.getClassTeacher() != null ? classSection.getClassTeacher().getId() : null,
+				classSection.getClassTeacher() != null ? classSection.getClassTeacher().getName() : null
 		);
 	}
 
