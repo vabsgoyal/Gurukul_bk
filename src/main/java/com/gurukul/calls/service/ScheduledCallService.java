@@ -9,6 +9,7 @@ import com.gurukul.calls.entity.CallOutcome;
 import com.gurukul.calls.entity.CallStatus;
 import com.gurukul.calls.entity.RsvpStatus;
 import com.gurukul.calls.entity.ScheduledCall;
+import com.gurukul.calls.jitsi.JitsiBotService;
 import com.gurukul.calls.repository.CallInviteeRepository;
 import com.gurukul.calls.repository.CallLogRepository;
 import com.gurukul.calls.repository.ScheduledCallRepository;
@@ -39,18 +40,21 @@ public class ScheduledCallService {
 	private final CallLogRepository callLogRepository;
 	private final CallAuthorizationService callAuthorizationService;
 	private final CallEventPublisher eventPublisher;
+	private final JitsiBotService jitsiBotService;
 
 	public ScheduledCallService(
 			ScheduledCallRepository scheduledCallRepository,
 			CallInviteeRepository callInviteeRepository,
 			CallLogRepository callLogRepository,
 			CallAuthorizationService callAuthorizationService,
-			CallEventPublisher eventPublisher) {
+			CallEventPublisher eventPublisher,
+			JitsiBotService jitsiBotService) {
 		this.scheduledCallRepository = scheduledCallRepository;
 		this.callInviteeRepository = callInviteeRepository;
 		this.callLogRepository = callLogRepository;
 		this.callAuthorizationService = callAuthorizationService;
 		this.eventPublisher = eventPublisher;
+		this.jitsiBotService = jitsiBotService;
 	}
 
 	@Transactional
@@ -158,6 +162,10 @@ public class ScheduledCallService {
 		log.setStartedAt(Instant.now());
 		log.setOutcome(CallOutcome.IN_PROGRESS);
 		callLogRepository.save(log);
+
+		// Same ordering requirement as CallSessionService.startImmediateCall - must complete before
+		// invitees are notified below, or a fast joiner could beat the bot into the room.
+		jitsiBotService.warmRoom(call.getRoomName());
 
 		callInviteeRepository.findAllByScheduledCall_IdAndRsvpStatus(call.getId(), RsvpStatus.ACCEPTED)
 				.forEach(invitee -> eventPublisher.sendTo(call.getSchoolId(), invitee.getOwnerType(), invitee.getOwnerId(),

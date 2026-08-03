@@ -24,6 +24,7 @@ public class ClassSectionService {
 	private final EmployeeService employeeService;
 	private final SchoolContext schoolContext;
 
+	@Transactional(readOnly = true)
 	public List<ClassSectionResponse> list() {
 		return classSectionRepository.findAllBySchoolIdOrderByClassNameAscSectionAsc(schoolContext.getSchoolId())
 				.stream()
@@ -35,6 +36,7 @@ public class ClassSectionService {
 		return classSectionRepository.findDistinctClassNamesBySchoolId(schoolContext.getSchoolId());
 	}
 
+	@Transactional(readOnly = true)
 	public List<ClassSectionResponse> listByClassName(String className) {
 		return classSectionRepository.findAllBySchoolIdAndClassNameOrderBySectionAsc(schoolContext.getSchoolId(), className)
 				.stream()
@@ -42,6 +44,7 @@ public class ClassSectionService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public ClassSectionResponse getById(UUID id) {
 		return ClassSectionResponse.from(classSectionRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Class-section not found")));
@@ -63,6 +66,7 @@ public class ClassSectionService {
 		return ClassSectionResponse.from(classSectionRepository.save(section));
 	}
 
+	@Transactional(readOnly = true)
 	public List<ClassSectionResponse> listByClassTeacherId(UUID employeeId) {
 		employeeService.getScopedEntity(employeeId);
 		return classSectionRepository
