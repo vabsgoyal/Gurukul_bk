@@ -23,4 +23,11 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 	List<AttendanceRecord> findAllBySchoolIdAndStudentIdAndAttendanceDateBetweenOrderByAttendanceDateDesc(
 			UUID schoolId, UUID studentId, LocalDate from, LocalDate to);
 
+	@EntityGraph(attributePaths = {"student", "section", "markedByTeacher"})
+	List<AttendanceRecord> findAllBySchoolIdAndSectionId(UUID schoolId, UUID sectionId);
+
+	@EntityGraph(attributePaths = {"student", "section", "markedByTeacher"})
+	List<AttendanceRecord> findAllBySchoolIdAndSectionIdAndAttendanceDateBetween(
+			UUID schoolId, UUID sectionId, LocalDate from, LocalDate to);
+
 }

@@ -167,4 +167,49 @@ class AttendanceIntegrationTest {
 				.andExpect(jsonPath("$.data.entries[?(@.studentId == '" + studentId + "')].status").value("PRESENT"));
 	}
 
+	@Test
+	void sectionHistoryAggregatesEveryStudentsAttendanceOverARange() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+		String teacherId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "History Teacher");
+
+		String studentAId = AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, CLASS_SECTION_B, "History Student A");
+		String studentBId = AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, CLASS_SECTION_B, "History Student B");
+
+		markDay(adminBearer, teacherId, "2026-08-10", studentAId, "PRESENT", studentBId, "ABSENT");
+		markDay(adminBearer, teacherId, "2026-08-11", studentAId, "PRESENT", studentBId, "PRESENT");
+
+		mockMvc.perform(get("/api/v1/class-sections/" + CLASS_SECTION_B + "/attendance/history")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+						.param("from", "2026-08-10")
+						.param("to", "2026-08-11"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentAId + "')].totalRecords").value(2))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentAId + "')].presentCount").value(2))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].totalRecords").value(2))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].presentCount").value(1))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].absentCount").value(1));
+	}
+
+	private void markDay(String adminBearer, String teacherId, String date,
+			String studentAId, String statusA, String studentBId, String statusB) throws Exception {
+		String payload = """
+				{
+				  "date": "%s",
+				  "teacherId": "%s",
+				  "records": [
+				    {"studentId": "%s", "status": "%s"},
+				    {"studentId": "%s", "status": "%s"}
+				  ]
+				}
+				""".formatted(date, teacherId, studentAId, statusA, studentBId, statusB);
+
+		mockMvc.perform(post("/api/v1/class-sections/" + CLASS_SECTION_B + "/attendance")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(payload))
+				.andExpect(status().isOk());
+	}
+
 }

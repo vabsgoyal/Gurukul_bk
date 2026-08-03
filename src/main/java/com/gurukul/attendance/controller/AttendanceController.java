@@ -1,6 +1,7 @@
 package com.gurukul.attendance.controller;
 
 import com.gurukul.attendance.dto.AttendanceDtos.BulkAttendanceRequest;
+import com.gurukul.attendance.dto.AttendanceDtos.SectionAttendanceHistoryResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.SectionAttendanceResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceHistoryResponse;
 import com.gurukul.attendance.service.AttendanceService;
@@ -41,6 +42,16 @@ public class AttendanceController {
 			@PathVariable UUID sectionId,
 			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 		return ApiResponse.success(attendanceService.getSectionRoster(sectionId, date));
+	}
+
+	@GetMapping("/api/v1/class-sections/{sectionId}/attendance/history")
+	@Operation(summary = "Get every student's attendance totals for a class-section, optionally within a date range",
+			description = "Class-wide history view: one summary row per student in the section, aggregated over the range.")
+	public ApiResponse<SectionAttendanceHistoryResponse> getSectionHistory(
+			@PathVariable UUID sectionId,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+		return ApiResponse.success(attendanceService.getSectionHistory(sectionId, from, to));
 	}
 
 	@GetMapping("/api/v1/students/{studentId}/attendance")
