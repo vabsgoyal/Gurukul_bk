@@ -52,10 +52,7 @@ public class ScheduledCallController {
 	@GetMapping("/api/v1/calls/scheduled/invited")
 	@Operation(summary = "List calls I've been invited to, with my RSVP status")
 	public ApiResponse<List<MyInviteResponse>> invited() {
-		List<MyInviteResponse> responses = scheduledCallService.invitedTo(AuthContext.current()).stream()
-				.map(MyInviteResponse::from)
-				.toList();
-		return ApiResponse.success(responses);
+		return ApiResponse.success(scheduledCallService.invitedTo(AuthContext.current()));
 	}
 
 	@GetMapping("/api/v1/calls/scheduled/{id}")

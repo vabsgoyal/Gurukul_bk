@@ -9,6 +9,7 @@ import com.gurukul.employees.repository.EmployeeRepository;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -48,6 +49,13 @@ public class CallAuthorizationService {
 		}
 	}
 
+	/**
+	 * readOnly transactional so isClassTeacherOf's lazy Student.classSection/ClassSection.classTeacher
+	 * dereference is safe even if a future caller invokes this outside an already-open transaction
+	 * (today's callers all happen to be @Transactional themselves, but that's caller discipline this
+	 * method shouldn't depend on).
+	 */
+	@Transactional(readOnly = true)
 	public boolean canCall(UUID schoolId, OwnerType callerType, UUID callerId, OwnerType otherType, UUID otherId) {
 		if (callerType == otherType && callerId.equals(otherId)) {
 			return false;

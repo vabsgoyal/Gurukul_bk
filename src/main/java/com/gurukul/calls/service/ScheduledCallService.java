@@ -1,6 +1,7 @@
 package com.gurukul.calls.service;
 
 import com.gurukul.auth.security.AuthPrincipal;
+import com.gurukul.calls.dto.CallDtos.MyInviteResponse;
 import com.gurukul.calls.dto.CallDtos.ScheduleCallRequest;
 import com.gurukul.calls.dto.CallEvent;
 import com.gurukul.calls.entity.CallInvitee;
@@ -93,9 +94,18 @@ public class ScheduledCallService {
 				principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId());
 	}
 
-	public List<CallInvitee> invitedTo(AuthPrincipal principal) {
+	/**
+	 * Builds MyInviteResponse here (not in the controller) because it dereferences
+	 * CallInvitee.scheduledCall - a LAZY association - and open-in-view is disabled, so that
+	 * dereference must happen while this method's own transaction is still open.
+	 */
+	@Transactional(readOnly = true)
+	public List<MyInviteResponse> invitedTo(AuthPrincipal principal) {
 		return callInviteeRepository.findAllBySchoolIdAndOwnerTypeAndOwnerIdOrderByCreatedAtDesc(
-				principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId());
+						principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId())
+				.stream()
+				.map(MyInviteResponse::from)
+				.toList();
 	}
 
 	public List<CallInvitee> invitees(UUID scheduledCallId) {

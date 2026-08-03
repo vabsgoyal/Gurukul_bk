@@ -56,6 +56,7 @@ public class AcademicsService {
 		return toSubjectResponse(subjectRepository.save(subject));
 	}
 
+	@Transactional(readOnly = true)
 	public List<SubjectAssignmentResponse> listSectionSubjects(UUID sectionId) {
 		classSectionService.getScopedClassSection(sectionId);
 		return sectionSubjectTeacherRepository.findAllBySectionId(sectionId).stream()
@@ -83,6 +84,7 @@ public class AcademicsService {
 		return toSubjectAssignmentResponse(sectionSubjectTeacherRepository.save(assignment));
 	}
 
+	@Transactional(readOnly = true)
 	public List<TeacherAssignmentResponse> listAssignmentsForTeacher(UUID teacherId) {
 		employeeService.getScopedEntity(teacherId);
 		return sectionSubjectTeacherRepository.findAllByTeacherId(teacherId).stream()
