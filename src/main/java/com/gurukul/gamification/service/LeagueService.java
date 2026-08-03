@@ -52,6 +52,7 @@ public class LeagueService {
 	private final XpEventRepository xpEventRepository;
 	private final GamificationService gamificationService;
 
+	@Transactional(readOnly = true)
 	public LeaderboardResponse getLeaderboard(AuthPrincipal principal) {
 		if (principal.getOwnerType() != OwnerType.STUDENT) {
 			throw new AccessDeniedException("Only a student account has a leaderboard");

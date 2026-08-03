@@ -90,6 +90,7 @@ public class StaffAttendanceService {
 		return new StaffAttendanceRosterResponse(date, entries);
 	}
 
+	@Transactional(readOnly = true)
 	public EmployeeAttendanceHistoryResponse getEmployeeHistory(UUID employeeId, LocalDate from, LocalDate to) {
 		AuthPrincipal principal = AuthContext.current();
 		if (principal.getRole() == Role.TEACHER && !principal.getOwnerId().equals(employeeId)) {
