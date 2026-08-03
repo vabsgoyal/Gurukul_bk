@@ -30,6 +30,7 @@ public class AssessmentService {
 	private final EmployeeService employeeService;
 	private final SchoolContext schoolContext;
 
+	@Transactional(readOnly = true)
 	public List<AssessmentResponse> list(UUID sectionId, AssessmentType type) {
 		classSectionService.getScopedClassSection(sectionId);
 		UUID schoolId = schoolContext.getSchoolId();
@@ -39,6 +40,7 @@ public class AssessmentService {
 		return assessments.stream().map(AssessmentResponse::from).toList();
 	}
 
+	@Transactional(readOnly = true)
 	public AssessmentResponse getById(UUID id) {
 		return AssessmentResponse.from(findScoped(id));
 	}

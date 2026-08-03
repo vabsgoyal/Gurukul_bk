@@ -77,6 +77,7 @@ public class AttendanceService {
 		return getSectionRoster(sectionId, request.getDate());
 	}
 
+	@Transactional(readOnly = true)
 	public SectionAttendanceResponse getSectionRoster(UUID sectionId, LocalDate date) {
 		UUID schoolId = schoolContext.getSchoolId();
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
@@ -103,6 +104,7 @@ public class AttendanceService {
 				section.getId(), section.getClassName(), section.getSection(), section.getAcademicYear(), date, entries);
 	}
 
+	@Transactional(readOnly = true)
 	public StudentAttendanceHistoryResponse getStudentHistory(UUID studentId, LocalDate from, LocalDate to) {
 		AuthPrincipal principal = AuthContext.current();
 		if (principal.getRole() == Role.STUDENT && !principal.getOwnerId().equals(studentId)) {

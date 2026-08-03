@@ -116,4 +116,55 @@ class AttendanceIntegrationTest {
 				.andExpect(jsonPath("$.data.presentCount").value(0));
 	}
 
+	/**
+	 * The existing test above only exercises the ADMIN-marks-on-behalf-of-a-teacher path. The
+	 * frontend's attendance screen defaults non-admin callers to marking as themselves - this
+	 * covers that path directly (a TEACHER who actually is the section's class teacher).
+	 */
+	@Test
+	void classTeacherMarksTheirOwnSectionAttendance() throws Exception {
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+
+		MvcResult sectionResult = mockMvc.perform(post("/api/v1/class-sections")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"className": "Grade 10", "section": "ATT-%s", "academicYear": "2026-27"}
+								""".formatted(suffix)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String sectionId = JsonPath.read(sectionResult.getResponse().getContentAsString(), "$.data.id");
+
+		String teacherId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "Own-Section Teacher " + suffix);
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+						"/api/v1/class-sections/" + sectionId + "/class-teacher")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"teacherId\": \"" + teacherId + "\"}"))
+				.andExpect(status().isOk());
+		String teacherBearer = AuthTestSupport.provisionAndLogin(mockMvc, SCHOOL_ID, adminBearer, "employees", teacherId, "TEACHER");
+
+		String studentId = AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, sectionId, "Own-Section Student " + suffix);
+
+		String markPayload = """
+				{
+				  "date": "2026-08-03",
+				  "teacherId": "%s",
+				  "records": [
+				    {"studentId": "%s", "status": "PRESENT"}
+				  ]
+				}
+				""".formatted(teacherId, studentId);
+
+		mockMvc.perform(post("/api/v1/class-sections/" + sectionId + "/attendance")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(markPayload))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.entries[?(@.studentId == '" + studentId + "')].status").value("PRESENT"));
+	}
+
 }
