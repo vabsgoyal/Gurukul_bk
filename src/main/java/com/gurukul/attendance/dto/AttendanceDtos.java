@@ -101,4 +101,29 @@ public class AttendanceDtos {
 		private List<AttendanceRecordResponse> records;
 	}
 
+	@Getter @AllArgsConstructor
+	@Schema(description = "One student's attendance totals within the section history's date range")
+	public static class SectionStudentAttendanceSummary {
+		private UUID studentId;
+		private String studentName;
+		private String rollNumber;
+		private long totalRecords;
+		private long presentCount;
+		private long absentCount;
+		private long lateCount;
+		private long halfDayCount;
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(description = "Every student in a class-section's attendance totals over a date range, for a class-wide history view")
+	public static class SectionAttendanceHistoryResponse {
+		private UUID sectionId;
+		private String className;
+		private String section;
+		private String academicYear;
+		private LocalDate from;
+		private LocalDate to;
+		private List<SectionStudentAttendanceSummary> students;
+	}
+
 }

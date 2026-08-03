@@ -3,7 +3,9 @@ package com.gurukul.attendance.service;
 import com.gurukul.attendance.dto.AttendanceDtos.AttendanceEntryRequest;
 import com.gurukul.attendance.dto.AttendanceDtos.AttendanceRecordResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.BulkAttendanceRequest;
+import com.gurukul.attendance.dto.AttendanceDtos.SectionAttendanceHistoryResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.SectionAttendanceResponse;
+import com.gurukul.attendance.dto.AttendanceDtos.SectionStudentAttendanceSummary;
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceEntryResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceHistoryResponse;
 import com.gurukul.attendance.entity.AttendanceRecord;
@@ -27,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -136,6 +139,44 @@ public class AttendanceService {
 				counts.getOrDefault(AttendanceStatus.HALF_DAY, 0L),
 				records.stream().map(AttendanceRecordResponse::from).toList()
 		);
+	}
+
+	@Transactional(readOnly = true)
+	public SectionAttendanceHistoryResponse getSectionHistory(UUID sectionId, LocalDate from, LocalDate to) {
+		UUID schoolId = schoolContext.getSchoolId();
+		ClassSection section = classSectionService.getScopedClassSection(sectionId);
+
+		List<Student> students = studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, sectionId).stream()
+				.sorted(Comparator.comparing(Student::getRollNumber))
+				.toList();
+
+		List<AttendanceRecord> records = (from != null && to != null)
+				? attendanceRecordRepository.findAllBySchoolIdAndSectionIdAndAttendanceDateBetween(schoolId, sectionId, from, to)
+				: attendanceRecordRepository.findAllBySchoolIdAndSectionId(schoolId, sectionId);
+
+		Map<UUID, List<AttendanceRecord>> recordsByStudentId = records.stream()
+				.collect(Collectors.groupingBy(r -> r.getStudent().getId()));
+
+		List<SectionStudentAttendanceSummary> summaries = students.stream()
+				.map(student -> {
+					List<AttendanceRecord> studentRecords = recordsByStudentId.getOrDefault(student.getId(), List.of());
+					Map<AttendanceStatus, Long> counts = studentRecords.stream()
+							.collect(Collectors.groupingBy(AttendanceRecord::getStatus, Collectors.counting()));
+					return new SectionStudentAttendanceSummary(
+							student.getId(),
+							student.getName(),
+							student.getRollNumber(),
+							studentRecords.size(),
+							counts.getOrDefault(AttendanceStatus.PRESENT, 0L),
+							counts.getOrDefault(AttendanceStatus.ABSENT, 0L),
+							counts.getOrDefault(AttendanceStatus.LATE, 0L),
+							counts.getOrDefault(AttendanceStatus.HALF_DAY, 0L)
+					);
+				})
+				.toList();
+
+		return new SectionAttendanceHistoryResponse(
+				section.getId(), section.getClassName(), section.getSection(), section.getAcademicYear(), from, to, summaries);
 	}
 
 	private Employee resolveMarkingTeacher(ClassSection section, UUID requestedTeacherId) {
