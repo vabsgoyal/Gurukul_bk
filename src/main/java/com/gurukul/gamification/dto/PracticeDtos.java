@@ -31,6 +31,7 @@ public class PracticeDtos {
 	public static class SubmitPracticeAnswerResponse {
 		private boolean correct;
 		private boolean sessionCompleted;
+		private QuizOption correctOption;
 	}
 
 	@Getter @AllArgsConstructor

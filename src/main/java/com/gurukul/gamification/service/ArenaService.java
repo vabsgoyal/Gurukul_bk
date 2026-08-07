@@ -195,7 +195,7 @@ public class ArenaService {
 		quizAnswerRepository.save(answer);
 
 		boolean completed = tryResolve(challenge);
-		return new SubmitAnswerResponse(correct, completed);
+		return new SubmitAnswerResponse(correct, completed, question.getCorrectOption());
 	}
 
 	/** Every night: expire challenges nobody finished within 48 hours. */

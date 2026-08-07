@@ -84,6 +84,7 @@ public class ArenaDtos {
 	public static class SubmitAnswerResponse {
 		private boolean correct;
 		private boolean challengeCompleted;
+		private QuizOption correctOption;
 	}
 
 	@Getter @AllArgsConstructor

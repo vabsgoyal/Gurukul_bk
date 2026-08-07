@@ -118,7 +118,7 @@ public class PracticeService {
 			sessionRepository.save(session);
 		}
 
-		return new SubmitPracticeAnswerResponse(correct, completed);
+		return new SubmitPracticeAnswerResponse(correct, completed, question.getCorrectOption());
 	}
 
 	private PracticeSessionResponse buildResponse(PracticeSession session) {
