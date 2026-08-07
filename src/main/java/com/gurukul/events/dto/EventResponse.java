@@ -3,6 +3,7 @@ package com.gurukul.events.dto;
 import com.gurukul.events.entity.EventCategory;
 import com.gurukul.events.entity.EventParticipationStatus;
 import com.gurukul.events.entity.EventParticipationType;
+import com.gurukul.events.entity.EventRsvpStatus;
 import com.gurukul.events.entity.EventScope;
 import com.gurukul.events.entity.EventStatus;
 import com.gurukul.events.entity.SchoolEvent;
@@ -13,6 +14,7 @@ import lombok.Getter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Getter
@@ -41,11 +43,18 @@ public class EventResponse {
 	private List<EventRequest.RegistrationFieldDefinition> registrationFields;
 	private UUID createdByEmployeeId;
 	private String createdByEmployeeName;
+	@Schema(description = "The caller's own RSVP, if participationType=RSVP and they've responded - "
+			+ "the only way a non-creator/admin can ever read their own RSVP back")
+	private EventRsvpStatus myRsvpStatus;
+	@Schema(description = "The caller's own registration answers, if participationType=REGISTRATION "
+			+ "and they've submitted - the only way a non-creator/admin can ever read their own registration back")
+	private Map<String, String> myRegistrationAnswers;
 	private Instant createdAt;
 	private Instant updatedAt;
 
 	public static EventResponse from(SchoolEvent event, EventParticipationStatus participationStatus,
-			List<EventRequest.RegistrationFieldDefinition> registrationFields) {
+			List<EventRequest.RegistrationFieldDefinition> registrationFields,
+			EventRsvpStatus myRsvpStatus, Map<String, String> myRegistrationAnswers) {
 		return new EventResponse(
 				event.getId(),
 				event.getSchoolId(),
@@ -67,6 +76,8 @@ public class EventResponse {
 				registrationFields,
 				event.getCreatedByEmployee() != null ? event.getCreatedByEmployee().getId() : null,
 				event.getCreatedByEmployee() != null ? event.getCreatedByEmployee().getName() : null,
+				myRsvpStatus,
+				myRegistrationAnswers,
 				event.getCreatedAt(),
 				event.getUpdatedAt()
 		);

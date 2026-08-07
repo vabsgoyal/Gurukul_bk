@@ -31,6 +31,7 @@ import com.gurukul.events.entity.EventPollOption;
 import com.gurukul.events.entity.EventPollVote;
 import com.gurukul.events.entity.EventRegistration;
 import com.gurukul.events.entity.EventRsvp;
+import com.gurukul.events.entity.EventRsvpStatus;
 import com.gurukul.events.entity.EventScope;
 import com.gurukul.events.entity.EventStatus;
 import com.gurukul.events.entity.SchoolEvent;
@@ -94,7 +95,7 @@ public class EventService {
 		List<SchoolEvent> all = eventRepository.findAllBySchoolIdOrderByEventDateDesc(schoolId);
 		return all.stream()
 				.filter(e -> isVisibleTo(principal, e))
-				.map(this::toResponse)
+				.map(e -> toResponse(principal, e))
 				.filter(r -> scopeFilter == null || r.getScope() == scopeFilter)
 				.filter(r -> statusFilter == null || r.getParticipationStatus() == statusFilter)
 				.toList();
@@ -102,7 +103,7 @@ public class EventService {
 
 	@Transactional(readOnly = true)
 	public EventResponse getById(AuthPrincipal principal, UUID id) {
-		return toResponse(requireVisible(principal, id));
+		return toResponse(principal, requireVisible(principal, id));
 	}
 
 	@Transactional
@@ -155,7 +156,7 @@ public class EventService {
 		if (opensIntoParticipation) {
 			notifyViaAnnouncement(principal, saved);
 		}
-		return toResponse(saved);
+		return toResponse(principal, saved);
 	}
 
 	@Transactional
@@ -186,7 +187,7 @@ public class EventService {
 		if (request.getEndAt() != null) {
 			event.setEndAt(request.getEndAt());
 		}
-		return toResponse(eventRepository.save(event));
+		return toResponse(principal, eventRepository.save(event));
 	}
 
 	/** Soft cancel for the participation flow - RSVPs/registrations/poll data stay intact for history. */
@@ -458,10 +459,23 @@ public class EventService {
 		event.setEventDate(request.getEventDate());
 	}
 
-	private EventResponse toResponse(SchoolEvent event) {
+	private EventResponse toResponse(AuthPrincipal principal, SchoolEvent event) {
 		List<RegistrationFieldDefinition> fields = event.getParticipationType() == EventParticipationType.REGISTRATION
 				? parseRegistrationFields(event) : null;
-		return EventResponse.from(event, computeParticipationStatus(event), fields);
+		EventRsvpStatus myRsvpStatus = null;
+		Map<String, String> myRegistrationAnswers = null;
+		if (principal != null) {
+			if (event.getParticipationType() == EventParticipationType.RSVP) {
+				myRsvpStatus = eventRsvpRepository
+						.findByEventIdAndOwnerIdAndOwnerType(event.getId(), principal.getOwnerId(), principal.getOwnerType())
+						.map(EventRsvp::getStatus).orElse(null);
+			} else if (event.getParticipationType() == EventParticipationType.REGISTRATION) {
+				myRegistrationAnswers = eventRegistrationRepository
+						.findByEventIdAndOwnerIdAndOwnerType(event.getId(), principal.getOwnerId(), principal.getOwnerType())
+						.map(r -> readJsonMap(r.getAnswers())).orElse(null);
+			}
+		}
+		return EventResponse.from(event, computeParticipationStatus(event), fields, myRsvpStatus, myRegistrationAnswers);
 	}
 
 	private EventParticipationStatus computeParticipationStatus(SchoolEvent event) {
