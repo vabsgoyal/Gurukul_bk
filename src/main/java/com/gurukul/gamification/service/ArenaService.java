@@ -86,11 +86,16 @@ public class ArenaService {
 		return QuizQuestionResponse.from(quizQuestionRepository.save(question));
 	}
 
-	public List<QuizQuestionResponse> listQuestions(AuthPrincipal principal, UUID subjectId, String className) {
+	@Transactional(readOnly = true)
+	public List<QuizQuestionResponse> listQuestions(AuthPrincipal principal, UUID subjectId, String className, UUID createdByEmployeeId) {
 		if (principal.getRole() != Role.ADMIN && principal.getRole() != Role.TEACHER) {
 			throw new AccessDeniedException("Only a teacher or admin can view the question bank");
 		}
-		return quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(principal.getSchoolId(), subjectId, className).stream()
+		List<QuizQuestion> questions = createdByEmployeeId == null
+				? quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(principal.getSchoolId(), subjectId, className)
+				: quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassNameAndCreatedByTeacherId(
+						principal.getSchoolId(), subjectId, className, createdByEmployeeId);
+		return questions.stream()
 				.map(QuizQuestionResponse::from)
 				.toList();
 	}

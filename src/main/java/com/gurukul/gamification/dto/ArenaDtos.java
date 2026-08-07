@@ -42,10 +42,13 @@ public class ArenaDtos {
 		private String optionC;
 		private String optionD;
 		private QuizOption correctOption;
+		private UUID createdByEmployeeId;
+		private String createdByEmployeeName;
 
 		public static QuizQuestionResponse from(QuizQuestion q) {
 			return new QuizQuestionResponse(
-					q.getId(), q.getClassName(), q.getQuestionText(), q.getOptionA(), q.getOptionB(), q.getOptionC(), q.getOptionD(), q.getCorrectOption());
+					q.getId(), q.getClassName(), q.getQuestionText(), q.getOptionA(), q.getOptionB(), q.getOptionC(), q.getOptionD(), q.getCorrectOption(),
+					q.getCreatedByTeacher().getId(), q.getCreatedByTeacher().getName());
 		}
 	}
 

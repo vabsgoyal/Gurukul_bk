@@ -14,4 +14,7 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, UUID
 
 	List<QuizQuestion> findAllBySchoolIdAndSubjectIdAndClassName(UUID schoolId, UUID subjectId, String className);
 
+	List<QuizQuestion> findAllBySchoolIdAndSubjectIdAndClassNameAndCreatedByTeacherId(
+			UUID schoolId, UUID subjectId, String className, UUID createdByTeacherId);
+
 }
