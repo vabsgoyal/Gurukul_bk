@@ -17,4 +17,10 @@ public final class AuthContext {
 		return principal;
 	}
 
+	/** Like current(), but returns null instead of throwing when no principal is authenticated. */
+	public static AuthPrincipal currentOrNull() {
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		return authentication != null && authentication.getPrincipal() instanceof AuthPrincipal principal ? principal : null;
+	}
+
 }
