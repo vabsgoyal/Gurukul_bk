@@ -90,7 +90,8 @@ public class EventService {
 	 * those see everything unfiltered, exactly as before this feature existed.
 	 */
 	@Transactional(readOnly = true)
-	public List<EventResponse> listVisible(AuthPrincipal principal, EventScope scopeFilter, EventParticipationStatus statusFilter) {
+	public List<EventResponse> listVisible(AuthPrincipal principal, EventScope scopeFilter, EventParticipationStatus statusFilter,
+			String classNameFilter) {
 		UUID schoolId = principal != null ? principal.getSchoolId() : schoolContext.getSchoolId();
 		List<SchoolEvent> all = eventRepository.findAllBySchoolIdOrderByEventDateDesc(schoolId);
 		return all.stream()
@@ -98,6 +99,7 @@ public class EventService {
 				.map(e -> toResponse(principal, e))
 				.filter(r -> scopeFilter == null || r.getScope() == scopeFilter)
 				.filter(r -> statusFilter == null || r.getParticipationStatus() == statusFilter)
+				.filter(r -> classNameFilter == null || classNameFilter.equals(r.getClassName()))
 				.toList();
 	}
 

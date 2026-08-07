@@ -44,12 +44,16 @@ public class EventController {
 	private final EventService eventService;
 
 	@GetMapping
-	@Operation(summary = "List events visible to the caller, optionally filtered by scope/status. "
-			+ "Callers with no JWT (legacy finance clients) see every event, unfiltered, as before.")
+	@Operation(summary = "List events visible to the caller, optionally filtered by scope/status/className. "
+			+ "className narrows to one grade's GRADE-scoped events (e.g. \"Grade 8\") - a student can already "
+			+ "only see their own grade's, so for them this mainly toggles GRADE events on/off; a teacher/admin "
+			+ "sees every grade by default and can use this to browse one at a time. Callers with no JWT "
+			+ "(legacy finance clients) see every event, unfiltered, as before.")
 	public ApiResponse<List<EventResponse>> list(
 			@RequestParam(required = false) EventScope scope,
-			@RequestParam(required = false) EventParticipationStatus status) {
-		return ApiResponse.success(eventService.listVisible(AuthContext.currentOrNull(), scope, status));
+			@RequestParam(required = false) EventParticipationStatus status,
+			@RequestParam(required = false) String className) {
+		return ApiResponse.success(eventService.listVisible(AuthContext.currentOrNull(), scope, status, className));
 	}
 
 	@GetMapping("/{id}")
