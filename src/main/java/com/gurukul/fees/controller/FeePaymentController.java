@@ -4,6 +4,8 @@ import com.gurukul.common.ApiResponse;
 import com.gurukul.fees.dto.FeeAssessmentResponse;
 import com.gurukul.fees.dto.FeePaymentRequest;
 import com.gurukul.fees.dto.FeePaymentResponse;
+import com.gurukul.fees.dto.UpiQrRequest;
+import com.gurukul.fees.dto.UpiQrResponse;
 import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.service.FeePaymentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +53,21 @@ public class FeePaymentController {
 	@Operation(summary = "Get fee payment by ID")
 	public ApiResponse<FeePaymentResponse> getPayment(@PathVariable UUID id) {
 		return ApiResponse.success(feePaymentService.getPayment(id));
+	}
+
+	@PostMapping("/api/v1/fee-assessments/{assessmentId}/upi-qr")
+	@Operation(
+			summary = "Generate a UPI QR payment request",
+			description = """
+					Returns a standard UPI deep link (upi://pay?...) to render as a QR code, scannable by any
+					UPI app. This does not verify payment - there is no payment gateway behind it yet, so the
+					payment must still be confirmed manually via POST /api/v1/fee-payments once received.
+					"""
+	)
+	public ApiResponse<UpiQrResponse> generateUpiQr(
+			@PathVariable UUID assessmentId,
+			@Valid @RequestBody UpiQrRequest request) {
+		return ApiResponse.success(feePaymentService.generateUpiQr(assessmentId, request), "UPI QR generated");
 	}
 
 }

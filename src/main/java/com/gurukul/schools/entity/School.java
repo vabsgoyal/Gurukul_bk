@@ -51,6 +51,12 @@ public class School {
 	@Column(name = "director_name", nullable = false)
 	private String directorName;
 
+	@Column(name = "upi_vpa")
+	private String upiVpa;
+
+	@Column(name = "upi_payee_name")
+	private String upiPayeeName;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 

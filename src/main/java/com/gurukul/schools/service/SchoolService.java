@@ -117,11 +117,18 @@ public class SchoolService {
 		school.setContactPhone(request.getContactPhone());
 		school.setPrincipalName(request.getPrincipalName());
 		school.setDirectorName(request.getDirectorName());
+		school.setUpiVpa(request.getUpiVpa());
+		school.setUpiPayeeName(request.getUpiPayeeName());
 		return toResponse(schoolRepository.save(school));
 	}
 
 	public void requireExists(UUID id) {
 		findSchool(id);
+	}
+
+	/** Exposes the raw entity for other modules that need school-level fields (e.g. fees needs upiVpa). */
+	public School getEntity(UUID id) {
+		return findSchool(id);
 	}
 
 	private SchoolResponse toResponse(School school) {

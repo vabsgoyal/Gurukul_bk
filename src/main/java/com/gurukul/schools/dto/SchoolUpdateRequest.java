@@ -48,4 +48,10 @@ public class SchoolUpdateRequest {
 	@Schema(description = "Director full name", example = "Mr. Sanjay Mehta")
 	private String directorName;
 
+	@Schema(description = "UPI VPA (payment address) that fee QR codes pay into, e.g. school@bank", example = "dpsjaipur@okhdfcbank")
+	private String upiVpa;
+
+	@Schema(description = "Payee name shown in the UPI app during payment; defaults to the school name if blank", example = "Delhi Public School")
+	private String upiPayeeName;
+
 }

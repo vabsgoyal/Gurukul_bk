@@ -43,6 +43,12 @@ public class SchoolResponse {
 	@Schema(description = "Director full name")
 	private String directorName;
 
+	@Schema(description = "UPI VPA (payment address) that fee QR codes pay into, if configured")
+	private String upiVpa;
+
+	@Schema(description = "Payee name shown in the UPI app during payment")
+	private String upiPayeeName;
+
 	@Schema(description = "Live count of enrolled students (computed, not stored)")
 	private long studentCount;
 
@@ -70,6 +76,8 @@ public class SchoolResponse {
 				school.getContactPhone(),
 				school.getPrincipalName(),
 				school.getDirectorName(),
+				school.getUpiVpa(),
+				school.getUpiPayeeName(),
 				studentCount,
 				classSectionCount,
 				teacherCount,
