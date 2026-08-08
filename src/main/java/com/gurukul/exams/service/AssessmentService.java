@@ -73,6 +73,7 @@ public class AssessmentService {
 		assessment.setAssessmentDate(request.getAssessmentDate());
 		assessment.setMaxMarks(request.getMaxMarks());
 		assessment.setDescription(request.getDescription());
+		assessment.setTerm(request.getTerm());
 
 		if (request.getSubjectId() != null) {
 			Subject subject = subjectRepository.findByIdAndSchoolId(request.getSubjectId(), schoolContext.getSchoolId())

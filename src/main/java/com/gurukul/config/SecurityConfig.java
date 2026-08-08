@@ -61,6 +61,17 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/assessments").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/v1/assessments/*").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.DELETE, "/api/v1/assessments/*").hasAnyRole("TEACHER", "ADMIN")
+						// Exam results: entry/roster-view is a teacher/admin tool - a student sees their own
+						// marks through the report-card/grade-card endpoint below, not this roster shape.
+						.requestMatchers(HttpMethod.POST, "/api/v1/assessments/*/results").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/assessments/*/results").hasAnyRole("TEACHER", "ADMIN")
+						// Grading scale: any authenticated role reads it (needed to interpret a grade card),
+						// only an admin may redefine the bands.
+						.requestMatchers(HttpMethod.PUT, "/api/v1/grading-scale").hasRole("ADMIN")
+						// Report cards: publishing is an admin action; viewing is student/teacher/admin with
+						// the student-sees-only-their-own-and-only-once-published check in the service layer.
+						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT")
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")

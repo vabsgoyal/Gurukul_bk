@@ -43,6 +43,11 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
 	}
 
+	@ExceptionHandler(IllegalStateException.class)
+	public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));

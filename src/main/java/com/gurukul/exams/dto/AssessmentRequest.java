@@ -43,4 +43,7 @@ public class AssessmentRequest {
 	@Schema(description = "Teacher (Employee) UUID who scheduled this assessment (optional)")
 	private UUID teacherId;
 
+	@Schema(description = "Free-text term grouping for report cards, e.g. \"Term 1\" (optional)")
+	private String term;
+
 }
