@@ -1,5 +1,6 @@
 package com.gurukul.chat.service;
 
+import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.chat.dto.AnnouncementDtos.CreateAnnouncementRequest;
@@ -7,6 +8,9 @@ import com.gurukul.chat.entity.Announcement;
 import com.gurukul.chat.entity.AnnouncementScope;
 import com.gurukul.chat.repository.AnnouncementRepository;
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.employees.repository.EmployeeRepository;
+import com.gurukul.notifications.service.PushNotificationService;
+import com.gurukul.notifications.service.PushNotificationService.Recipient;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.ClassSectionRepository;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -36,17 +41,23 @@ public class AnnouncementService {
 	private final AnnouncementRepository announcementRepository;
 	private final ClassSectionRepository classSectionRepository;
 	private final StudentRepository studentRepository;
+	private final EmployeeRepository employeeRepository;
 	private final SimpMessagingTemplate messagingTemplate;
+	private final PushNotificationService pushNotificationService;
 
 	public AnnouncementService(
 			AnnouncementRepository announcementRepository,
 			ClassSectionRepository classSectionRepository,
 			StudentRepository studentRepository,
-			@Lazy SimpMessagingTemplate messagingTemplate) {
+			EmployeeRepository employeeRepository,
+			@Lazy SimpMessagingTemplate messagingTemplate,
+			PushNotificationService pushNotificationService) {
 		this.announcementRepository = announcementRepository;
 		this.classSectionRepository = classSectionRepository;
 		this.studentRepository = studentRepository;
+		this.employeeRepository = employeeRepository;
 		this.messagingTemplate = messagingTemplate;
+		this.pushNotificationService = pushNotificationService;
 	}
 
 	@Transactional
@@ -98,6 +109,7 @@ public class AnnouncementService {
 
 		Announcement saved = announcementRepository.save(announcement);
 		broadcast(saved);
+		notify(saved);
 		return saved;
 	}
 
@@ -175,6 +187,28 @@ public class AnnouncementService {
 
 	public static String decodeClassNameFromTopic(String encoded) {
 		return encoded.replace("_", " ");
+	}
+
+	/**
+	 * Every employee (any ADMIN/TEACHER can see any announcement - see isSectionVisibleTo/
+	 * isGradeVisibleTo above) plus whichever students the scope actually covers.
+	 */
+	private void notify(Announcement announcement) {
+		UUID schoolId = announcement.getSchoolId();
+		List<Recipient> recipients = new java.util.ArrayList<>(
+				employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
+						.map(e -> new Recipient(OwnerType.EMPLOYEE, e.getId()))
+						.toList());
+
+		List<Student> students = switch (announcement.getScope()) {
+			case SCHOOL -> studentRepository.findAllBySchoolId(schoolId);
+			case CLASS -> studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, announcement.getSectionId());
+			case GRADE -> studentRepository.findAllBySchoolIdAndClassSection_ClassName(schoolId, announcement.getClassName());
+		};
+		students.forEach(s -> recipients.add(new Recipient(OwnerType.STUDENT, s.getId())));
+
+		pushNotificationService.sendToRecipients(schoolId, recipients, "New announcement", announcement.getTitle(),
+				Map.of("type", "ANNOUNCEMENT", "announcementId", String.valueOf(announcement.getId())));
 	}
 
 	private void broadcast(Announcement announcement) {
