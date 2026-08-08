@@ -7,6 +7,7 @@ import com.gurukul.chat.dto.ChatDtos.SendMessageRequest;
 import com.gurukul.chat.entity.Conversation;
 import com.gurukul.chat.entity.ConversationType;
 import com.gurukul.chat.entity.Message;
+import com.gurukul.chat.service.AttachmentService;
 import com.gurukul.chat.service.ConversationService;
 import com.gurukul.chat.service.MessageService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class ChatMessageController {
 
 	private final ConversationService conversationService;
 	private final MessageService messageService;
+	private final AttachmentService attachmentService;
 	private final SimpMessagingTemplate messagingTemplate;
 	private final BotReplyService botReplyService;
 
@@ -43,9 +45,11 @@ public class ChatMessageController {
 			SimpMessageHeaderAccessor accessor) {
 		AuthPrincipal principal = requirePrincipal(accessor);
 		Conversation conversation = conversationService.requireParticipant(principal, conversationId);
-		Message saved = messageService.send(conversation, principal, request.getContent());
+		Message saved = messageService.send(conversation, principal, request.getContent(),
+				request.getAttachmentObjectKey(), request.getAttachmentContentType(), request.getAttachmentFileName());
+		String attachmentUrl = attachmentService.presignDownload(saved.getAttachmentObjectKey());
 		messagingTemplate.convertAndSend(
-				"/topic/conversations/" + conversationId, MessageResponse.from(saved));
+				"/topic/conversations/" + conversationId, MessageResponse.from(saved, attachmentUrl));
 		if (conversation.getType() == ConversationType.BOT) {
 			botReplyService.generateReply(conversation, saved, principal);
 		}

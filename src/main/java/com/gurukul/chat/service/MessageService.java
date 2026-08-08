@@ -26,14 +26,22 @@ public class MessageService {
 	private final MessageRepository messageRepository;
 
 	@Transactional
-	public Message send(Conversation conversation, AuthPrincipal principal, String content) {
+	public Message send(Conversation conversation, AuthPrincipal principal, String content,
+			String attachmentObjectKey, String attachmentContentType, String attachmentFileName) {
+		boolean blankContent = content == null || content.isBlank();
+		if (blankContent && attachmentObjectKey == null) {
+			throw new IllegalArgumentException("A message needs content, an attachment, or both");
+		}
 		Message message = new Message();
 		message.setSchoolId(conversation.getSchoolId());
 		message.setConversation(conversation);
 		message.setSenderKind(SenderKind.HUMAN);
 		message.setSenderOwnerType(principal.getOwnerType());
 		message.setSenderOwnerId(principal.getOwnerId());
-		message.setContent(content);
+		message.setContent(blankContent ? null : content);
+		message.setAttachmentObjectKey(attachmentObjectKey);
+		message.setAttachmentContentType(attachmentContentType);
+		message.setAttachmentFileName(attachmentFileName);
 		message.setSentAt(Instant.now());
 		return messageRepository.save(message);
 	}

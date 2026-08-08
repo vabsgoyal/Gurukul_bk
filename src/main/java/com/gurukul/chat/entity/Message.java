@@ -17,6 +17,11 @@ import java.time.Instant;
 
 /**
  * senderOwnerType/senderOwnerId are null exactly when senderKind = BOT (see V18 CHECK constraint).
+ *
+ * <p>content is nullable: a message can be attachment-only (an image/PDF with no caption) - see
+ * V38 CHECK constraint requiring at least one of content/attachmentObjectKey. attachmentObjectKey
+ * is the S3 key, not a URL - AttachmentService.presignDownload freshly signs a GET url on every
+ * read, so a message from months ago never shows an expired link.
  */
 @Getter
 @Setter
@@ -39,8 +44,17 @@ public class Message extends BaseEntity {
 	@Column(name = "sender_owner_id")
 	private java.util.UUID senderOwnerId;
 
-	@Column(nullable = false, columnDefinition = "TEXT")
+	@Column(columnDefinition = "TEXT")
 	private String content;
+
+	@Column(name = "attachment_object_key")
+	private String attachmentObjectKey;
+
+	@Column(name = "attachment_content_type")
+	private String attachmentContentType;
+
+	@Column(name = "attachment_file_name")
+	private String attachmentFileName;
 
 	@Column(name = "sent_at", nullable = false)
 	private Instant sentAt;

@@ -6,8 +6,11 @@ import com.gurukul.chat.dto.ChatDtos.ConversationResponse;
 import com.gurukul.chat.dto.ChatDtos.CreateConversationRequest;
 import com.gurukul.chat.dto.ChatDtos.MessagePageResponse;
 import com.gurukul.chat.dto.ChatDtos.MessageResponse;
+import com.gurukul.chat.dto.ChatDtos.PresignAttachmentRequest;
+import com.gurukul.chat.dto.ChatDtos.PresignAttachmentResponse;
 import com.gurukul.chat.entity.Conversation;
 import com.gurukul.chat.entity.Message;
+import com.gurukul.chat.service.AttachmentService;
 import com.gurukul.chat.service.ConversationService;
 import com.gurukul.chat.service.MessageService;
 import com.gurukul.common.ApiResponse;
@@ -36,6 +39,7 @@ public class ConversationController {
 
 	private final ConversationService conversationService;
 	private final MessageService messageService;
+	private final AttachmentService attachmentService;
 
 	@PostMapping("/api/v1/chat/conversations")
 	@Operation(summary = "Create (or fetch, if one already exists) a 1:1 conversation",
@@ -66,7 +70,21 @@ public class ConversationController {
 		conversationService.requireParticipant(principal, id);
 		Page<Message> result = messageService.history(id, PageRequest.of(page, size));
 		return ApiResponse.success(new MessagePageResponse(
-				result.getContent().stream().map(MessageResponse::from).toList(), result.hasNext()));
+				result.getContent().stream()
+						.map(m -> MessageResponse.from(m, attachmentService.presignDownload(m.getAttachmentObjectKey())))
+						.toList(),
+				result.hasNext()));
+	}
+
+	@PostMapping("/api/v1/chat/conversations/{id}/attachments/presign")
+	@Operation(summary = "Request a presigned S3 upload slot for one image/PDF attachment",
+			description = "Upload the raw file bytes to the returned uploadUrl directly (PUT, with the same "
+					+ "Content-Type sent here), then send the message over STOMP with the returned objectKey.")
+	public ApiResponse<PresignAttachmentResponse> presignAttachment(
+			@PathVariable UUID id, @Valid @RequestBody PresignAttachmentRequest request) {
+		AuthPrincipal principal = AuthContext.current();
+		conversationService.requireParticipant(principal, id);
+		return ApiResponse.success(attachmentService.presignUpload(principal, id, request));
 	}
 
 	@PostMapping("/api/v1/chat/bot/conversation")
