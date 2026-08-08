@@ -1,5 +1,6 @@
 package com.gurukul.common;
 
+import com.gurukul.teachers.service.TeacherAiGenerationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -43,6 +44,11 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
 	}
 
+	@ExceptionHandler(IllegalStateException.class)
+	public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
@@ -61,6 +67,12 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(AccessDeniedException.class)
 	public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
 		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
+	}
+
+	@ExceptionHandler(TeacherAiGenerationException.class)
+	public ResponseEntity<ApiResponse<Void>> handleTeacherAiGeneration(TeacherAiGenerationException ex) {
+		log.error("Teacher AI quiz generation failed", ex);
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponse.error(ex.getMessage()));
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)

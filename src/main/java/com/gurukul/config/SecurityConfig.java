@@ -67,6 +67,15 @@ public class SecurityConfig {
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// Teacher resources and AI quiz generation: create/upload/generate/delete are
+						// teacher-or-admin actions; viewing is open to students too since resources are
+						// shared with their class.
+						.requestMatchers(HttpMethod.POST,
+								"/api/v1/teachers/*/resources", "/api/v1/teachers/*/resources/upload", "/api/v1/teachers/*/ai/quiz-generator")
+						.hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.GET, "/api/v1/teachers/*/resources", "/api/v1/teachers/class-sections/*/resources")
+						.hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/teachers/resources/*").hasAnyRole("ADMIN", "TEACHER")
 						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
 						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
 						// Everything else is unchanged (no auth) for now - see auth ticket for phased retrofit scope.
