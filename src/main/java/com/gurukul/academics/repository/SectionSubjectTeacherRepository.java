@@ -18,4 +18,6 @@ public interface SectionSubjectTeacherRepository extends JpaRepository<SectionSu
 
 	Optional<SectionSubjectTeacher> findBySectionIdAndSubjectIdAndTeacherId(UUID sectionId, UUID subjectId, UUID teacherId);
 
+	boolean existsBySectionIdAndTeacherId(UUID sectionId, UUID teacherId);
+
 }
