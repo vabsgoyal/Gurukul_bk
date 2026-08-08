@@ -2,6 +2,7 @@ package com.gurukul.exams.service;
 
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceHistoryResponse;
 import com.gurukul.attendance.service.AttendanceService;
+import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
@@ -16,6 +17,8 @@ import com.gurukul.exams.entity.ReportCardPublication;
 import com.gurukul.exams.repository.AssessmentResultRepository;
 import com.gurukul.exams.repository.ReportCardPublicationRepository;
 import com.gurukul.academics.entity.Subject;
+import com.gurukul.notifications.service.PushNotificationService;
+import com.gurukul.notifications.service.PushNotificationService.Recipient;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
@@ -46,6 +49,7 @@ public class ReportCardService {
 	private final GradingScaleService gradingScaleService;
 	private final AttendanceService attendanceService;
 	private final SchoolContext schoolContext;
+	private final PushNotificationService pushNotificationService;
 
 	@Transactional
 	public PublicationResponse publish(UUID sectionId, String term) {
@@ -62,8 +66,19 @@ public class ReportCardService {
 		publication.setPublishedAt(Instant.now());
 		publication.setPublishedByEmployee(employeeService.getScopedEntity(principal.getOwnerId()));
 		ReportCardPublication saved = reportCardPublicationRepository.save(publication);
+		notifyStudents(saved);
 		return new PublicationResponse(
 				saved.getClassSection().getId(), saved.getTerm(), saved.getPublishedAt(), saved.getPublishedByEmployee().getName());
+	}
+
+	private void notifyStudents(ReportCardPublication publication) {
+		UUID sectionId = publication.getClassSection().getId();
+		List<Recipient> recipients = studentRepository.findAllBySchoolIdAndClassSectionId(publication.getSchoolId(), sectionId).stream()
+				.map(s -> new Recipient(OwnerType.STUDENT, s.getId()))
+				.toList();
+		pushNotificationService.sendToRecipients(publication.getSchoolId(), recipients, "Report card published",
+				"Your " + publication.getTerm() + " report card is now available",
+				Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", publication.getTerm()));
 	}
 
 	/**
