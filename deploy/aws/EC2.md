@@ -167,14 +167,28 @@ sudo docker logs gurukul-backend
 
 File: `/etc/gurukul/backend.env`
 
-| Variable | Value |
-|----------|--------|
-| `SPRING_PROFILES_ACTIVE` | `prod` |
-| `AWS_REGION` | `eu-north-1` |
-| `SPRING_DATASOURCE_URL` | `jdbc:aws-wrapper:postgresql://gurukul.cluster-cro4soma8nh2.eu-north-1.rds.amazonaws.com:5432/postgres?sslmode=require` |
-| `SPRING_DATASOURCE_USERNAME` | `postgres` |
+| Variable | Value | Managed by |
+|----------|--------|--------|
+| `SPRING_PROFILES_ACTIVE` | `prod` | static, set once on the instance |
+| `DB_PROVIDER` | `supabase` (default if unset - set to `aurora` to switch back) | **GitHub Secret**, pushed on every deploy |
+| `SPRING_DATASOURCE_URL` | e.g. `jdbc:postgresql://db.<project-ref>.supabase.co:5432/postgres?sslmode=require` | **GitHub Secret**, pushed on every deploy |
+| `SPRING_DATASOURCE_USERNAME` | `postgres` | **GitHub Secret**, pushed on every deploy |
+| `SPRING_DATASOURCE_PASSWORD` | Supabase DB password (unused by the `aurora` branch) | **GitHub Secret**, pushed on every deploy |
+| `AWS_REGION` | `eu-north-1` (only used by the `aurora` branch, for IAM auth) | static, set once on the instance |
 
-No password. Credentials come from the **EC2 instance role** via the AWS SDK inside the container.
+`DB_PROVIDER`, `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and
+`SPRING_DATASOURCE_PASSWORD` are **no longer hand-edited on the instance** - the "Deploy to EC2
+via SSM" step in `.github/workflows/deploy.yml` overwrites all four in
+`/etc/gurukul/backend.env` on every push to `main`, from the GitHub repo secrets of the same
+names (`DB_PROVIDER`, `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`,
+`SPRING_DATASOURCE_PASSWORD` under Settings -> Secrets and variables -> Actions). **Set those 4
+secrets before the next deploy** - if they're left unset, the workflow pushes empty values and
+the next restart will fail to start (no matching `DB_PROVIDER` value means no `DataSource` bean
+gets created at all). Editing the instance's env file directly still works between deploys, but
+gets overwritten by whatever's in GitHub Secrets on the next push.
+
+To switch back to Aurora, change the `DB_PROVIDER`/`SPRING_DATASOURCE_*` GitHub Secrets (not the
+instance file) and redeploy. See `com.gurukul.config.DataSourceConfig`.
 
 ---
 

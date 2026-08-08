@@ -61,15 +61,43 @@ jobs:
         env:
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DB_PROVIDER: ${{ secrets.DB_PROVIDER }}
+          DS_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+          DS_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
+          DS_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
         run: |
           # Always push the repo's deploy-from-s3.sh to the instance before running it, so the
           # instance can never silently drift from what's committed (it previously did - a stale
           # copy with a flat "sleep 25" instead of a real health-check retry loop caused
           # intermittent false-failures on this exact step for several deploys).
           SCRIPT_B64=$(base64 -w0 deploy/aws/deploy-from-s3.sh)
-          COMMANDS=$(jq -n --arg key "$ANTHROPIC_API_KEY" --arg script "$SCRIPT_B64" '[
+
+          # DB_PROVIDER/datasource secrets are base64-wrapped before embedding in the SSM command
+          # (same reasoning as SCRIPT_B64 above) - a DB password is exactly the kind of value
+          # that can contain quotes/$/backticks, which would otherwise corrupt or inject into the
+          # remote shell command built below.
+          DB_PROVIDER_B64=$(printf '%s' "$DB_PROVIDER" | base64 -w0)
+          DS_URL_B64=$(printf '%s' "$DS_URL" | base64 -w0)
+          DS_USERNAME_B64=$(printf '%s' "$DS_USERNAME" | base64 -w0)
+          DS_PASSWORD_B64=$(printf '%s' "$DS_PASSWORD" | base64 -w0)
+
+          COMMANDS=$(jq -n \
+            --arg key "$ANTHROPIC_API_KEY" \
+            --arg provider "$DB_PROVIDER_B64" \
+            --arg url "$DS_URL_B64" \
+            --arg username "$DS_USERNAME_B64" \
+            --arg password "$DS_PASSWORD_B64" \
+            --arg script "$SCRIPT_B64" '[
             "sudo sed -i /^ANTHROPIC_API_KEY=/d /etc/gurukul/backend.env",
             "echo \"ANTHROPIC_API_KEY=\($key)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^DB_PROVIDER=/d /etc/gurukul/backend.env",
+            "echo \"DB_PROVIDER=$(echo \($provider) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^SPRING_DATASOURCE_URL=/d /etc/gurukul/backend.env",
+            "echo \"SPRING_DATASOURCE_URL=$(echo \($url) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^SPRING_DATASOURCE_USERNAME=/d /etc/gurukul/backend.env",
+            "echo \"SPRING_DATASOURCE_USERNAME=$(echo \($username) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^SPRING_DATASOURCE_PASSWORD=/d /etc/gurukul/backend.env",
+            "echo \"SPRING_DATASOURCE_PASSWORD=$(echo \($password) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "echo \($script) | base64 -d | sudo tee /opt/gurukul/deploy-from-s3.sh >/dev/null",
             "sudo chmod +x /opt/gurukul/deploy-from-s3.sh",
             "/opt/gurukul/deploy-from-s3.sh"
