@@ -179,6 +179,27 @@ public class BattleRoomService {
 	}
 
 	/**
+	 * Lets any participant skip the rest of the join window once minPlayers is met, instead of
+	 * waiting for sweep() to do it on the next 5s tick. Same activateRoom() path as the scheduled
+	 * sweep, so there's exactly one way a room actually goes ACTIVE - no separate "host" concept
+	 * needed since any participant may trigger it.
+	 */
+	@Transactional
+	public BattleRoomResponse startRoomNow(AuthPrincipal principal, UUID roomId) {
+		requireStudent(principal);
+		BattleRoom room = requireParticipant(principal, roomId);
+		if (room.getStatus() != BattleRoomStatus.WAITING) {
+			throw new IllegalStateException("This room is no longer waiting to start");
+		}
+		long count = participantRepository.countByRoomId(roomId);
+		if (count < room.getMinPlayers()) {
+			throw new IllegalArgumentException("Need at least " + room.getMinPlayers() + " players to start");
+		}
+		activateRoom(room);
+		return buildResponse(room);
+	}
+
+	/**
 	 * Browse list for a student's own class: every WAITING/ACTIVE room (COMPLETED/CANCELLED ones
 	 * are never worth listing here), optionally filtered to one subject. Class/academicYear are
 	 * derived from the caller's own enrollment, same as everywhere else in this service - never
