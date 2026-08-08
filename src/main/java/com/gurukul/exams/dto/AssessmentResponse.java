@@ -32,6 +32,7 @@ public class AssessmentResponse {
 	private String description;
 	private UUID createdByTeacherId;
 	private String createdByTeacherName;
+	private String term;
 	private Instant createdAt;
 	private Instant updatedAt;
 
@@ -53,6 +54,7 @@ public class AssessmentResponse {
 				assessment.getDescription(),
 				assessment.getCreatedByTeacher() != null ? assessment.getCreatedByTeacher().getId() : null,
 				assessment.getCreatedByTeacher() != null ? assessment.getCreatedByTeacher().getName() : null,
+				assessment.getTerm(),
 				assessment.getCreatedAt(),
 				assessment.getUpdatedAt()
 		);

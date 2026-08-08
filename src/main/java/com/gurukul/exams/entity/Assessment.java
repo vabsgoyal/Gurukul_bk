@@ -52,4 +52,9 @@ public class Assessment extends BaseEntity {
 	@JoinColumn(name = "created_by_teacher_id")
 	private Employee createdByTeacher;
 
+	/** Free-text grouping for report-card purposes (e.g. "Term 1") - nullable, set by whoever
+	 * creates the assessment. Not a fixed enum: schools structure their terms differently. */
+	@Column(length = 50)
+	private String term;
+
 }
