@@ -184,7 +184,7 @@ public class BotReplyService {
 
 	private Message reply(Conversation conversation, String content) {
 		Message saved = messageService.sendBotReply(conversation, content);
-		messagingTemplate.convertAndSend("/topic/conversations/" + conversation.getId(), MessageResponse.from(saved));
+		messagingTemplate.convertAndSend("/topic/conversations/" + conversation.getId(), MessageResponse.from(saved, null));
 		return saved;
 	}
 
