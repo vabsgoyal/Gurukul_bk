@@ -53,6 +53,9 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						// Class teacher assignment: admin-only.
 						.requestMatchers(HttpMethod.PATCH, "/api/v1/class-sections/*/class-teacher").hasRole("ADMIN")
+						// Push notification device registration: any authenticated session registers its
+						// own device, regardless of role.
+						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/device-token").authenticated()
 						// Assessments: teachers/admins author them; students may only ever read (GETs stay
 						// on the general permitAll() below, matching every other read-only listing today).
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/assessments").hasAnyRole("TEACHER", "ADMIN")

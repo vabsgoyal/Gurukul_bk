@@ -21,6 +21,9 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 			UUID schoolId, String className, String section, String academicYear);
 
 	@EntityGraph(attributePaths = "classSection")
+	List<Student> findAllBySchoolIdAndClassSection_ClassName(UUID schoolId, String className);
+
+	@EntityGraph(attributePaths = "classSection")
 	Optional<Student> findByIdAndSchoolId(UUID id, UUID schoolId);
 
 	List<Student> findAllBySchoolIdAndParentContact(UUID schoolId, String parentContact);
