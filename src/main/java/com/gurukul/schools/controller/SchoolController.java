@@ -97,7 +97,7 @@ public class SchoolController {
 			summary = "Set school geolocation and self-attendance geofence radius",
 			description = """
 					Admin-only. Configures the point/radius teachers are checked against when self-marking
-					attendance via POST /api/v1/staff-attendance/self-mark. No X-School-Id header required.
+					attendance via POST /api/v1/staff-attendance/self-mark. Requires the X-School-Id header.
 					"""
 	)
 	@ApiResponses({

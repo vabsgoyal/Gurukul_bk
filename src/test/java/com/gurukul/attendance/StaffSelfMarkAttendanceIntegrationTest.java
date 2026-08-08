@@ -68,6 +68,7 @@ class StaffSelfMarkAttendanceIntegrationTest {
 				.andExpect(jsonPath("$.message").value(containsString("not been configured")));
 
 		mockMvc.perform(put("/api/v1/schools/" + schoolId + "/location")
+						.header("X-School-Id", schoolId)
 						.header(HttpHeaders.AUTHORIZATION, adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
