@@ -53,6 +53,11 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						// Class teacher assignment: admin-only.
 						.requestMatchers(HttpMethod.PATCH, "/api/v1/class-sections/*/class-teacher").hasRole("ADMIN")
+						// Assessments: teachers/admins author them; students may only ever read (GETs stay
+						// on the general permitAll() below, matching every other read-only listing today).
+						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/assessments").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/assessments/*").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/assessments/*").hasAnyRole("TEACHER", "ADMIN")
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")
