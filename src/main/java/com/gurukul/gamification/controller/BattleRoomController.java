@@ -64,6 +64,14 @@ public class BattleRoomController {
 		return ApiResponse.success(battleRoomService.getRoom(AuthContext.current(), id));
 	}
 
+	@PostMapping("/api/v1/gamification/battle-rooms/{id}/start")
+	@Operation(summary = "Start the battle early, once minPlayers is met - any participant may call this, "
+			+ "not just whoever created the room. Pushes the resulting ACTIVE state to everyone over the "
+			+ "existing /topic/battle-rooms/{roomId} subscription.")
+	public ApiResponse<BattleRoomResponse> start(@PathVariable UUID id) {
+		return ApiResponse.success(battleRoomService.startRoomNow(AuthContext.current(), id));
+	}
+
 	@GetMapping("/api/v1/gamification/battle-rooms")
 	@Operation(summary = "Browse open rooms for your own class",
 			description = "Every WAITING or ACTIVE room for your class (any section), optionally filtered to one "
