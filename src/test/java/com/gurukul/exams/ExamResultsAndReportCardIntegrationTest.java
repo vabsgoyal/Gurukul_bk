@@ -74,6 +74,7 @@ class ExamResultsAndReportCardIntegrationTest {
 
 		MvcResult assessmentResult = mockMvc.perform(post("/api/v1/class-sections/" + sectionId + "/assessments")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
