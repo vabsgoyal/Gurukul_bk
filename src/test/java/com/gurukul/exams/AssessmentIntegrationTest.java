@@ -1,10 +1,12 @@
 package com.gurukul.exams;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -28,8 +30,11 @@ class AssessmentIntegrationTest {
 
 	@Test
 	void createListUpdateAndDeleteAssessment() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+
 		MvcResult createResult = mockMvc.perform(post("/api/v1/class-sections/" + CLASS_SECTION_A + "/assessments")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"title": "Unit Test 1", "type": "TEST", "assessmentDate": "2026-08-10", "maxMarks": 50}
@@ -59,6 +64,7 @@ class AssessmentIntegrationTest {
 
 		mockMvc.perform(put("/api/v1/assessments/" + assessmentId)
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"title": "Unit Test 1 (Revised)", "type": "TEST", "assessmentDate": "2026-08-12", "maxMarks": 60}
@@ -68,7 +74,8 @@ class AssessmentIntegrationTest {
 				.andExpect(jsonPath("$.data.maxMarks").value(60.00));
 
 		mockMvc.perform(delete("/api/v1/assessments/" + assessmentId)
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(get("/api/v1/assessments/" + assessmentId)
