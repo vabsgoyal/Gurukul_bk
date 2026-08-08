@@ -11,6 +11,7 @@ import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.entity.EmployeeStatus;
 import com.gurukul.employees.entity.EmployeeType;
 import com.gurukul.employees.repository.EmployeeRepository;
+import com.gurukul.schools.dto.SchoolLocationUpdateRequest;
 import com.gurukul.schools.dto.SchoolRegistrationRequest;
 import com.gurukul.schools.dto.SchoolRegistrationResponse;
 import com.gurukul.schools.dto.SchoolResponse;
@@ -117,6 +118,15 @@ public class SchoolService {
 		school.setContactPhone(request.getContactPhone());
 		school.setPrincipalName(request.getPrincipalName());
 		school.setDirectorName(request.getDirectorName());
+		return toResponse(schoolRepository.save(school));
+	}
+
+	@Transactional
+	public SchoolResponse updateLocation(UUID id, SchoolLocationUpdateRequest request) {
+		School school = findSchool(id);
+		school.setLatitude(request.getLatitude());
+		school.setLongitude(request.getLongitude());
+		school.setGeofenceRadiusMeters(request.getGeofenceRadiusMeters());
 		return toResponse(schoolRepository.save(school));
 	}
 

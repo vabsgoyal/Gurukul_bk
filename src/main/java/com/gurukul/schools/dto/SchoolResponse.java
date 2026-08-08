@@ -43,6 +43,15 @@ public class SchoolResponse {
 	@Schema(description = "Director full name")
 	private String directorName;
 
+	@Schema(description = "Latitude of the school, null until an admin configures it")
+	private Double latitude;
+
+	@Schema(description = "Longitude of the school, null until an admin configures it")
+	private Double longitude;
+
+	@Schema(description = "Radius in meters within which a teacher may self-mark attendance")
+	private Integer geofenceRadiusMeters;
+
 	@Schema(description = "Live count of enrolled students (computed, not stored)")
 	private long studentCount;
 
@@ -70,6 +79,9 @@ public class SchoolResponse {
 				school.getContactPhone(),
 				school.getPrincipalName(),
 				school.getDirectorName(),
+				school.getLatitude(),
+				school.getLongitude(),
+				school.getGeofenceRadiusMeters(),
 				studentCount,
 				classSectionCount,
 				teacherCount,

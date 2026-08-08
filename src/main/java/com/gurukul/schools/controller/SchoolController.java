@@ -1,6 +1,7 @@
 package com.gurukul.schools.controller;
 
 import com.gurukul.common.ApiResponse;
+import com.gurukul.schools.dto.SchoolLocationUpdateRequest;
 import com.gurukul.schools.dto.SchoolRegistrationRequest;
 import com.gurukul.schools.dto.SchoolRegistrationResponse;
 import com.gurukul.schools.dto.SchoolResponse;
@@ -89,6 +90,26 @@ public class SchoolController {
 			@PathVariable UUID id,
 			@Valid @RequestBody SchoolUpdateRequest request) {
 		return ApiResponse.success(schoolService.update(id, request), "School updated");
+	}
+
+	@PutMapping("/{id}/location")
+	@Operation(
+			summary = "Set school geolocation and self-attendance geofence radius",
+			description = """
+					Admin-only. Configures the point/radius teachers are checked against when self-marking
+					attendance via POST /api/v1/staff-attendance/self-mark. No X-School-Id header required.
+					"""
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Location updated"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "School not found")
+	})
+	public ApiResponse<SchoolResponse> updateLocation(
+			@Parameter(description = "School UUID", required = true)
+			@PathVariable UUID id,
+			@Valid @RequestBody SchoolLocationUpdateRequest request) {
+		return ApiResponse.success(schoolService.updateLocation(id, request), "School location updated");
 	}
 
 	@GetMapping

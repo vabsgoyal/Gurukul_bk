@@ -51,6 +51,14 @@ public class School {
 	@Column(name = "director_name", nullable = false)
 	private String directorName;
 
+	/** Null until an admin configures the school's geofence via PUT /api/v1/schools/{id}/location. */
+	private Double latitude;
+
+	private Double longitude;
+
+	@Column(name = "geofence_radius_meters", nullable = false)
+	private Integer geofenceRadiusMeters = 100;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
