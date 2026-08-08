@@ -3,7 +3,10 @@ package com.gurukul.exams.controller;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.exams.dto.AssessmentRequest;
 import com.gurukul.exams.dto.AssessmentResponse;
+import com.gurukul.exams.dto.AssessmentResultResponse;
+import com.gurukul.exams.dto.BulkAssessmentResultRequest;
 import com.gurukul.exams.entity.AssessmentType;
+import com.gurukul.exams.service.AssessmentResultService;
 import com.gurukul.exams.service.AssessmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +30,7 @@ import java.util.UUID;
 public class AssessmentController {
 
 	private final AssessmentService assessmentService;
+	private final AssessmentResultService assessmentResultService;
 
 	@GetMapping("/api/v1/class-sections/{sectionId}/assessments")
 	@Operation(summary = "List assessments for a class-section, optionally filtered by type")
@@ -61,6 +65,34 @@ public class AssessmentController {
 	public ApiResponse<Void> delete(@PathVariable UUID id) {
 		assessmentService.delete(id);
 		return ApiResponse.success(null, "Assessment deleted");
+	}
+
+	@GetMapping("/api/v1/assessments/{assessmentId}/results")
+	@Operation(summary = "List recorded student results for an assessment")
+	public ApiResponse<List<AssessmentResultResponse>> listResults(@PathVariable UUID assessmentId) {
+		return ApiResponse.success(assessmentResultService.listByAssessment(assessmentId));
+	}
+
+	@PostMapping("/api/v1/assessments/{assessmentId}/results")
+	@Operation(summary = "Record (create or update) student results for an assessment")
+	public ApiResponse<List<AssessmentResultResponse>> recordResults(
+			@PathVariable UUID assessmentId, @Valid @RequestBody BulkAssessmentResultRequest request) {
+		return ApiResponse.success(assessmentResultService.recordResults(assessmentId, request), "Results recorded");
+	}
+
+	@PutMapping("/api/v1/assessments/{assessmentId}/results/{resultId}")
+	@Operation(summary = "Update a single student's result")
+	public ApiResponse<AssessmentResultResponse> updateResult(
+			@PathVariable UUID assessmentId, @PathVariable UUID resultId,
+			@Valid @RequestBody BulkAssessmentResultRequest.Entry entry) {
+		return ApiResponse.success(assessmentResultService.update(assessmentId, resultId, entry), "Result updated");
+	}
+
+	@DeleteMapping("/api/v1/assessments/{assessmentId}/results/{resultId}")
+	@Operation(summary = "Delete a single student's result")
+	public ApiResponse<Void> deleteResult(@PathVariable UUID assessmentId, @PathVariable UUID resultId) {
+		assessmentResultService.delete(assessmentId, resultId);
+		return ApiResponse.success(null, "Result deleted");
 	}
 
 }

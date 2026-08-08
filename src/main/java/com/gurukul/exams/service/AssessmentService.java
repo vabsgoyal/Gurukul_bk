@@ -45,6 +45,10 @@ public class AssessmentService {
 		return AssessmentResponse.from(findScoped(id));
 	}
 
+	public Assessment getScopedEntity(UUID id) {
+		return findScoped(id);
+	}
+
 	@Transactional
 	public AssessmentResponse create(UUID sectionId, AssessmentRequest request) {
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
