@@ -17,15 +17,17 @@ import java.util.UUID;
  * The one place that decides who may call whom. Reused for both the immediate-call and
  * scheduled-call REST paths so the rule can never drift between the two.
  *
- * <p>Two pairs are allowed, same school only, never with yourself:
+ * <p>Allowed, same school only, never with yourself:
  * <ul>
  *   <li>EMPLOYEE &lt;-&gt; EMPLOYEE, where at least one side holds {@link Role#ADMIN} (any staff
  *       member can reach "the principal", and the principal can reach any staff member).</li>
  *   <li>STUDENT &lt;-&gt; EMPLOYEE, where the EMPLOYEE is exactly that student's
- *       {@code ClassSection.classTeacher}. A parent's login is a STUDENT-owner-type session (see
- *       OtpService.resolveOwner) - there is no separate Parent entity in this codebase.</li>
+ *       {@code ClassSection.classTeacher}, OR the EMPLOYEE is an admin (full diagnostic reach,
+ *       matching admin's access everywhere else - Arena, Battle Room, House Wars, Events). A
+ *       parent's login is a STUDENT-owner-type session (see OtpService.resolveOwner) - there is no
+ *       separate Parent entity in this codebase.</li>
+ *   <li>STUDENT &lt;-&gt; STUDENT, where both are in the same class-section (classmates).</li>
  * </ul>
- * STUDENT &lt;-&gt; STUDENT is never allowed, matching the existing chat module's rule.
  */
 @Service
 public class CallAuthorizationService {
@@ -61,14 +63,14 @@ public class CallAuthorizationService {
 			return false;
 		}
 		if (callerType == OwnerType.STUDENT && otherType == OwnerType.STUDENT) {
-			return false;
+			return isSameClassSection(schoolId, callerId, otherId);
 		}
 		if (callerType == OwnerType.EMPLOYEE && otherType == OwnerType.EMPLOYEE) {
 			return isAdmin(otherId) || isAdmin(callerId);
 		}
 		UUID studentId = callerType == OwnerType.STUDENT ? callerId : otherId;
 		UUID employeeId = callerType == OwnerType.EMPLOYEE ? callerId : otherId;
-		return isClassTeacherOf(schoolId, studentId, employeeId);
+		return isAdmin(employeeId) || isClassTeacherOf(schoolId, studentId, employeeId);
 	}
 
 	private boolean isAdmin(UUID employeeId) {
@@ -83,6 +85,15 @@ public class CallAuthorizationService {
 			return false;
 		}
 		return student.getClassSection().getClassTeacher().getId().equals(employeeId);
+	}
+
+	private boolean isSameClassSection(UUID schoolId, UUID studentId, UUID otherStudentId) {
+		Student student = studentRepository.findByIdAndSchoolId(studentId, schoolId).orElse(null);
+		Student other = studentRepository.findByIdAndSchoolId(otherStudentId, schoolId).orElse(null);
+		if (student == null || other == null || student.getClassSection() == null || other.getClassSection() == null) {
+			return false;
+		}
+		return student.getClassSection().getId().equals(other.getClassSection().getId());
 	}
 
 	/** Throws if {@code otherType}/{@code otherId} doesn't exist in this school - checked before authz. */
