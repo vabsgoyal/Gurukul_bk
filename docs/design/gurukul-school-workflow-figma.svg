@@ -1,0 +1,217 @@
+<svg width="1440" height="2200" viewBox="0 0 1440 2200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .bg { fill: #F8FAFC; }
+      .surface { fill: #FFFFFF; stroke: #E2E8F0; stroke-width: 1; }
+      .panel { fill: #F1F5F9; stroke: #CBD5E1; stroke-width: 1; }
+      .primary { fill: #2563EB; }
+      .primary-stroke { stroke: #2563EB; stroke-width: 2; }
+      .success { fill: #15803D; }
+      .warning { fill: #B45309; }
+      .danger { fill: #DC2626; }
+      .text { fill: #0F172A; font-family: Inter, Arial, sans-serif; }
+      .muted { fill: #64748B; font-family: Inter, Arial, sans-serif; }
+      .white { fill: #FFFFFF; font-family: Inter, Arial, sans-serif; }
+      .h1 { font-size: 32px; font-weight: 700; }
+      .h2 { font-size: 22px; font-weight: 700; }
+      .h3 { font-size: 16px; font-weight: 700; }
+      .body { font-size: 14px; font-weight: 400; }
+      .small { font-size: 12px; font-weight: 400; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: 0; }
+      .mono { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2563EB" />
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1440" height="2200"/>
+
+  <!-- Cover -->
+  <text x="72" y="78" class="text h1">Gurukul School Workflow Design</text>
+  <text x="72" y="108" class="muted body">Figma-importable visual design for school registration, lookup, and tenant workflow</text>
+  <rect x="1130" y="54" width="238" height="44" rx="8" class="primary"/>
+  <text x="1164" y="82" class="white body">Backend aligned design</text>
+
+  <!-- Design tokens -->
+  <rect x="72" y="144" width="1296" height="154" rx="8" class="surface"/>
+  <text x="96" y="184" class="text h2">Design Tokens</text>
+  <text x="96" y="214" class="muted body">Use these as Figma color and text styles before building the final screens.</text>
+  <rect x="96" y="238" width="104" height="36" rx="6" fill="#2563EB"/>
+  <text x="116" y="261" class="white small">Primary</text>
+  <rect x="216" y="238" width="104" height="36" rx="6" fill="#15803D"/>
+  <text x="237" y="261" class="white small">Success</text>
+  <rect x="336" y="238" width="104" height="36" rx="6" fill="#B45309"/>
+  <text x="357" y="261" class="white small">Warning</text>
+  <rect x="456" y="238" width="104" height="36" rx="6" fill="#DC2626"/>
+  <text x="482" y="261" class="white small">Danger</text>
+  <rect x="576" y="238" width="104" height="36" rx="6" fill="#0F172A"/>
+  <text x="606" y="261" class="white small">Text</text>
+  <rect x="696" y="238" width="104" height="36" rx="6" fill="#64748B"/>
+  <text x="718" y="261" class="white small">Muted</text>
+  <text x="840" y="254" class="text body">Radius: 8px cards, 4px inputs. Spacing: 8px grid. Font: Inter.</text>
+
+  <!-- Frame 1: Register school screen -->
+  <rect x="72" y="340" width="604" height="620" rx="10" class="surface"/>
+  <rect x="72" y="340" width="604" height="64" rx="10" fill="#0F172A"/>
+  <text x="96" y="380" class="white h2">Admin Web - Register School</text>
+  <text x="96" y="438" class="text h3">Create a new school tenant</text>
+  <text x="96" y="462" class="muted body">Maps to POST /api/v1/schools. No X-School-Id header required.</text>
+
+  <text x="96" y="506" class="text label">School name</text>
+  <rect x="96" y="516" width="252" height="42" rx="6" class="panel"/>
+  <text x="112" y="543" class="muted body">Delhi Public School</text>
+
+  <text x="372" y="506" class="text label">Contact email</text>
+  <rect x="372" y="516" width="252" height="42" rx="6" class="panel"/>
+  <text x="388" y="543" class="muted body">admin@dps.example</text>
+
+  <text x="96" y="588" class="text label">Address</text>
+  <rect x="96" y="598" width="528" height="42" rx="6" class="panel"/>
+  <text x="112" y="625" class="muted body">45 Ring Road</text>
+
+  <text x="96" y="670" class="text label">City</text>
+  <rect x="96" y="680" width="158" height="42" rx="6" class="panel"/>
+  <text x="112" y="707" class="muted body">Jaipur</text>
+
+  <text x="280" y="670" class="text label">State</text>
+  <rect x="280" y="680" width="158" height="42" rx="6" class="panel"/>
+  <text x="296" y="707" class="muted body">Rajasthan</text>
+
+  <text x="464" y="670" class="text label">Pincode</text>
+  <rect x="464" y="680" width="160" height="42" rx="6" class="panel"/>
+  <text x="480" y="707" class="muted body">302001</text>
+
+  <text x="96" y="752" class="text label">Principal name</text>
+  <rect x="96" y="762" width="252" height="42" rx="6" class="panel"/>
+  <text x="112" y="789" class="muted body">Dr. Anita Verma</text>
+
+  <text x="372" y="752" class="text label">Director name</text>
+  <rect x="372" y="762" width="252" height="42" rx="6" class="panel"/>
+  <text x="388" y="789" class="muted body">Mr. Sanjay Mehta</text>
+
+  <rect x="96" y="842" width="156" height="44" rx="8" class="primary"/>
+  <text x="124" y="870" class="white body">Register School</text>
+  <rect x="268" y="842" width="104" height="44" rx="8" class="surface"/>
+  <text x="301" y="870" class="text body">Cancel</text>
+
+  <rect x="96" y="908" width="528" height="28" rx="14" fill="#DCFCE7"/>
+  <text x="112" y="927" class="success small">Success state returns school id, used later as X-School-Id</text>
+
+  <!-- Frame 2: School detail screen -->
+  <rect x="764" y="340" width="604" height="620" rx="10" class="surface"/>
+  <rect x="764" y="340" width="604" height="64" rx="10" fill="#0F172A"/>
+  <text x="788" y="380" class="white h2">Admin Web - School Detail</text>
+  <text x="788" y="438" class="text h3">School profile and live counts</text>
+  <text x="788" y="462" class="muted body">Maps to GET /api/v1/schools/{id}. No X-School-Id header required.</text>
+
+  <rect x="788" y="496" width="552" height="92" rx="8" class="panel"/>
+  <text x="812" y="530" class="text h2">Gurukul Demo School</text>
+  <text x="812" y="560" class="muted body">Jaipur, Rajasthan - 302001</text>
+
+  <text x="788" y="628" class="text label">School UUID</text>
+  <rect x="788" y="640" width="426" height="42" rx="6" class="panel"/>
+  <text x="804" y="666" class="text mono">11111111-1111-1111-1111-111111111111</text>
+  <rect x="1228" y="640" width="112" height="42" rx="8" class="primary"/>
+  <text x="1254" y="666" class="white body">Copy</text>
+
+  <rect x="788" y="724" width="166" height="112" rx="8" class="surface"/>
+  <text x="812" y="760" class="muted small">Students</text>
+  <text x="812" y="804" class="text h1">24</text>
+
+  <rect x="981" y="724" width="166" height="112" rx="8" class="surface"/>
+  <text x="1005" y="760" class="muted small">Class sections</text>
+  <text x="1005" y="804" class="text h1">2</text>
+
+  <rect x="1174" y="724" width="166" height="112" rx="8" class="surface"/>
+  <text x="1198" y="760" class="muted small">Teachers</text>
+  <text x="1198" y="804" class="text h1">0</text>
+
+  <rect x="788" y="874" width="552" height="48" rx="8" fill="#EFF6FF"/>
+  <text x="812" y="904" class="text body">After this, use the school UUID as X-School-Id for student and class-section APIs.</text>
+
+  <!-- Workflow pipeline -->
+  <rect x="72" y="1010" width="1296" height="440" rx="10" class="surface"/>
+  <text x="96" y="1054" class="text h2">School API Workflow</text>
+  <text x="96" y="1082" class="muted body">Simple request-to-database path for the current school module.</text>
+
+  <rect x="110" y="1134" width="170" height="92" rx="8" fill="#DBEAFE" stroke="#93C5FD"/>
+  <text x="132" y="1168" class="text h3">Client</text>
+  <text x="132" y="1196" class="muted small">Browser, Swagger, Postman</text>
+
+  <line x1="280" y1="1180" x2="352" y2="1180" class="primary-stroke" marker-end="url(#arrow)"/>
+
+  <rect x="362" y="1134" width="190" height="92" rx="8" fill="#EEF2FF" stroke="#C7D2FE"/>
+  <text x="386" y="1168" class="text h3">SchoolController</text>
+  <text x="386" y="1196" class="muted small">Receives HTTP request</text>
+
+  <line x1="552" y1="1180" x2="624" y2="1180" class="primary-stroke" marker-end="url(#arrow)"/>
+
+  <rect x="634" y="1134" width="190" height="92" rx="8" fill="#F0FDFA" stroke="#99F6E4"/>
+  <text x="658" y="1168" class="text h3">SchoolService</text>
+  <text x="658" y="1196" class="muted small">Business logic</text>
+
+  <line x1="824" y1="1180" x2="896" y2="1180" class="primary-stroke" marker-end="url(#arrow)"/>
+
+  <rect x="906" y="1134" width="190" height="92" rx="8" fill="#F0FDF4" stroke="#BBF7D0"/>
+  <text x="930" y="1168" class="text h3">SchoolRepository</text>
+  <text x="930" y="1196" class="muted small">JPA database access</text>
+
+  <line x1="1096" y1="1180" x2="1168" y2="1180" class="primary-stroke" marker-end="url(#arrow)"/>
+
+  <rect x="1178" y="1134" width="150" height="92" rx="8" fill="#FEF3C7" stroke="#FCD34D"/>
+  <text x="1202" y="1168" class="text h3">Database</text>
+  <text x="1202" y="1196" class="muted small">school table</text>
+
+  <rect x="110" y="1280" width="1218" height="122" rx="8" class="panel"/>
+  <text x="134" y="1316" class="text h3">Register school flow</text>
+  <text x="134" y="1346" class="text body">POST /api/v1/schools -> SchoolRegistrationRequest validation -> SchoolService.register -> SchoolRepository.save -> SchoolResponse -> ApiResponse.success</text>
+  <text x="134" y="1378" class="muted body">The returned school id becomes the tenant identifier for future requests.</text>
+
+  <!-- File map -->
+  <rect x="72" y="1500" width="1296" height="584" rx="10" class="surface"/>
+  <text x="96" y="1544" class="text h2">File Responsibility Map</text>
+  <text x="96" y="1572" class="muted body">Use this section as an annotated Figma frame for explaining the codebase to developers.</text>
+
+  <rect x="96" y="1616" width="390" height="92" rx="8" class="panel"/>
+  <text x="120" y="1648" class="text h3">SchoolController.java</text>
+  <text x="120" y="1676" class="muted body">API entry point. Defines POST and GET school endpoints.</text>
+
+  <rect x="525" y="1616" width="390" height="92" rx="8" class="panel"/>
+  <text x="549" y="1648" class="text h3">SchoolRegistrationRequest.java</text>
+  <text x="549" y="1676" class="muted body">Input shape and validation for school registration.</text>
+
+  <rect x="954" y="1616" width="390" height="92" rx="8" class="panel"/>
+  <text x="978" y="1648" class="text h3">SchoolService.java</text>
+  <text x="978" y="1676" class="muted body">Creates school, fetches school, computes live counts.</text>
+
+  <rect x="96" y="1748" width="390" height="92" rx="8" class="panel"/>
+  <text x="120" y="1780" class="text h3">SchoolRepository.java</text>
+  <text x="120" y="1808" class="muted body">Spring Data JPA interface for save and findById.</text>
+
+  <rect x="525" y="1748" width="390" height="92" rx="8" class="panel"/>
+  <text x="549" y="1780" class="text h3">School.java</text>
+  <text x="549" y="1808" class="muted body">Entity mapped to the school database table.</text>
+
+  <rect x="954" y="1748" width="390" height="92" rx="8" class="panel"/>
+  <text x="978" y="1780" class="text h3">SchoolResponse.java</text>
+  <text x="978" y="1808" class="muted body">Output DTO returned to API clients and Swagger.</text>
+
+  <rect x="96" y="1880" width="390" height="92" rx="8" class="panel"/>
+  <text x="120" y="1912" class="text h3">ApiResponse.java</text>
+  <text x="120" y="1940" class="muted body">Standard success/data/message wrapper for all APIs.</text>
+
+  <rect x="525" y="1880" width="390" height="92" rx="8" class="panel"/>
+  <text x="549" y="1912" class="text h3">SchoolContextFilter.java</text>
+  <text x="549" y="1940" class="muted body">Checks X-School-Id on tenant-scoped API requests.</text>
+
+  <rect x="954" y="1880" width="390" height="92" rx="8" class="panel"/>
+  <text x="978" y="1912" class="text h3">V1__student_school.sql</text>
+  <text x="978" y="1940" class="muted body">Creates school table and inserts demo school data.</text>
+
+  <rect x="96" y="2014" width="1248" height="42" rx="8" fill="#EFF6FF"/>
+  <text x="120" y="2041" class="text body">Figma note: turn each card into a component, then create prototype links from Register School to School Detail.</text>
+
+  <!-- Footer -->
+  <text x="72" y="2152" class="muted small">Generated for Gurukul backend. Import this SVG into Figma, then detach and rebuild frames/components as needed.</text>
+</svg>
