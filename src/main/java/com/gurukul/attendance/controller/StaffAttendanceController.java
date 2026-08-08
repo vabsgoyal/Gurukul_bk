@@ -2,6 +2,8 @@ package com.gurukul.attendance.controller;
 
 import com.gurukul.attendance.dto.StaffAttendanceDtos.BulkStaffAttendanceRequest;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.EmployeeAttendanceHistoryResponse;
+import com.gurukul.attendance.dto.StaffAttendanceDtos.SelfMarkAttendanceRequest;
+import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceRecordResponse;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceRosterResponse;
 import com.gurukul.attendance.service.StaffAttendanceService;
 import com.gurukul.common.ApiResponse;
@@ -32,6 +34,17 @@ public class StaffAttendanceController {
 			description = "Marks/updates attendance for one or more staff members for one date. Calling again for the same date overwrites the prior marks.")
 	public ApiResponse<StaffAttendanceRosterResponse> markStaffAttendance(@Valid @RequestBody BulkStaffAttendanceRequest request) {
 		return ApiResponse.success(staffAttendanceService.markStaffAttendance(request), "Staff attendance marked");
+	}
+
+	@PostMapping("/api/v1/staff-attendance/self-mark")
+	@Operation(summary = "Self-mark today's attendance from within the school's geofence",
+			description = """
+					Marks the caller (teacher or admin) present for today, rejecting with a 400 if the
+					submitted coordinates are outside the school's configured geofence radius, or if the
+					school's location hasn't been configured yet.
+					""")
+	public ApiResponse<StaffAttendanceRecordResponse> selfMark(@Valid @RequestBody SelfMarkAttendanceRequest request) {
+		return ApiResponse.success(staffAttendanceService.selfMark(request), "Attendance marked");
 	}
 
 	@GetMapping("/api/v1/staff-attendance")

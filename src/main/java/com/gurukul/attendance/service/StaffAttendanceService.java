@@ -2,6 +2,7 @@ package com.gurukul.attendance.service;
 
 import com.gurukul.attendance.dto.StaffAttendanceDtos.BulkStaffAttendanceRequest;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.EmployeeAttendanceHistoryResponse;
+import com.gurukul.attendance.dto.StaffAttendanceDtos.SelfMarkAttendanceRequest;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceEntryRequest;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceEntryResponse;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceRecordResponse;
@@ -13,10 +14,13 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.common.GeoUtils;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.repository.EmployeeRepository;
 import com.gurukul.employees.service.EmployeeService;
+import com.gurukul.schools.entity.School;
+import com.gurukul.schools.repository.SchoolRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -36,6 +41,7 @@ public class StaffAttendanceService {
 	private final StaffAttendanceRecordRepository staffAttendanceRecordRepository;
 	private final EmployeeRepository employeeRepository;
 	private final EmployeeService employeeService;
+	private final SchoolRepository schoolRepository;
 	private final SchoolContext schoolContext;
 
 	@Transactional
@@ -61,10 +67,61 @@ public class StaffAttendanceService {
 			record.setStatus(entry.getStatus());
 			record.setMarkedByEmployee(markedBy);
 			record.setRemarks(entry.getRemarks());
+			record.setSelfMarked(false);
+			record.setMarkedLatitude(null);
+			record.setMarkedLongitude(null);
+			record.setMarkedAccuracyMeters(null);
 			staffAttendanceRecordRepository.save(record);
 		}
 
 		return getStaffRoster(request.getDate());
+	}
+
+	/**
+	 * A teacher (or admin) checking in from the school premises - always resolves the employee
+	 * from the authenticated session, never a request parameter, since trusting a caller-supplied
+	 * employeeId would let anyone mark someone else present. The distance check happens here,
+	 * server-side, against the school's stored coordinates - the client's own "am I inside the
+	 * fence" belief is never trusted, since GPS coordinates are trivially spoofable.
+	 */
+	@Transactional
+	public StaffAttendanceRecordResponse selfMark(SelfMarkAttendanceRequest request) {
+		UUID schoolId = schoolContext.getSchoolId();
+		AuthPrincipal principal = AuthContext.current();
+		Employee employee = employeeService.getScopedEntity(principal.getOwnerId());
+
+		School school = schoolRepository.findById(schoolId)
+				.orElseThrow(() -> new EntityNotFoundException("School not found"));
+		if (school.getLatitude() == null || school.getLongitude() == null) {
+			throw new IllegalStateException("School location has not been configured yet - ask an admin to set it before self-marking attendance");
+		}
+
+		double distanceMeters = GeoUtils.distanceMeters(
+				school.getLatitude(), school.getLongitude(), request.getLatitude(), request.getLongitude());
+		int radiusMeters = school.getGeofenceRadiusMeters();
+		if (distanceMeters > radiusMeters) {
+			throw new IllegalStateException(String.format(Locale.ROOT,
+					"You are %.0fm away from the school; you must be within %dm to mark attendance", distanceMeters, radiusMeters));
+		}
+
+		LocalDate today = LocalDate.now();
+		StaffAttendanceRecord record = staffAttendanceRecordRepository
+				.findBySchoolIdAndEmployeeIdAndAttendanceDate(schoolId, employee.getId(), today)
+				.orElseGet(() -> {
+					StaffAttendanceRecord newRecord = new StaffAttendanceRecord();
+					newRecord.setSchoolId(schoolId);
+					newRecord.setEmployee(employee);
+					newRecord.setAttendanceDate(today);
+					return newRecord;
+				});
+		record.setStatus(AttendanceStatus.PRESENT);
+		record.setMarkedByEmployee(employee);
+		record.setSelfMarked(true);
+		record.setMarkedLatitude(request.getLatitude());
+		record.setMarkedLongitude(request.getLongitude());
+		record.setMarkedAccuracyMeters(request.getAccuracy());
+		StaffAttendanceRecord saved = staffAttendanceRecordRepository.save(record);
+		return StaffAttendanceRecordResponse.from(saved);
 	}
 
 	public StaffAttendanceRosterResponse getStaffRoster(LocalDate date) {
@@ -82,7 +139,8 @@ public class StaffAttendanceService {
 							employee.getName(),
 							employee.getDesignation(),
 							record != null ? record.getStatus() : null,
-							record != null ? record.getRemarks() : null
+							record != null ? record.getRemarks() : null,
+							record != null && record.isSelfMarked()
 					);
 				})
 				.toList();

@@ -47,9 +47,13 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/attendance/history").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/attendance").hasAnyRole("TEACHER", "ADMIN", "STUDENT")
-						// Staff attendance: admin-only.
+						// Staff attendance: bulk admin-entry is admin-only; self-mark (geofenced check-in) is
+						// for the employee themselves, teacher or admin.
+						.requestMatchers(HttpMethod.POST, "/api/v1/staff-attendance/self-mark").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/v1/staff-attendance").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/staff-attendance").hasRole("ADMIN")
+						// School location (geofence center/radius for self-mark attendance): admin-only.
+						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*/location").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						// Class teacher assignment: admin-only.
 						.requestMatchers(HttpMethod.PATCH, "/api/v1/class-sections/*/class-teacher").hasRole("ADMIN")

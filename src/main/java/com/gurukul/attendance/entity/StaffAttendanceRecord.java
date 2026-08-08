@@ -42,4 +42,16 @@ public class StaffAttendanceRecord extends BaseEntity {
 	@Column(length = 500)
 	private String remarks;
 
+	@Column(name = "self_marked", nullable = false)
+	private boolean selfMarked;
+
+	@Column(name = "marked_latitude")
+	private Double markedLatitude;
+
+	@Column(name = "marked_longitude")
+	private Double markedLongitude;
+
+	@Column(name = "marked_accuracy_meters")
+	private Double markedAccuracyMeters;
+
 }

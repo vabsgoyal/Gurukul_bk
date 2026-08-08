@@ -4,6 +4,8 @@ import com.gurukul.attendance.entity.AttendanceStatus;
 import com.gurukul.attendance.entity.StaffAttendanceRecord;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -32,6 +34,15 @@ public class StaffAttendanceDtos {
 		@NotEmpty @Valid private List<StaffAttendanceEntryRequest> records;
 	}
 
+	@Getter @Setter
+	@Schema(description = "Submitted by a teacher self-marking their own attendance from the school premises")
+	public static class SelfMarkAttendanceRequest {
+		@NotNull @Min(-90) @Max(90) private Double latitude;
+		@NotNull @Min(-180) @Max(180) private Double longitude;
+		@Schema(description = "Device-reported GPS accuracy in meters, if available")
+		private Double accuracy;
+	}
+
 	@Getter @AllArgsConstructor
 	public static class StaffAttendanceRecordResponse {
 		private UUID id;
@@ -42,6 +53,7 @@ public class StaffAttendanceDtos {
 		private UUID markedByEmployeeId;
 		private String markedByEmployeeName;
 		private String remarks;
+		private boolean selfMarked;
 		private Instant createdAt;
 		private Instant updatedAt;
 
@@ -55,6 +67,7 @@ public class StaffAttendanceDtos {
 					record.getMarkedByEmployee().getId(),
 					record.getMarkedByEmployee().getName(),
 					record.getRemarks(),
+					record.isSelfMarked(),
 					record.getCreatedAt(),
 					record.getUpdatedAt()
 			);
@@ -69,6 +82,7 @@ public class StaffAttendanceDtos {
 		private String designation;
 		private AttendanceStatus status;
 		private String remarks;
+		private boolean selfMarked;
 	}
 
 	@Getter @AllArgsConstructor
