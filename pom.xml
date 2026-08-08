@@ -51,6 +51,13 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- Brings NimbusJwtDecoder, used standalone (not the full oauth2Login()/oauth2ResourceServer()
+		     DSL) to verify Supabase-issued phone-OTP tokens via its JWKS endpoint - see
+		     com.gurukul.auth.security.SupabaseJwtVerifier. This app's own JWTs remain jjwt/HMAC below. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>

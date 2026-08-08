@@ -6,10 +6,7 @@ import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.repository.CredentialRepository;
 import com.gurukul.auth.security.JwtService;
-import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
-import com.gurukul.employees.repository.EmployeeRepository;
-import com.gurukul.students.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,7 +17,9 @@ import java.util.UUID;
 
 /**
  * Dummy OTP for now: always "1234", no real code generation/expiry/SMS delivery. Swap in a
- * real provider behind {@link #requestOtp} / the otp check in {@link #verifyOtp} when ready.
+ * real provider behind {@link #requestOtp} / the otp check in {@link #verifyOtp} when ready
+ * (or enable app.auth.supabase.enabled - see SupabaseAuthController - for real phone-OTP login
+ * via Supabase, which this service is intentionally left untouched by).
  */
 @Service
 @RequiredArgsConstructor
@@ -28,15 +27,14 @@ public class OtpService {
 
 	private static final String DUMMY_OTP = "1234";
 
-	private final EmployeeRepository employeeRepository;
-	private final StudentRepository studentRepository;
+	private final PhoneOwnerResolver phoneOwnerResolver;
 	private final CredentialRepository credentialRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
 	private final SchoolContext schoolContext;
 
 	public void requestOtp(String phone) {
-		resolveOwner(phone);
+		phoneOwnerResolver.resolve(schoolContext.getSchoolId(), phone);
 	}
 
 	@Transactional
@@ -45,7 +43,7 @@ public class OtpService {
 			throw new BadCredentialsException("Invalid OTP");
 		}
 
-		PhoneOwner owner = resolveOwner(phone);
+		PhoneOwnerResolver.PhoneOwner owner = phoneOwnerResolver.resolve(schoolContext.getSchoolId(), phone);
 		Credential credential = credentialRepository.findByOwnerTypeAndOwnerId(owner.ownerType(), owner.ownerId())
 				.orElseGet(() -> createCredentialFor(owner, phone));
 
@@ -55,7 +53,7 @@ public class OtpService {
 				credential.getRole(), credential.getSchoolId(), credential.getUsername());
 	}
 
-	private Credential createCredentialFor(PhoneOwner owner, String phone) {
+	private Credential createCredentialFor(PhoneOwnerResolver.PhoneOwner owner, String phone) {
 		Credential credential = new Credential();
 		credential.setSchoolId(schoolContext.getSchoolId());
 		credential.setOwnerType(owner.ownerType());
@@ -64,21 +62,6 @@ public class OtpService {
 		credential.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
 		credential.setRole(owner.ownerType() == OwnerType.EMPLOYEE ? Role.TEACHER : Role.STUDENT);
 		return credentialRepository.save(credential);
-	}
-
-	// If a phone number matches more than one record (e.g. siblings sharing a parent's
-	// number), the first match wins - there's no "choose which profile" step yet.
-	private PhoneOwner resolveOwner(String phone) {
-		UUID schoolId = schoolContext.getSchoolId();
-
-		return employeeRepository.findAllBySchoolIdAndContactPhone(schoolId, phone).stream().findFirst()
-				.map(employee -> new PhoneOwner(OwnerType.EMPLOYEE, employee.getId()))
-				.or(() -> studentRepository.findAllBySchoolIdAndParentContact(schoolId, phone).stream().findFirst()
-						.map(student -> new PhoneOwner(OwnerType.STUDENT, student.getId())))
-				.orElseThrow(() -> new EntityNotFoundException("Phone number not registered"));
-	}
-
-	private record PhoneOwner(OwnerType ownerType, UUID ownerId) {
 	}
 
 }

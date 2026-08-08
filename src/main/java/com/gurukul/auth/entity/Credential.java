@@ -38,4 +38,10 @@ public class Credential extends BaseEntity {
 	@Column(nullable = false)
 	private Role role;
 
+	// Set the first time this credential logs in via a verified Supabase phone-OTP session
+	// (see SupabaseAuthService). Null for credentials that have only ever used the legacy
+	// dummy-OTP or password login.
+	@Column(name = "supabase_user_id")
+	private UUID supabaseUserId;
+
 }
