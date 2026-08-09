@@ -1,5 +1,8 @@
 package com.gurukul.students.service;
 
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.SchoolContext;
@@ -33,32 +36,35 @@ public class StudentService {
 
 	@Transactional(readOnly = true)
 	public List<StudentResponse> list() {
+		boolean includeRegistrationNumber = isAdmin();
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
-				.map(StudentResponse::from)
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
 	public List<StudentResponse> search(String query) {
 		requireQuery(query);
+		boolean includeRegistrationNumber = isAdmin();
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
 				.filter(s -> FuzzyMatcher.anyFieldMatches(query, s.getName(), s.getRollNumber()))
 				.sorted(Comparator.comparingDouble(
 						(Student s) -> FuzzyMatcher.bestScore(query, s.getName(), s.getRollNumber())).reversed())
 				.limit(SEARCH_RESULT_LIMIT)
-				.map(StudentResponse::from)
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
 	public List<StudentResponse> searchByParent(String query) {
 		requireQuery(query);
+		boolean includeRegistrationNumber = isAdmin();
 		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
 				.filter(s -> FuzzyMatcher.anyFieldMatches(query, s.getParentName(), s.getParentContact(), s.getName()))
 				.sorted(Comparator.comparingDouble((Student s) -> FuzzyMatcher.bestScore(
 						query, s.getParentName(), s.getParentContact(), s.getName())).reversed())
 				.limit(SEARCH_RESULT_LIMIT)
-				.map(StudentResponse::from)
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
 				.toList();
 	}
 
@@ -77,15 +83,16 @@ public class StudentService {
 	@Transactional(readOnly = true)
 	public List<StudentResponse> listByClassSectionId(UUID classSectionId) {
 		classSectionService.getScopedClassSection(classSectionId);
+		boolean includeRegistrationNumber = isAdmin();
 		return studentRepository.findAllBySchoolIdAndClassSectionId(schoolContext.getSchoolId(), classSectionId)
 				.stream()
-				.map(StudentResponse::from)
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
 	public StudentResponse getById(UUID id) {
-		return StudentResponse.from(findScoped(id));
+		return StudentResponse.from(findScoped(id), isAdmin());
 	}
 
 	public Student getScopedEntity(UUID id) {
@@ -94,7 +101,15 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse create(StudentRequest request) {
-		return StudentResponse.from(createEntity(request));
+		// Whoever hits this endpoint just admitted the student and needs the registrationNumber
+		// immediately to share it - include it regardless of role, matching create's existing
+		// (pre-existing, unrelated) lack of a role check on this endpoint.
+		return StudentResponse.from(createEntity(request), true);
+	}
+
+	private boolean isAdmin() {
+		AuthPrincipal principal = AuthContext.currentOrNull();
+		return principal != null && principal.getRole() == Role.ADMIN;
 	}
 
 	/** Returns the entity (not just its response DTO) - used by RegistrationService, which needs the id for a Credential. */
@@ -135,7 +150,7 @@ public class StudentService {
 		if (!oldClassSectionId.equals(classSection.getId())) {
 			recomputeActiveRollNumbers(classSection.getId());
 		}
-		return StudentResponse.from(saved);
+		return StudentResponse.from(saved, isAdmin());
 	}
 
 	@Transactional
@@ -162,7 +177,7 @@ public class StudentService {
 		if (!oldClassSectionId.equals(classSection.getId())) {
 			recomputeActiveRollNumbers(classSection.getId());
 		}
-		return StudentResponse.from(saved);
+		return StudentResponse.from(saved, isAdmin());
 	}
 
 	@Transactional
