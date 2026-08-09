@@ -77,7 +77,6 @@ class StudentEnrollmentIntegrationTest {
 
 		String enrollStudent = """
 				{
-				  "rollNumber": "9A-001",
 				  "name": "Rahul Sharma",
 				  "dob": "2012-05-15",
 				  "gender": "MALE",
@@ -95,7 +94,7 @@ class StudentEnrollmentIntegrationTest {
 						.content(enrollStudent))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
-				.andExpect(jsonPath("$.data.rollNumber").value("9A-001"))
+				.andExpect(jsonPath("$.data.rollNumber").value("1"))
 				.andExpect(jsonPath("$.data.classSectionLabel").value("Grade 9 - A (2026-27)"))
 				.andReturn();
 
@@ -134,7 +133,6 @@ class StudentEnrollmentIntegrationTest {
 	void enrollWithSeededClassSection() throws Exception {
 		String enrollStudent = """
 				{
-				  "rollNumber": "8A-002",
 				  "name": "Priya Singh",
 				  "dob": "2012-08-20",
 				  "gender": "FEMALE",
@@ -159,7 +157,6 @@ class StudentEnrollmentIntegrationTest {
 	void missingRequiredFieldReturns400() throws Exception {
 		String incomplete = """
 				{
-				  "rollNumber": "8A-003",
 				  "name": "Test Student"
 				}
 				""";
@@ -178,7 +175,6 @@ class StudentEnrollmentIntegrationTest {
 	void invalidClassSectionIdReturns400() throws Exception {
 		String enrollStudent = """
 				{
-				  "rollNumber": "8A-004",
 				  "name": "Test Student",
 				  "dob": "2012-05-15",
 				  "gender": "MALE",

@@ -26,20 +26,20 @@ public class ParentClaimRateLimiter {
 	private final ParentClaimAttemptRepository parentClaimAttemptRepository;
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public boolean isLocked(UUID schoolId, String studentRollNumber) {
-		return parentClaimAttemptRepository.findBySchoolIdAndStudentRollNumber(schoolId, studentRollNumber)
+	public boolean isLocked(UUID schoolId, String studentRegistrationNumber) {
+		return parentClaimAttemptRepository.findBySchoolIdAndStudentRegistrationNumber(schoolId, studentRegistrationNumber)
 				.map(a -> a.getLockedUntil() != null && a.getLockedUntil().isAfter(Instant.now()))
 				.orElse(false);
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void recordFailure(UUID schoolId, String studentRollNumber) {
+	public void recordFailure(UUID schoolId, String studentRegistrationNumber) {
 		ParentClaimAttempt attempt = parentClaimAttemptRepository
-				.findBySchoolIdAndStudentRollNumber(schoolId, studentRollNumber)
+				.findBySchoolIdAndStudentRegistrationNumber(schoolId, studentRegistrationNumber)
 				.orElseGet(() -> {
 					ParentClaimAttempt a = new ParentClaimAttempt();
 					a.setSchoolId(schoolId);
-					a.setStudentRollNumber(studentRollNumber);
+					a.setStudentRegistrationNumber(studentRegistrationNumber);
 					a.setAttemptCount(0);
 					return a;
 				});
@@ -51,8 +51,8 @@ public class ParentClaimRateLimiter {
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void recordSuccess(UUID schoolId, String studentRollNumber) {
-		parentClaimAttemptRepository.findBySchoolIdAndStudentRollNumber(schoolId, studentRollNumber)
+	public void recordSuccess(UUID schoolId, String studentRegistrationNumber) {
+		parentClaimAttemptRepository.findBySchoolIdAndStudentRegistrationNumber(schoolId, studentRegistrationNumber)
 				.ifPresent(parentClaimAttemptRepository::delete);
 	}
 
