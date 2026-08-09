@@ -46,7 +46,26 @@ public class TeacherInviteService {
 		invite.setTargetEmployeeId(employeeId);
 		invite.setUsed(false);
 		invite = teacherInviteRepository.save(invite);
-		return new TeacherInviteResponse(invite.getCode(), invite.getExpiresAt());
+		return toResponse(invite);
+	}
+
+	/**
+	 * Lets admin re-view/re-share an invite after the create response - otherwise a lost/never-copied
+	 * code would be permanently stuck, since createInviteForEmployee refuses to issue a second one
+	 * while an unused invite still exists for that employee.
+	 */
+	@Transactional(readOnly = true)
+	public TeacherInviteResponse getInviteForEmployee(UUID employeeId) {
+		UUID schoolId = schoolContext.getSchoolId();
+		TeacherInvite invite = teacherInviteRepository
+				.findFirstBySchoolIdAndTargetEmployeeIdOrderByCreatedAtDesc(schoolId, employeeId)
+				.orElseThrow(() -> new EntityNotFoundException("No invite has been generated for this employee yet"));
+		return toResponse(invite);
+	}
+
+	private TeacherInviteResponse toResponse(TeacherInvite invite) {
+		return new TeacherInviteResponse(
+				invite.getCode(), invite.getExpiresAt(), invite.isUsed(), invite.getExpiresAt().isBefore(Instant.now()));
 	}
 
 	private String generateCode() {
