@@ -78,12 +78,17 @@ public class StudentResponse {
 	@Schema(description = "When the record was last updated")
 	private Instant updatedAt;
 
-	public static StudentResponse from(Student student) {
+	/**
+	 * registrationNumber is a login-claim key (student self-registration auto-activates on it alone)
+	 * - only an admin, who can hand it to the student/parent directly, should ever see it. Everyone
+	 * else gets null, same as any other field they're not entitled to.
+	 */
+	public static StudentResponse from(Student student, boolean includeRegistrationNumber) {
 		return new StudentResponse(
 				student.getId(),
 				student.getSchoolId(),
 				student.getRollNumber(),
-				student.getRegistrationNumber(),
+				includeRegistrationNumber ? student.getRegistrationNumber() : null,
 				student.getName(),
 				student.getDob(),
 				student.getGender().name(),
