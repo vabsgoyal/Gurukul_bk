@@ -6,9 +6,7 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.registration.dto.RegistrationDtos.DecisionRequest;
 import com.gurukul.registration.dto.RegistrationDtos.PendingRegistrationResponse;
-import com.gurukul.registration.dto.RegistrationDtos.TeacherInviteResponse;
 import com.gurukul.registration.service.RegistrationService;
-import com.gurukul.registration.service.TeacherInviteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,16 +23,16 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "Registration - Admin", description = "Admin-only: the self-registration approval inbox and "
-		+ "teacher invite codes. Requires X-School-Id and Authorization headers, admin role.")
+@Tag(name = "Registration - Admin", description = "Admin-only: the self-registration approval inbox. Student and "
+		+ "teacher claims auto-activate; only parent claims land here, since roll-number/phone identity-proof is "
+		+ "weaker. Requires X-School-Id and Authorization headers, admin role.")
 public class RegistrationAdminController {
 
 	private final RegistrationService registrationService;
-	private final TeacherInviteService teacherInviteService;
 
 	@GetMapping("/api/v1/registrations")
 	@Operation(summary = "List pending self-registrations of one type",
-			description = "entityType is one of STUDENT_REGISTRATION, EMPLOYEE_REGISTRATION, PARENT_REGISTRATION")
+			description = "entityType is PARENT_REGISTRATION - student/teacher claims auto-activate and never appear here")
 	public ApiResponse<List<PendingRegistrationResponse>> listPending(@RequestParam String entityType) {
 		requireAdmin(AuthContext.current());
 		return ApiResponse.success(registrationService.listPending(entityType));
@@ -56,13 +54,6 @@ public class RegistrationAdminController {
 		AuthPrincipal principal = requireAdmin(AuthContext.current());
 		registrationService.reject(entityType, entityId, principal.getUsername(), comment(request));
 		return ApiResponse.success(null, "Registration rejected");
-	}
-
-	@PostMapping("/api/v1/registrations/teacher-invites")
-	@Operation(summary = "Generate a teacher invite code (valid 72h, single use) to share with a prospective teacher")
-	public ApiResponse<TeacherInviteResponse> createTeacherInvite() {
-		AuthPrincipal principal = requireAdmin(AuthContext.current());
-		return ApiResponse.success(teacherInviteService.createInvite(principal));
 	}
 
 	private AuthPrincipal requireAdmin(AuthPrincipal principal) {

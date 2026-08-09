@@ -33,6 +33,8 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
 	boolean existsBySchoolIdAndRollNumber(UUID schoolId, String rollNumber);
 
+	Optional<Student> findBySchoolIdAndRegistrationNumber(UUID schoolId, String registrationNumber);
+
 	boolean existsBySchoolIdAndRollNumberAndIdNot(UUID schoolId, String rollNumber, UUID id);
 
 	long countBySchoolId(UUID schoolId);

@@ -29,6 +29,7 @@ public class StudentService {
 	private final SchoolContext schoolContext;
 	private final ClassSectionService classSectionService;
 	private final FeeStructureService feeStructureService;
+	private final com.gurukul.documents.DocumentNumberGenerator documentNumberGenerator;
 
 	@Transactional(readOnly = true)
 	public List<StudentResponse> list() {
@@ -110,6 +111,9 @@ public class StudentService {
 		student.setSchoolId(schoolId);
 		applyRequest(student, request, classSection);
 		student.setStatus(StudentStatus.ACTIVE);
+
+		String admissionYear = String.valueOf(student.getAdmissionDate().getYear());
+		student.setRegistrationNumber(documentNumberGenerator.nextRegistrationNumber(schoolId, admissionYear));
 
 		Student saved = studentRepository.save(student);
 		feeStructureService.createAssessmentForStudentIfStructureExists(saved);

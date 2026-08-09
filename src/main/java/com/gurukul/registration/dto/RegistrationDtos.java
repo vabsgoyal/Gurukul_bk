@@ -1,61 +1,47 @@
 package com.gurukul.registration.dto;
 
-import com.gurukul.students.entity.Gender;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
-import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 
 public class RegistrationDtos {
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a student - goes to admin approval before login works")
+	@Schema(description = "Self-registration for a student - claims the existing Student record created at admission "
+			+ "by registrationNumber; auto-activates immediately since admin already vetted the record")
 	public static class StudentRegistrationRequest {
-		@NotBlank private String rollNumber;
-		@NotBlank private String name;
-		@NotNull @Past private LocalDate dob;
-		@NotNull private Gender gender;
-		@NotBlank private String address;
-		@NotBlank private String parentName;
-		@NotBlank private String parentContact;
-		@NotNull private UUID classSectionId;
-		@NotNull @PastOrPresent private LocalDate admissionDate;
+		@NotBlank
+		@Schema(description = "System-generated at admission time, e.g. 2026000001 - not the roll number")
+		private String registrationNumber;
 		@NotBlank @Size(min = 3, max = 50) private String username;
 		@NotBlank @Size(min = 8) private String password;
 	}
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a teacher - requires an admin-issued invite code")
+	@Schema(description = "Self-registration for a teacher - claims the specific Employee record the invite code was "
+			+ "issued for; auto-activates immediately since admin already vetted the record")
 	public static class TeacherRegistrationRequest {
 		@NotBlank private String inviteCode;
-		@NotBlank private String name;
-		@NotBlank private String designation;
-		@NotNull private LocalDate joinDate;
-		private String contactPhone;
-		@Email private String contactEmail;
 		@NotBlank @Size(min = 3, max = 50) private String username;
 		@NotBlank @Size(min = 8) private String password;
 	}
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a parent - links to an existing student by roll number")
+	@Schema(description = "Self-registration for a parent - links to an existing student by roll number, verified by "
+			+ "matching parentContact against the value already on the student record; goes to admin approval")
 	public static class ParentRegistrationRequest {
-		@NotBlank private String name;
-		@Email private String email;
-		private String phone;
 		@NotBlank
 		@Schema(description = "Roll number of the child this parent is linking to")
 		private String studentRollNumber;
+		@NotBlank
+		@Schema(description = "Must match the parentContact already on file for this student")
+		private String parentContact;
 		@NotBlank @Size(min = 3, max = 50) private String username;
 		@NotBlank @Size(min = 8) private String password;
 	}
@@ -68,40 +54,33 @@ public class RegistrationDtos {
 
 	@Getter @Setter
 	@Schema(description = "Self-registration for a student via Google - idToken replaces username/password; "
-			+ "the verified Google email becomes the username")
+			+ "the verified Google email becomes the username; claims the existing Student record by registrationNumber")
 	public static class StudentGoogleRegistrationRequest {
 		@NotBlank private String idToken;
-		@NotBlank private String rollNumber;
-		@NotBlank private String name;
-		@NotNull @Past private LocalDate dob;
-		@NotNull private Gender gender;
-		@NotBlank private String address;
-		@NotBlank private String parentName;
-		@NotBlank private String parentContact;
-		@NotNull private UUID classSectionId;
-		@NotNull @PastOrPresent private LocalDate admissionDate;
+		@NotBlank
+		@Schema(description = "System-generated at admission time, e.g. 2026000001 - not the roll number")
+		private String registrationNumber;
 	}
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a teacher via Google - still requires an admin-issued invite code")
+	@Schema(description = "Self-registration for a teacher via Google - still requires an admin-issued invite code, "
+			+ "claims the specific Employee record it was issued for")
 	public static class TeacherGoogleRegistrationRequest {
 		@NotBlank private String idToken;
 		@NotBlank private String inviteCode;
-		@NotBlank private String name;
-		@NotBlank private String designation;
-		@NotNull private LocalDate joinDate;
-		private String contactPhone;
 	}
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a parent via Google, linking to an existing student by roll number")
+	@Schema(description = "Self-registration for a parent via Google, linking to an existing student by roll number, "
+			+ "verified by matching parentContact against the value already on the student record")
 	public static class ParentGoogleRegistrationRequest {
 		@NotBlank private String idToken;
-		@NotBlank private String name;
-		private String phone;
 		@NotBlank
 		@Schema(description = "Roll number of the child this parent is linking to")
 		private String studentRollNumber;
+		@NotBlank
+		@Schema(description = "Must match the parentContact already on file for this student")
+		private String parentContact;
 	}
 
 	@Getter @AllArgsConstructor

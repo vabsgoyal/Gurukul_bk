@@ -31,6 +31,18 @@ public class DocumentNumberGenerator {
 		return String.format("%s/%s/%s/%06d", schoolCode, academicYear, type.name(), next);
 	}
 
+	public String nextRegistrationNumber(UUID schoolId, String admissionYear) {
+		ReceiptSequence sequence = receiptSequenceRepository
+				.findForUpdate(schoolId, ReceiptSequenceType.STUDENT_REGISTRATION, admissionYear)
+				.orElseGet(() -> createSequence(schoolId, ReceiptSequenceType.STUDENT_REGISTRATION, admissionYear));
+
+		long next = sequence.getLastValue() + 1;
+		sequence.setLastValue(next);
+		receiptSequenceRepository.save(sequence);
+
+		return String.format("%s%06d", admissionYear, next);
+	}
+
 	private ReceiptSequence createSequence(UUID schoolId, ReceiptSequenceType type, String academicYear) {
 		ReceiptSequence sequence = new ReceiptSequence();
 		sequence.setSchoolId(schoolId);
