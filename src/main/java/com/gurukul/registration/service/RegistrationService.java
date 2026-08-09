@@ -3,6 +3,8 @@ package com.gurukul.registration.service;
 import com.gurukul.auth.entity.Credential;
 import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.google.GoogleTokenVerifier;
+import com.gurukul.auth.google.GoogleTokenVerifier.GoogleIdentity;
 import com.gurukul.auth.repository.CredentialRepository;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
@@ -15,10 +17,13 @@ import com.gurukul.parents.entity.ParentStudentLink;
 import com.gurukul.parents.repository.ParentRepository;
 import com.gurukul.parents.repository.ParentStudentLinkRepository;
 import com.gurukul.registration.dto.RegistrationDtos.LinkChildRequest;
+import com.gurukul.registration.dto.RegistrationDtos.ParentGoogleRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.ParentRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.PendingRegistrationResponse;
 import com.gurukul.registration.dto.RegistrationDtos.RegistrationSubmittedResponse;
+import com.gurukul.registration.dto.RegistrationDtos.StudentGoogleRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.StudentRegistrationRequest;
+import com.gurukul.registration.dto.RegistrationDtos.TeacherGoogleRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherRegistrationRequest;
 import com.gurukul.registration.entity.TeacherInvite;
 import com.gurukul.registration.repository.TeacherInviteRepository;
@@ -67,6 +72,7 @@ public class RegistrationService {
 	private final WorkflowService workflowService;
 	private final PasswordEncoder passwordEncoder;
 	private final SchoolContext schoolContext;
+	private final GoogleTokenVerifier googleTokenVerifier;
 
 	@Transactional
 	public RegistrationSubmittedResponse registerStudent(StudentRegistrationRequest request) {
@@ -140,6 +146,84 @@ public class RegistrationService {
 		return new RegistrationSubmittedResponse(parent.getId(), "Registration submitted - pending admin approval");
 	}
 
+	@Transactional
+	public RegistrationSubmittedResponse registerStudentViaGoogle(StudentGoogleRegistrationRequest request) {
+		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
+
+		StudentRequest studentRequest = new StudentRequest();
+		studentRequest.setRollNumber(request.getRollNumber());
+		studentRequest.setName(request.getName());
+		studentRequest.setDob(request.getDob());
+		studentRequest.setGender(request.getGender());
+		studentRequest.setAddress(request.getAddress());
+		studentRequest.setParentName(request.getParentName());
+		studentRequest.setParentContact(request.getParentContact());
+		studentRequest.setClassSectionId(request.getClassSectionId());
+		studentRequest.setAdmissionDate(request.getAdmissionDate());
+
+		Student student = studentService.createEntity(studentRequest);
+		createDisabledGoogleCredential(OwnerType.STUDENT, student.getId(), Role.STUDENT, identity);
+		submit(STUDENT_REGISTRATION, student.getId(), identity.email());
+		return new RegistrationSubmittedResponse(student.getId(), "Registration submitted - pending admin approval");
+	}
+
+	@Transactional
+	public RegistrationSubmittedResponse registerTeacherViaGoogle(TeacherGoogleRegistrationRequest request) {
+		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
+
+		UUID schoolId = schoolContext.getSchoolId();
+		TeacherInvite invite = teacherInviteRepository.findBySchoolIdAndCode(schoolId, request.getInviteCode())
+				.orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
+		if (invite.isUsed()) {
+			throw new IllegalArgumentException("This invite code has already been used");
+		}
+		if (invite.getExpiresAt().isBefore(Instant.now())) {
+			throw new IllegalArgumentException("This invite code has expired");
+		}
+
+		EmployeeRequest employeeRequest = new EmployeeRequest();
+		employeeRequest.setName(request.getName());
+		employeeRequest.setDesignation(request.getDesignation());
+		employeeRequest.setJoinDate(request.getJoinDate());
+		employeeRequest.setContactPhone(request.getContactPhone());
+		employeeRequest.setContactEmail(identity.email());
+
+		Employee employee = employeeService.createEntity(employeeRequest);
+		createDisabledGoogleCredential(OwnerType.EMPLOYEE, employee.getId(), Role.TEACHER, identity);
+
+		invite.setUsed(true);
+		teacherInviteRepository.save(invite);
+
+		submit(EMPLOYEE_REGISTRATION, employee.getId(), identity.email());
+		return new RegistrationSubmittedResponse(employee.getId(), "Registration submitted - pending admin approval");
+	}
+
+	@Transactional
+	public RegistrationSubmittedResponse registerParentViaGoogle(ParentGoogleRegistrationRequest request) {
+		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
+
+		UUID schoolId = schoolContext.getSchoolId();
+		Student student = studentRepository.findBySchoolIdAndRollNumber(schoolId, request.getStudentRollNumber())
+				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
+
+		Parent parent = new Parent();
+		parent.setSchoolId(schoolId);
+		parent.setName(request.getName());
+		parent.setEmail(identity.email());
+		parent.setPhone(request.getPhone());
+		parent = parentRepository.save(parent);
+
+		ParentStudentLink link = new ParentStudentLink();
+		link.setSchoolId(schoolId);
+		link.setParentId(parent.getId());
+		link.setStudentId(student.getId());
+		parentStudentLinkRepository.save(link);
+
+		createDisabledGoogleCredential(OwnerType.PARENT, parent.getId(), Role.PARENT, identity);
+		submit(PARENT_REGISTRATION, parent.getId(), identity.email());
+		return new RegistrationSubmittedResponse(parent.getId(), "Registration submitted - pending admin approval");
+	}
+
 	/**
 	 * An already-approved parent linking another child (e.g. a sibling enrolling later) - no
 	 * further approval needed, since the parent identity itself is already trusted; only the
@@ -203,6 +287,35 @@ public class RegistrationService {
 		credential.setUsername(username);
 		credential.setPasswordHash(passwordEncoder.encode(password));
 		credential.setRole(role);
+		credential.setEnabled(false);
+		credentialRepository.save(credential);
+	}
+
+	/**
+	 * Google email must already be verified by Google itself (payload's email_verified claim) -
+	 * we don't do our own verification email, so this is the only integrity check available.
+	 * Username is set to the verified email; password is a random, never-shared value so the
+	 * password-login path simply can never match it - this account only ever logs in via Google.
+	 */
+	private void createDisabledGoogleCredential(OwnerType ownerType, UUID ownerId, Role role, GoogleIdentity identity) {
+		if (!identity.emailVerified()) {
+			throw new IllegalArgumentException("Your Google account's email isn't verified");
+		}
+		UUID schoolId = schoolContext.getSchoolId();
+		if (credentialRepository.existsBySchoolIdAndUsername(schoolId, identity.email())) {
+			throw new IllegalArgumentException("An account already exists for this Google email at this school");
+		}
+		if (credentialRepository.findBySchoolIdAndGoogleSubject(schoolId, identity.subject()).isPresent()) {
+			throw new IllegalArgumentException("This Google account is already registered at this school");
+		}
+		Credential credential = new Credential();
+		credential.setSchoolId(schoolId);
+		credential.setOwnerType(ownerType);
+		credential.setOwnerId(ownerId);
+		credential.setUsername(identity.email());
+		credential.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+		credential.setRole(role);
+		credential.setGoogleSubject(identity.subject());
 		credential.setEnabled(false);
 		credentialRepository.save(credential);
 	}

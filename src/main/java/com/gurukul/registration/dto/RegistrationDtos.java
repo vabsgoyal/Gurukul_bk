@@ -66,6 +66,44 @@ public class RegistrationDtos {
 		@NotBlank private String studentRollNumber;
 	}
 
+	@Getter @Setter
+	@Schema(description = "Self-registration for a student via Google - idToken replaces username/password; "
+			+ "the verified Google email becomes the username")
+	public static class StudentGoogleRegistrationRequest {
+		@NotBlank private String idToken;
+		@NotBlank private String rollNumber;
+		@NotBlank private String name;
+		@NotNull @Past private LocalDate dob;
+		@NotNull private Gender gender;
+		@NotBlank private String address;
+		@NotBlank private String parentName;
+		@NotBlank private String parentContact;
+		@NotNull private UUID classSectionId;
+		@NotNull @PastOrPresent private LocalDate admissionDate;
+	}
+
+	@Getter @Setter
+	@Schema(description = "Self-registration for a teacher via Google - still requires an admin-issued invite code")
+	public static class TeacherGoogleRegistrationRequest {
+		@NotBlank private String idToken;
+		@NotBlank private String inviteCode;
+		@NotBlank private String name;
+		@NotBlank private String designation;
+		@NotNull private LocalDate joinDate;
+		private String contactPhone;
+	}
+
+	@Getter @Setter
+	@Schema(description = "Self-registration for a parent via Google, linking to an existing student by roll number")
+	public static class ParentGoogleRegistrationRequest {
+		@NotBlank private String idToken;
+		@NotBlank private String name;
+		private String phone;
+		@NotBlank
+		@Schema(description = "Roll number of the child this parent is linking to")
+		private String studentRollNumber;
+	}
+
 	@Getter @AllArgsConstructor
 	@Schema(description = "Result of a successful self-registration submission - no login yet, pending approval")
 	public static class RegistrationSubmittedResponse {
