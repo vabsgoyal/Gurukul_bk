@@ -19,12 +19,22 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "student", uniqueConstraints = {
-		@UniqueConstraint(columnNames = {"school_id", "roll_number"})
+		@UniqueConstraint(columnNames = {"school_id", "roll_number"}),
+		@UniqueConstraint(columnNames = {"school_id", "registration_number"})
 })
 public class Student extends BaseEntity {
 
 	@Column(nullable = false)
 	private String rollNumber;
+
+	/**
+	 * System-generated at admission time (see DocumentNumberGenerator.nextRegistrationNumber) -
+	 * never admin-typed, unlike rollNumber. Deliberately distinct from rollNumber: this is the
+	 * permanent claim key a student uses to self-register a login (see RegistrationService), so it
+	 * needs to stay stable even if rollNumber ever changes (e.g. on class/section reassignment).
+	 */
+	@Column(name = "registration_number", nullable = false)
+	private String registrationNumber;
 
 	@Column(nullable = false)
 	private String name;
