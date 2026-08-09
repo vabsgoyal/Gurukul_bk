@@ -1,5 +1,8 @@
 package com.gurukul.fees.service;
 
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.fees.dto.FeeAssessmentResponse;
@@ -15,6 +18,7 @@ import com.gurukul.finance.entity.PaymentMethod;
 import com.gurukul.finance.entity.SourceType;
 import com.gurukul.finance.repository.FinancialTransactionRepository;
 import com.gurukul.finance.service.LedgerService;
+import com.gurukul.parents.service.ParentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +37,7 @@ public class FeePaymentService {
 	private final FinancialTransactionRepository transactionRepository;
 	private final LedgerService ledgerService;
 	private final SchoolContext schoolContext;
+	private final ParentService parentService;
 
 	@Transactional(readOnly = true)
 	public List<FeeAssessmentResponse> listAssessments(FeeAssessmentStatus status) {
@@ -43,8 +48,18 @@ public class FeePaymentService {
 		return assessments.stream().map(FeeAssessmentResponse::from).toList();
 	}
 
+	/**
+	 * No SecurityConfig role restriction on this endpoint historically (open to any authenticated
+	 * caller) - that pre-existing gap is out of scope here. The one new check: a PARENT caller must
+	 * be linked to this specific student, since Parent is a real distinct identity now and
+	 * shouldn't be able to view an arbitrary student's fees just by guessing an id.
+	 */
 	@Transactional(readOnly = true)
 	public List<FeeAssessmentResponse> listByStudent(UUID studentId) {
+		AuthPrincipal principal = AuthContext.currentOrNull();
+		if (principal != null && principal.getRole() == Role.PARENT) {
+			parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
+		}
 		return assessmentRepository.findAllBySchoolIdAndStudentId(schoolContext.getSchoolId(), studentId).stream()
 				.map(FeeAssessmentResponse::from)
 				.toList();

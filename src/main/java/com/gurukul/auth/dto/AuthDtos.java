@@ -22,6 +22,14 @@ public class AuthDtos {
 		@NotBlank private String password;
 	}
 
+	@Getter @Setter
+	@Schema(description = "Google Sign-In login/registration request - idToken is the credential "
+			+ "from Google's own SDK on the client (One Tap / Google Identity Services / native "
+			+ "Sign-In), never a password")
+	public static class GoogleIdTokenRequest {
+		@NotBlank private String idToken;
+	}
+
 	@Getter @AllArgsConstructor
 	@Schema(description = "Login response - use the token as an Authorization: Bearer header on subsequent requests")
 	public static class LoginResponse {

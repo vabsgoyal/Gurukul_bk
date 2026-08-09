@@ -38,4 +38,20 @@ public class Credential extends BaseEntity {
 	@Column(nullable = false)
 	private Role role;
 
+	/**
+	 * Defaults true for every existing creation path (admin-issued, OTP auto-provision, dev
+	 * seeders) - only the new self-registration flow explicitly creates a credential disabled,
+	 * pending admin approval (see RegistrationService), and flips it on approval.
+	 */
+	@Column(nullable = false)
+	private boolean enabled = true;
+
+	/**
+	 * Google's stable per-account subject id (the JWT "sub" claim) - null for a password-only
+	 * credential. Preferred over storing/matching on email, since email addresses can change but a
+	 * Google account's subject never does.
+	 */
+	@Column(name = "google_subject")
+	private String googleSubject;
+
 }

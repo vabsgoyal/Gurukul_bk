@@ -13,6 +13,8 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
 
 	Optional<Credential> findBySchoolIdAndUsername(UUID schoolId, String username);
 
+	Optional<Credential> findBySchoolIdAndGoogleSubject(UUID schoolId, String googleSubject);
+
 	boolean existsBySchoolIdAndUsername(UUID schoolId, String username);
 
 	boolean existsByOwnerTypeAndOwnerId(OwnerType ownerType, UUID ownerId);

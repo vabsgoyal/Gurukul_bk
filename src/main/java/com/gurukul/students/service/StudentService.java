@@ -93,6 +93,12 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse create(StudentRequest request) {
+		return StudentResponse.from(createEntity(request));
+	}
+
+	/** Returns the entity (not just its response DTO) - used by RegistrationService, which needs the id for a Credential. */
+	@Transactional
+	public Student createEntity(StudentRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
 		if (studentRepository.existsBySchoolIdAndRollNumber(schoolId, request.getRollNumber())) {
 			throw new IllegalArgumentException("Roll number already exists for this school");
@@ -108,7 +114,7 @@ public class StudentService {
 		Student saved = studentRepository.save(student);
 		feeStructureService.createAssessmentForStudentIfStructureExists(saved);
 
-		return StudentResponse.from(saved);
+		return saved;
 	}
 
 	@Transactional

@@ -19,6 +19,7 @@ import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.service.EmployeeService;
 import com.gurukul.gamification.service.GamificationService;
+import com.gurukul.parents.service.ParentService;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
@@ -44,6 +45,7 @@ public class AttendanceService {
 	private final StudentRepository studentRepository;
 	private final ClassSectionService classSectionService;
 	private final EmployeeService employeeService;
+	private final ParentService parentService;
 	private final SchoolContext schoolContext;
 	private final GamificationService gamificationService;
 
@@ -112,6 +114,9 @@ public class AttendanceService {
 		AuthPrincipal principal = AuthContext.current();
 		if (principal.getRole() == Role.STUDENT && !principal.getOwnerId().equals(studentId)) {
 			throw new AccessDeniedException("Students can only view their own attendance");
+		}
+		if (principal.getRole() == Role.PARENT) {
+			parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
 		}
 
 		UUID schoolId = schoolContext.getSchoolId();

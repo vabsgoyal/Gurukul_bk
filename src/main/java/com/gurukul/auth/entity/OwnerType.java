@@ -9,6 +9,9 @@ public enum OwnerType {
 	EMPLOYEE,
 
 	@Schema(description = "Owner is a Student")
-	STUDENT
+	STUDENT,
+
+	@Schema(description = "Owner is a Parent - a standalone identity, distinct from the student(s) they're linked to")
+	PARENT
 
 }
