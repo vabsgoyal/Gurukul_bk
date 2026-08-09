@@ -12,6 +12,9 @@ public enum Role {
 	TEACHER,
 
 	@Schema(description = "Student - restricted to their own data")
-	STUDENT
+	STUDENT,
+
+	@Schema(description = "Parent - read-only visibility into their linked child(ren)'s data")
+	PARENT
 
 }

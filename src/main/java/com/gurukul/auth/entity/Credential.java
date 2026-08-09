@@ -38,4 +38,12 @@ public class Credential extends BaseEntity {
 	@Column(nullable = false)
 	private Role role;
 
+	/**
+	 * Defaults true for every existing creation path (admin-issued, OTP auto-provision, dev
+	 * seeders) - only the new self-registration flow explicitly creates a credential disabled,
+	 * pending admin approval (see RegistrationService), and flips it on approval.
+	 */
+	@Column(nullable = false)
+	private boolean enabled = true;
+
 }

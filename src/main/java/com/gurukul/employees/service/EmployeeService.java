@@ -72,12 +72,17 @@ public class EmployeeService {
 
 	@Transactional
 	public EmployeeResponse create(EmployeeRequest request) {
+		return EmployeeResponse.from(createEntity(request), null);
+	}
+
+	/** Returns the entity (not just its response DTO) - used by RegistrationService, which needs the id for a Credential. */
+	@Transactional
+	public Employee createEntity(EmployeeRequest request) {
 		Employee employee = new Employee();
 		employee.setSchoolId(schoolContext.getSchoolId());
 		applyRequest(employee, request);
 		employee.setStatus(request.getStatus() != null ? request.getStatus() : EmployeeStatus.ACTIVE);
-		Employee saved = employeeRepository.save(employee);
-		return EmployeeResponse.from(saved, null);
+		return employeeRepository.save(employee);
 	}
 
 	@Transactional

@@ -28,6 +28,9 @@ public class AuthService {
 		if (!passwordEncoder.matches(request.getPassword(), credential.getPasswordHash())) {
 			throw new BadCredentialsException("Invalid username or password");
 		}
+		if (!credential.isEnabled()) {
+			throw new BadCredentialsException("Your registration is still pending admin approval");
+		}
 
 		String token = jwtService.generateToken(credential);
 		return new LoginResponse(
