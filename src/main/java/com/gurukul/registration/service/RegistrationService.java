@@ -329,6 +329,22 @@ public class RegistrationService {
 		};
 	}
 
+	private String entityTypeFor(OwnerType ownerType) {
+		return switch (ownerType) {
+			case STUDENT -> STUDENT_REGISTRATION;
+			case EMPLOYEE -> EMPLOYEE_REGISTRATION;
+			case PARENT -> PARENT_REGISTRATION;
+		};
+	}
+
+	/** Used by AuthService to give a distinct login error for "rejected" vs "still pending". */
+	@Transactional(readOnly = true)
+	public ApprovalStatus findApprovalStatus(OwnerType ownerType, UUID ownerId) {
+		return approvalRequestRepository.findByEntityTypeAndEntityId(entityTypeFor(ownerType), ownerId)
+				.map(ApprovalRequest::getStatus)
+				.orElse(ApprovalStatus.SUBMITTED);
+	}
+
 	private String displayNameFor(String entityType, UUID entityId, UUID schoolId) {
 		return switch (entityType) {
 			case STUDENT_REGISTRATION -> studentRepository.findByIdAndSchoolId(entityId, schoolId)
