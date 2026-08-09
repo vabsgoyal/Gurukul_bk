@@ -23,9 +23,7 @@ import com.gurukul.registration.dto.RegistrationDtos.StudentGoogleRegistrationRe
 import com.gurukul.registration.dto.RegistrationDtos.StudentRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherGoogleRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherRegistrationRequest;
-import com.gurukul.registration.entity.ParentClaimAttempt;
 import com.gurukul.registration.entity.TeacherInvite;
-import com.gurukul.registration.repository.ParentClaimAttemptRepository;
 import com.gurukul.registration.repository.TeacherInviteRepository;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
@@ -60,15 +58,12 @@ public class RegistrationService {
 	public static final String EMPLOYEE_REGISTRATION = "EMPLOYEE_REGISTRATION";
 	public static final String PARENT_REGISTRATION = "PARENT_REGISTRATION";
 
-	private static final int MAX_PARENT_CLAIM_ATTEMPTS = 5;
-	private static final long PARENT_CLAIM_LOCKOUT_MINUTES = 15;
-
 	private final StudentRepository studentRepository;
 	private final EmployeeRepository employeeRepository;
 	private final ParentRepository parentRepository;
 	private final ParentStudentLinkRepository parentStudentLinkRepository;
 	private final TeacherInviteRepository teacherInviteRepository;
-	private final ParentClaimAttemptRepository parentClaimAttemptRepository;
+	private final ParentClaimRateLimiter parentClaimRateLimiter;
 	private final CredentialRepository credentialRepository;
 	private final ApprovalRequestRepository approvalRequestRepository;
 	private final WorkflowService workflowService;
@@ -183,20 +178,15 @@ public class RegistrationService {
 		return invite;
 	}
 
-	/** Rate-limits guessing parentContact, since a roll number + phone number are not secret data. */
+	/**
+	 * Rate-limits guessing parentContact, since a roll number + phone number are not secret data.
+	 * Delegates the attempt-counter writes to ParentClaimRateLimiter's own REQUIRES_NEW transaction -
+	 * this method throws on every failure, which would otherwise roll back the increment right along
+	 * with the rest of this transaction and silently defeat the rate limit.
+	 */
 	private Student verifyParentClaim(String studentRollNumber, String parentContact) {
 		UUID schoolId = schoolContext.getSchoolId();
-		ParentClaimAttempt attempt = parentClaimAttemptRepository
-				.findBySchoolIdAndStudentRollNumber(schoolId, studentRollNumber)
-				.orElseGet(() -> {
-					ParentClaimAttempt a = new ParentClaimAttempt();
-					a.setSchoolId(schoolId);
-					a.setStudentRollNumber(studentRollNumber);
-					a.setAttemptCount(0);
-					return a;
-				});
-
-		if (attempt.getLockedUntil() != null && attempt.getLockedUntil().isAfter(Instant.now())) {
+		if (parentClaimRateLimiter.isLocked(schoolId, studentRollNumber)) {
 			throw new IllegalArgumentException("Too many failed attempts - try again later");
 		}
 
@@ -204,17 +194,11 @@ public class RegistrationService {
 				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
 
 		if (!student.getParentContact().equals(parentContact)) {
-			attempt.setAttemptCount(attempt.getAttemptCount() + 1);
-			if (attempt.getAttemptCount() >= MAX_PARENT_CLAIM_ATTEMPTS) {
-				attempt.setLockedUntil(Instant.now().plusSeconds(PARENT_CLAIM_LOCKOUT_MINUTES * 60));
-			}
-			parentClaimAttemptRepository.save(attempt);
+			parentClaimRateLimiter.recordFailure(schoolId, studentRollNumber);
 			throw new IllegalArgumentException("Roll number and parent contact do not match our records");
 		}
 
-		if (attempt.getId() != null) {
-			parentClaimAttemptRepository.delete(attempt);
-		}
+		parentClaimRateLimiter.recordSuccess(schoolId, studentRollNumber);
 		return student;
 	}
 
