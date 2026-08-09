@@ -19,6 +19,7 @@ import com.gurukul.exams.repository.ReportCardPublicationRepository;
 import com.gurukul.academics.entity.Subject;
 import com.gurukul.notifications.service.PushNotificationService;
 import com.gurukul.notifications.service.PushNotificationService.Recipient;
+import com.gurukul.parents.service.ParentService;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
@@ -50,6 +51,7 @@ public class ReportCardService {
 	private final AttendanceService attendanceService;
 	private final SchoolContext schoolContext;
 	private final PushNotificationService pushNotificationService;
+	private final ParentService parentService;
 
 	@Transactional
 	public PublicationResponse publish(UUID sectionId, String term) {
@@ -91,6 +93,9 @@ public class ReportCardService {
 		if (principal.getRole() == Role.STUDENT && !principal.getOwnerId().equals(studentId)) {
 			throw new AccessDeniedException("Students can only view their own report card");
 		}
+		if (principal.getRole() == Role.PARENT) {
+			parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
+		}
 
 		UUID schoolId = schoolContext.getSchoolId();
 		Student student = studentRepository.findByIdAndSchoolId(studentId, schoolId)
@@ -101,7 +106,7 @@ public class ReportCardService {
 		}
 
 		boolean published = reportCardPublicationRepository.existsByClassSection_IdAndTerm(section.getId(), term);
-		if (!published && principal.getRole() == Role.STUDENT) {
+		if (!published && (principal.getRole() == Role.STUDENT || principal.getRole() == Role.PARENT)) {
 			throw new IllegalStateException("The report card for " + term + " has not been published yet");
 		}
 

@@ -46,7 +46,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/attendance/history").hasAnyRole("TEACHER", "ADMIN")
-						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/attendance").hasAnyRole("TEACHER", "ADMIN", "STUDENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/attendance").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Staff attendance: bulk admin-entry is admin-only; self-mark (geofenced check-in) is
 						// for the employee themselves, teacher or admin.
 						.requestMatchers(HttpMethod.POST, "/api/v1/staff-attendance/self-mark").hasAnyRole("TEACHER", "ADMIN")
@@ -75,7 +75,7 @@ public class SecurityConfig {
 						// Report cards: publishing is an admin action; viewing is student/teacher/admin with
 						// the student-sees-only-their-own-and-only-once-published check in the service layer.
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")
