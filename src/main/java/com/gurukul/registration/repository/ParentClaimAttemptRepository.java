@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface ParentClaimAttemptRepository extends JpaRepository<ParentClaimAttempt, UUID> {
 
-	Optional<ParentClaimAttempt> findBySchoolIdAndStudentRollNumber(UUID schoolId, String studentRollNumber);
+	Optional<ParentClaimAttempt> findBySchoolIdAndStudentRegistrationNumber(UUID schoolId, String studentRegistrationNumber);
 
 }

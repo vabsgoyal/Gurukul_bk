@@ -88,7 +88,7 @@ public class RegistrationService {
 	@Transactional
 	public RegistrationSubmittedResponse registerParent(ParentRegistrationRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = verifyParentClaim(request.getStudentRollNumber(), request.getParentContact());
+		Student student = verifyParentClaim(request.getStudentRegistrationNumber(), request.getParentContact());
 
 		Parent parent = new Parent();
 		parent.setSchoolId(schoolId);
@@ -127,7 +127,7 @@ public class RegistrationService {
 	public RegistrationSubmittedResponse registerParentViaGoogle(ParentGoogleRegistrationRequest request) {
 		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = verifyParentClaim(request.getStudentRollNumber(), request.getParentContact());
+		Student student = verifyParentClaim(request.getStudentRegistrationNumber(), request.getParentContact());
 
 		Parent parent = new Parent();
 		parent.setSchoolId(schoolId);
@@ -179,39 +179,42 @@ public class RegistrationService {
 	}
 
 	/**
-	 * Rate-limits guessing parentContact, since a roll number + phone number are not secret data.
+	 * Rate-limits guessing parentContact, since a registrationNumber + phone number are not secret
+	 * data. Uses registrationNumber (not rollNumber) as the claim key - rollNumber is only unique
+	 * within a class-section (server-computed alphabetical rank) and can change as classmates
+	 * join/leave, so it can't safely identify a specific student on its own.
 	 * Delegates the attempt-counter writes to ParentClaimRateLimiter's own REQUIRES_NEW transaction -
 	 * this method throws on every failure, which would otherwise roll back the increment right along
 	 * with the rest of this transaction and silently defeat the rate limit.
 	 */
-	private Student verifyParentClaim(String studentRollNumber, String parentContact) {
+	private Student verifyParentClaim(String studentRegistrationNumber, String parentContact) {
 		UUID schoolId = schoolContext.getSchoolId();
-		if (parentClaimRateLimiter.isLocked(schoolId, studentRollNumber)) {
+		if (parentClaimRateLimiter.isLocked(schoolId, studentRegistrationNumber)) {
 			throw new IllegalArgumentException("Too many failed attempts - try again later");
 		}
 
-		Student student = studentRepository.findBySchoolIdAndRollNumber(schoolId, studentRollNumber)
-				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
+		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, studentRegistrationNumber)
+				.orElseThrow(() -> new EntityNotFoundException("No student found with that registration number"));
 
 		if (!student.getParentContact().equals(parentContact)) {
-			parentClaimRateLimiter.recordFailure(schoolId, studentRollNumber);
-			throw new IllegalArgumentException("Roll number and parent contact do not match our records");
+			parentClaimRateLimiter.recordFailure(schoolId, studentRegistrationNumber);
+			throw new IllegalArgumentException("Registration number and parent contact do not match our records");
 		}
 
-		parentClaimRateLimiter.recordSuccess(schoolId, studentRollNumber);
+		parentClaimRateLimiter.recordSuccess(schoolId, studentRegistrationNumber);
 		return student;
 	}
 
 	/**
 	 * An already-approved parent linking another child (e.g. a sibling enrolling later) - no
 	 * further approval needed, since the parent identity itself is already trusted; only the
-	 * student-roll-number lookup needs to succeed.
+	 * registrationNumber lookup needs to succeed.
 	 */
 	@Transactional
 	public void linkAdditionalChild(UUID parentId, LinkChildRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = studentRepository.findBySchoolIdAndRollNumber(schoolId, request.getStudentRollNumber())
-				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
+		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, request.getStudentRegistrationNumber())
+				.orElseThrow(() -> new EntityNotFoundException("No student found with that registration number"));
 		if (parentStudentLinkRepository.existsByParentIdAndStudentId(parentId, student.getId())) {
 			throw new IllegalArgumentException("This child is already linked to your account");
 		}

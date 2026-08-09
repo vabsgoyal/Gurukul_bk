@@ -21,8 +21,11 @@ public class StudentResponse {
 	@Schema(description = "School (tenant) this student belongs to")
 	private UUID schoolId;
 
-	@Schema(description = "Roll number unique within the school", example = "8A-001")
+	@Schema(description = "Roll number within the class-section - server-computed from alphabetical order, not admin-entered", example = "1")
 	private String rollNumber;
+
+	@Schema(description = "System-generated at admission, unique per school - the identifier the student/parent use to self-register a login", example = "2026000001")
+	private String registrationNumber;
 
 	@Schema(description = "Full name", example = "Rahul Sharma")
 	private String name;
@@ -80,6 +83,7 @@ public class StudentResponse {
 				student.getId(),
 				student.getSchoolId(),
 				student.getRollNumber(),
+				student.getRegistrationNumber(),
 				student.getName(),
 				student.getDob(),
 				student.getGender().name(),

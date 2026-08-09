@@ -9,15 +9,15 @@ import lombok.Setter;
 
 import java.time.Instant;
 
-/** Tracks failed parent-registration claim attempts per (school, student roll number) to rate-limit guessing parentContact. */
+/** Tracks failed parent-registration claim attempts per (school, student registrationNumber) to rate-limit guessing parentContact. */
 @Getter
 @Setter
 @Entity
 @Table(name = "parent_claim_attempt")
 public class ParentClaimAttempt extends BaseEntity {
 
-	@Column(name = "student_roll_number", nullable = false)
-	private String studentRollNumber;
+	@Column(name = "student_registration_number", nullable = false)
+	private String studentRegistrationNumber;
 
 	@Column(name = "attempt_count", nullable = false)
 	private int attemptCount;

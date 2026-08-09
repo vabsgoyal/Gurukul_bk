@@ -33,12 +33,13 @@ public class RegistrationDtos {
 	}
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a parent - links to an existing student by roll number, verified by "
-			+ "matching parentContact against the value already on the student record; goes to admin approval")
+	@Schema(description = "Self-registration for a parent - links to an existing student by registrationNumber, "
+			+ "verified by matching parentContact against the value already on the student record; goes to admin approval")
 	public static class ParentRegistrationRequest {
 		@NotBlank
-		@Schema(description = "Roll number of the child this parent is linking to")
-		private String studentRollNumber;
+		@Schema(description = "The child's registrationNumber, e.g. 2026000001 - not the roll number, which isn't "
+				+ "unique per school and can change as classmates join/leave")
+		private String studentRegistrationNumber;
 		@NotBlank
 		@Schema(description = "Must match the parentContact already on file for this student")
 		private String parentContact;
@@ -49,7 +50,9 @@ public class RegistrationDtos {
 	@Getter @Setter
 	@Schema(description = "Link an additional child to an already-approved parent account (e.g. a sibling)")
 	public static class LinkChildRequest {
-		@NotBlank private String studentRollNumber;
+		@NotBlank
+		@Schema(description = "The child's registrationNumber, e.g. 2026000001")
+		private String studentRegistrationNumber;
 	}
 
 	@Getter @Setter
@@ -71,13 +74,13 @@ public class RegistrationDtos {
 	}
 
 	@Getter @Setter
-	@Schema(description = "Self-registration for a parent via Google, linking to an existing student by roll number, "
-			+ "verified by matching parentContact against the value already on the student record")
+	@Schema(description = "Self-registration for a parent via Google, linking to an existing student by "
+			+ "registrationNumber, verified by matching parentContact against the value already on the student record")
 	public static class ParentGoogleRegistrationRequest {
 		@NotBlank private String idToken;
 		@NotBlank
-		@Schema(description = "Roll number of the child this parent is linking to")
-		private String studentRollNumber;
+		@Schema(description = "The child's registrationNumber, e.g. 2026000001")
+		private String studentRegistrationNumber;
 		@NotBlank
 		@Schema(description = "Must match the parentContact already on file for this student")
 		private String parentContact;
