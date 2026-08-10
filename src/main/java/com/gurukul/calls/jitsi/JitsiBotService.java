@@ -29,9 +29,11 @@ import java.io.File;
  * way, Jitsi lets everyone else join anonymously with no moderator requirement - the bot doesn't
  * need to stay in the call, so it quits immediately after confirming the room started.
  *
- * <p>Best-effort only: a failure here (blank profile dir, expired session, Chrome missing) must
- * never block the call itself - it only means the room may still show the "waiting for moderator"
- * screen to real participants, exactly like before this bot existed.
+ * <p>When the bot feature is disabled/unconfigured (blank profile dir), {@link #warmRoom} is a
+ * no-op that returns {@code true} - calls proceed exactly as before this bot existed. But when the
+ * feature IS configured and warming fails (expired session, Chrome missing, timeout), it returns
+ * {@code false} so the caller can refuse to start a call that would otherwise land both
+ * participants on Jitsi's "waiting for moderator... please log-in" screen.
  */
 @Service
 @EnableConfigurationProperties(JitsiBotProperties.class)
@@ -47,22 +49,25 @@ public class JitsiBotService {
 		this.properties = properties;
 	}
 
-	public void warmRoom(String roomName) {
+	public boolean warmRoom(String roomName) {
 		if (!properties.isConfigured()) {
 			log.debug("Jitsi bot not configured (disabled or no profile-dir) - skipping warm for room {}", roomName);
-			return;
+			return true;
 		}
 		WebDriver driver = null;
 		try {
 			driver = newDriver();
 			driver.get(roomUrl(roomName));
-			if (!waitUntilStarted(driver)) {
-				log.warn("Jitsi bot could not confirm room {} started within {}s - it may still show "
-						+ "\"waiting for moderator\" to real participants. Check that the bot's saved "
-						+ "session (app.jitsi.bot.profile-dir) is still logged in.", roomName, properties.warmTimeoutSeconds());
+			boolean started = waitUntilStarted(driver);
+			if (!started) {
+				log.warn("Jitsi bot could not confirm room {} started within {}s - refusing to start the call. "
+						+ "Check that the bot's saved session (app.jitsi.bot.profile-dir) is still logged in.",
+						roomName, properties.warmTimeoutSeconds());
 			}
+			return started;
 		} catch (Exception e) {
-			log.error("Jitsi bot failed to warm room {} - proceeding without it", roomName, e);
+			log.error("Jitsi bot failed to warm room {} - refusing to start the call", roomName, e);
+			return false;
 		} finally {
 			if (driver != null) {
 				try {
