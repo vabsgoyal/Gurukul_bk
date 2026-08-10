@@ -23,10 +23,12 @@ public class ParentService {
 
 	@Transactional(readOnly = true)
 	public List<StudentResponse> listMyChildren(UUID parentId) {
+		// A parent already has the child's registrationNumber (they needed it to register in the
+		// first place) - it isn't re-shown here, same as it's hidden from every other non-admin caller.
 		return parentStudentLinkRepository.findAllByParentId(parentId).stream()
 				.map(link -> studentRepository.findById(link.getStudentId()).orElse(null))
 				.filter(Objects::nonNull)
-				.map(StudentResponse::from)
+				.map(s -> StudentResponse.from(s, false))
 				.toList();
 	}
 

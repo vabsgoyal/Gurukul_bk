@@ -1,6 +1,7 @@
 package com.gurukul.students.repository;
 
 import com.gurukul.students.entity.Student;
+import com.gurukul.students.entity.StudentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -28,13 +29,11 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
 	List<Student> findAllBySchoolIdAndParentContact(UUID schoolId, String parentContact);
 
-	@EntityGraph(attributePaths = "classSection")
-	Optional<Student> findBySchoolIdAndRollNumber(UUID schoolId, String rollNumber);
-
-	boolean existsBySchoolIdAndRollNumber(UUID schoolId, String rollNumber);
-
-	boolean existsBySchoolIdAndRollNumberAndIdNot(UUID schoolId, String rollNumber, UUID id);
+	Optional<Student> findBySchoolIdAndRegistrationNumber(UUID schoolId, String registrationNumber);
 
 	long countBySchoolId(UUID schoolId);
+
+	/** Used to recompute server-assigned roll numbers (alphabetical rank within the active roster) whenever the roster changes. */
+	List<Student> findAllByClassSectionIdAndStatus(UUID classSectionId, StudentStatus status);
 
 }

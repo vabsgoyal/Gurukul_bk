@@ -1,7 +1,9 @@
 package com.gurukul.registration.service;
 
 import com.gurukul.auth.security.AuthPrincipal;
+import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
+import com.gurukul.employees.repository.EmployeeRepository;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherInviteResponse;
 import com.gurukul.registration.entity.TeacherInvite;
 import com.gurukul.registration.repository.TeacherInviteRepository;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -21,15 +24,26 @@ public class TeacherInviteService {
 	private static final long DEFAULT_VALIDITY_HOURS = 72;
 
 	private final TeacherInviteRepository teacherInviteRepository;
+	private final EmployeeRepository employeeRepository;
 	private final SchoolContext schoolContext;
 
+	/** Generates an invite tied to a specific, already-created Employee - the registering teacher just claims that record. */
 	@Transactional
-	public TeacherInviteResponse createInvite(AuthPrincipal principal) {
+	public TeacherInviteResponse createInviteForEmployee(AuthPrincipal principal, UUID employeeId) {
+		UUID schoolId = schoolContext.getSchoolId();
+		if (employeeRepository.findByIdAndSchoolId(employeeId, schoolId).isEmpty()) {
+			throw new EntityNotFoundException("No employee found with that id");
+		}
+		if (teacherInviteRepository.existsBySchoolIdAndTargetEmployeeIdAndUsedFalse(schoolId, employeeId)) {
+			throw new IllegalArgumentException("An unused invite already exists for this employee");
+		}
+
 		TeacherInvite invite = new TeacherInvite();
-		invite.setSchoolId(schoolContext.getSchoolId());
+		invite.setSchoolId(schoolId);
 		invite.setCode(generateCode());
 		invite.setExpiresAt(Instant.now().plusSeconds(DEFAULT_VALIDITY_HOURS * 3600));
 		invite.setCreatedByEmployeeId(principal.getOwnerId());
+		invite.setTargetEmployeeId(employeeId);
 		invite.setUsed(false);
 		invite = teacherInviteRepository.save(invite);
 		return new TeacherInviteResponse(invite.getCode(), invite.getExpiresAt());

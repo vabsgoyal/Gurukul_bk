@@ -29,4 +29,8 @@ public class TeacherInvite extends BaseEntity {
 	@Column(name = "created_by_employee_id", nullable = false)
 	private UUID createdByEmployeeId;
 
+	/** The specific Employee this invite claims a credential for - null only for invites issued before this column existed. */
+	@Column(name = "target_employee_id")
+	private UUID targetEmployeeId;
+
 }

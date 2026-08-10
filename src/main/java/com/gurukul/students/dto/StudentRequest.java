@@ -19,10 +19,6 @@ import java.util.UUID;
 public class StudentRequest {
 
 	@NotBlank
-	@Schema(description = "Unique roll number within the school", example = "8A-001")
-	private String rollNumber;
-
-	@NotBlank
 	@Schema(description = "Full name of the student", example = "Rahul Sharma")
 	private String name;
 

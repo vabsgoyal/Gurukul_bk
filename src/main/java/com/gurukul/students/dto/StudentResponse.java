@@ -21,8 +21,11 @@ public class StudentResponse {
 	@Schema(description = "School (tenant) this student belongs to")
 	private UUID schoolId;
 
-	@Schema(description = "Roll number unique within the school", example = "8A-001")
+	@Schema(description = "Roll number within the class-section - server-computed from alphabetical order, not admin-entered", example = "1")
 	private String rollNumber;
+
+	@Schema(description = "System-generated at admission, unique per school - the identifier the student/parent use to self-register a login", example = "2026000001")
+	private String registrationNumber;
 
 	@Schema(description = "Full name", example = "Rahul Sharma")
 	private String name;
@@ -75,11 +78,17 @@ public class StudentResponse {
 	@Schema(description = "When the record was last updated")
 	private Instant updatedAt;
 
-	public static StudentResponse from(Student student) {
+	/**
+	 * registrationNumber is a login-claim key (student self-registration auto-activates on it alone)
+	 * - only an admin, who can hand it to the student/parent directly, should ever see it. Everyone
+	 * else gets null, same as any other field they're not entitled to.
+	 */
+	public static StudentResponse from(Student student, boolean includeRegistrationNumber) {
 		return new StudentResponse(
 				student.getId(),
 				student.getSchoolId(),
 				student.getRollNumber(),
+				includeRegistrationNumber ? student.getRegistrationNumber() : null,
 				student.getName(),
 				student.getDob(),
 				student.getGender().name(),

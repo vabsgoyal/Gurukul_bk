@@ -22,10 +22,9 @@ class StudentSearchIntegrationTest {
 	@Autowired
 	private MockMvc mockMvc;
 
-	private void enrollStudent(String rollNumber, String name, String parentName, String parentContact) throws Exception {
+	private void enrollStudent(String name, String parentName, String parentContact) throws Exception {
 		String body = """
 				{
-				  "rollNumber": "%s",
 				  "name": "%s",
 				  "dob": "2012-05-15",
 				  "gender": "MALE",
@@ -35,7 +34,7 @@ class StudentSearchIntegrationTest {
 				  "classSectionId": "%s",
 				  "admissionDate": "2026-04-01"
 				}
-				""".formatted(rollNumber, name, parentName, parentContact, SEED_CLASS_SECTION_ID);
+				""".formatted(name, parentName, parentContact, SEED_CLASS_SECTION_ID);
 
 		mockMvc.perform(post("/api/v1/students")
 						.header("X-School-Id", SCHOOL_ID)
@@ -46,36 +45,25 @@ class StudentSearchIntegrationTest {
 
 	@Test
 	void searchByExactNameReturnsMatch() throws Exception {
-		enrollStudent("SR-001", "Ananya Gupta", "Deepak Gupta", "9811122233");
+		enrollStudent("Ananya Gupta", "Deepak Gupta", "9811122233");
 
 		mockMvc.perform(get("/api/v1/students/search")
 						.header("X-School-Id", SCHOOL_ID)
 						.param("q", "Ananya"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
-				.andExpect(jsonPath("$.data[?(@.rollNumber == 'SR-001')]").exists());
-	}
-
-	@Test
-	void searchByRollNumberReturnsMatch() throws Exception {
-		enrollStudent("SR-002", "Vivaan Mehta", "Suresh Mehta", "9822233344");
-
-		mockMvc.perform(get("/api/v1/students/search")
-						.header("X-School-Id", SCHOOL_ID)
-						.param("q", "SR-002"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.name == 'Vivaan Mehta')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == 'Ananya Gupta')]").exists());
 	}
 
 	@Test
 	void searchToleratesTypos() throws Exception {
-		enrollStudent("SR-005", "Vivaan Mehta", "Suresh Mehta", "9822233355");
+		enrollStudent("Vivaan Mehta", "Suresh Mehta", "9822233355");
 
 		mockMvc.perform(get("/api/v1/students/search")
 						.header("X-School-Id", SCHOOL_ID)
 						.param("q", "Vivan Mehta"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == 'SR-005')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == 'Vivaan Mehta')]").exists());
 	}
 
 	@Test
@@ -89,7 +77,7 @@ class StudentSearchIntegrationTest {
 
 	@Test
 	void searchIsScopedToSchool() throws Exception {
-		enrollStudent("SR-003", "Kabir Nair", "Ramesh Nair", "9833344455");
+		enrollStudent("Kabir Nair", "Ramesh Nair", "9833344455");
 
 		String otherSchool = """
 				{
@@ -124,25 +112,25 @@ class StudentSearchIntegrationTest {
 
 	@Test
 	void searchParentsMatchesByParentNameParentContactOrStudentName() throws Exception {
-		enrollStudent("SR-004", "Ishaan Rao", "Meera Rao", "9844455566");
+		enrollStudent("Ishaan Rao", "Meera Rao", "9844455566");
 
 		mockMvc.perform(get("/api/v1/students/search-parents")
 						.header("X-School-Id", SCHOOL_ID)
 						.param("q", "Meera Rao"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == 'SR-004')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == 'Ishaan Rao')]").exists());
 
 		mockMvc.perform(get("/api/v1/students/search-parents")
 						.header("X-School-Id", SCHOOL_ID)
 						.param("q", "9844455566"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == 'SR-004')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == 'Ishaan Rao')]").exists());
 
 		mockMvc.perform(get("/api/v1/students/search-parents")
 						.header("X-School-Id", SCHOOL_ID)
 						.param("q", "Ishaan"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == 'SR-004')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == 'Ishaan Rao')]").exists());
 	}
 
 	@Test

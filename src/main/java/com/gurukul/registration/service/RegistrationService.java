@@ -8,10 +8,8 @@ import com.gurukul.auth.google.GoogleTokenVerifier.GoogleIdentity;
 import com.gurukul.auth.repository.CredentialRepository;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
-import com.gurukul.employees.dto.EmployeeRequest;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.repository.EmployeeRepository;
-import com.gurukul.employees.service.EmployeeService;
 import com.gurukul.parents.entity.Parent;
 import com.gurukul.parents.entity.ParentStudentLink;
 import com.gurukul.parents.repository.ParentRepository;
@@ -27,10 +25,8 @@ import com.gurukul.registration.dto.RegistrationDtos.TeacherGoogleRegistrationRe
 import com.gurukul.registration.dto.RegistrationDtos.TeacherRegistrationRequest;
 import com.gurukul.registration.entity.TeacherInvite;
 import com.gurukul.registration.repository.TeacherInviteRepository;
-import com.gurukul.students.dto.StudentRequest;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
-import com.gurukul.students.service.StudentService;
 import com.gurukul.workflow.entity.ApprovalRequest;
 import com.gurukul.workflow.entity.ApprovalStatus;
 import com.gurukul.workflow.repository.ApprovalRequestRepository;
@@ -45,12 +41,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Self-registration for student/teacher/parent, gated by admin approval before login works.
- * Reuses the existing generic ApprovalRequest/WorkflowService (previously only used for finance
- * approvals) rather than a parallel status field, and reuses StudentService/EmployeeService's own
- * create() so a self-registered record is created exactly like an admin-entered one (same
- * validation, same defaults). The one piece those don't do: the Credential is created disabled and
- * only enabled on approval, so nothing can log in until an admin says so.
+ * Self-registration for student/teacher/parent - claims an existing, admin-created record (Student
+ * at admission, Employee at hiring) rather than creating a new one, so the person never re-enters
+ * data an admin already captured. Student and teacher claims auto-activate immediately: the admin
+ * already vetted the underlying record's existence (it can only be claimed once - see the
+ * already-has-a-credential checks below), so the only remaining question is "does this login belong
+ * to that record," which registrationNumber/inviteCode already answer. Parent claims are weaker
+ * (roll number + phone are not secret) so they stay approval-gated via the existing generic
+ * ApprovalRequest/WorkflowService, plus rate-limiting on failed parentContact guesses.
  */
 @Service
 @RequiredArgsConstructor
@@ -60,13 +58,12 @@ public class RegistrationService {
 	public static final String EMPLOYEE_REGISTRATION = "EMPLOYEE_REGISTRATION";
 	public static final String PARENT_REGISTRATION = "PARENT_REGISTRATION";
 
-	private final StudentService studentService;
 	private final StudentRepository studentRepository;
-	private final EmployeeService employeeService;
 	private final EmployeeRepository employeeRepository;
 	private final ParentRepository parentRepository;
 	private final ParentStudentLinkRepository parentStudentLinkRepository;
 	private final TeacherInviteRepository teacherInviteRepository;
+	private final ParentClaimRateLimiter parentClaimRateLimiter;
 	private final CredentialRepository credentialRepository;
 	private final ApprovalRequestRepository approvalRequestRepository;
 	private final WorkflowService workflowService;
@@ -76,63 +73,27 @@ public class RegistrationService {
 
 	@Transactional
 	public RegistrationSubmittedResponse registerStudent(StudentRegistrationRequest request) {
-		StudentRequest studentRequest = new StudentRequest();
-		studentRequest.setRollNumber(request.getRollNumber());
-		studentRequest.setName(request.getName());
-		studentRequest.setDob(request.getDob());
-		studentRequest.setGender(request.getGender());
-		studentRequest.setAddress(request.getAddress());
-		studentRequest.setParentName(request.getParentName());
-		studentRequest.setParentContact(request.getParentContact());
-		studentRequest.setClassSectionId(request.getClassSectionId());
-		studentRequest.setAdmissionDate(request.getAdmissionDate());
-
-		Student student = studentService.createEntity(studentRequest);
-		createDisabledCredential(OwnerType.STUDENT, student.getId(), Role.STUDENT, request.getUsername(), request.getPassword());
-		submit(STUDENT_REGISTRATION, student.getId(), request.getUsername());
-		return new RegistrationSubmittedResponse(student.getId(), "Registration submitted - pending admin approval");
+		Student student = findClaimableStudent(request.getRegistrationNumber());
+		createEnabledCredential(OwnerType.STUDENT, student.getId(), Role.STUDENT, request.getUsername(), request.getPassword());
+		return new RegistrationSubmittedResponse(student.getId(), "Registration complete - you can log in now");
 	}
 
 	@Transactional
 	public RegistrationSubmittedResponse registerTeacher(TeacherRegistrationRequest request) {
-		UUID schoolId = schoolContext.getSchoolId();
-		TeacherInvite invite = teacherInviteRepository.findBySchoolIdAndCode(schoolId, request.getInviteCode())
-				.orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
-		if (invite.isUsed()) {
-			throw new IllegalArgumentException("This invite code has already been used");
-		}
-		if (invite.getExpiresAt().isBefore(Instant.now())) {
-			throw new IllegalArgumentException("This invite code has expired");
-		}
-
-		EmployeeRequest employeeRequest = new EmployeeRequest();
-		employeeRequest.setName(request.getName());
-		employeeRequest.setDesignation(request.getDesignation());
-		employeeRequest.setJoinDate(request.getJoinDate());
-		employeeRequest.setContactPhone(request.getContactPhone());
-		employeeRequest.setContactEmail(request.getContactEmail());
-
-		Employee employee = employeeService.createEntity(employeeRequest);
-		createDisabledCredential(OwnerType.EMPLOYEE, employee.getId(), Role.TEACHER, request.getUsername(), request.getPassword());
-
-		invite.setUsed(true);
-		teacherInviteRepository.save(invite);
-
-		submit(EMPLOYEE_REGISTRATION, employee.getId(), request.getUsername());
-		return new RegistrationSubmittedResponse(employee.getId(), "Registration submitted - pending admin approval");
+		TeacherInvite invite = consumeInvite(request.getInviteCode());
+		createEnabledCredential(OwnerType.EMPLOYEE, invite.getTargetEmployeeId(), Role.TEACHER, request.getUsername(), request.getPassword());
+		return new RegistrationSubmittedResponse(invite.getTargetEmployeeId(), "Registration complete - you can log in now");
 	}
 
 	@Transactional
 	public RegistrationSubmittedResponse registerParent(ParentRegistrationRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = studentRepository.findBySchoolIdAndRollNumber(schoolId, request.getStudentRollNumber())
-				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
+		Student student = verifyParentClaim(request.getStudentRegistrationNumber(), request.getParentContact());
 
 		Parent parent = new Parent();
 		parent.setSchoolId(schoolId);
-		parent.setName(request.getName());
-		parent.setEmail(request.getEmail());
-		parent.setPhone(request.getPhone());
+		parent.setName(student.getParentName());
+		parent.setPhone(student.getParentContact());
 		parent = parentRepository.save(parent);
 
 		ParentStudentLink link = new ParentStudentLink();
@@ -149,68 +110,30 @@ public class RegistrationService {
 	@Transactional
 	public RegistrationSubmittedResponse registerStudentViaGoogle(StudentGoogleRegistrationRequest request) {
 		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
-
-		StudentRequest studentRequest = new StudentRequest();
-		studentRequest.setRollNumber(request.getRollNumber());
-		studentRequest.setName(request.getName());
-		studentRequest.setDob(request.getDob());
-		studentRequest.setGender(request.getGender());
-		studentRequest.setAddress(request.getAddress());
-		studentRequest.setParentName(request.getParentName());
-		studentRequest.setParentContact(request.getParentContact());
-		studentRequest.setClassSectionId(request.getClassSectionId());
-		studentRequest.setAdmissionDate(request.getAdmissionDate());
-
-		Student student = studentService.createEntity(studentRequest);
-		createDisabledGoogleCredential(OwnerType.STUDENT, student.getId(), Role.STUDENT, identity);
-		submit(STUDENT_REGISTRATION, student.getId(), identity.email());
-		return new RegistrationSubmittedResponse(student.getId(), "Registration submitted - pending admin approval");
+		Student student = findClaimableStudent(request.getRegistrationNumber());
+		createEnabledGoogleCredential(OwnerType.STUDENT, student.getId(), Role.STUDENT, identity);
+		return new RegistrationSubmittedResponse(student.getId(), "Registration complete - you can log in now");
 	}
 
 	@Transactional
 	public RegistrationSubmittedResponse registerTeacherViaGoogle(TeacherGoogleRegistrationRequest request) {
 		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
-
-		UUID schoolId = schoolContext.getSchoolId();
-		TeacherInvite invite = teacherInviteRepository.findBySchoolIdAndCode(schoolId, request.getInviteCode())
-				.orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
-		if (invite.isUsed()) {
-			throw new IllegalArgumentException("This invite code has already been used");
-		}
-		if (invite.getExpiresAt().isBefore(Instant.now())) {
-			throw new IllegalArgumentException("This invite code has expired");
-		}
-
-		EmployeeRequest employeeRequest = new EmployeeRequest();
-		employeeRequest.setName(request.getName());
-		employeeRequest.setDesignation(request.getDesignation());
-		employeeRequest.setJoinDate(request.getJoinDate());
-		employeeRequest.setContactPhone(request.getContactPhone());
-		employeeRequest.setContactEmail(identity.email());
-
-		Employee employee = employeeService.createEntity(employeeRequest);
-		createDisabledGoogleCredential(OwnerType.EMPLOYEE, employee.getId(), Role.TEACHER, identity);
-
-		invite.setUsed(true);
-		teacherInviteRepository.save(invite);
-
-		submit(EMPLOYEE_REGISTRATION, employee.getId(), identity.email());
-		return new RegistrationSubmittedResponse(employee.getId(), "Registration submitted - pending admin approval");
+		TeacherInvite invite = consumeInvite(request.getInviteCode());
+		createEnabledGoogleCredential(OwnerType.EMPLOYEE, invite.getTargetEmployeeId(), Role.TEACHER, identity);
+		return new RegistrationSubmittedResponse(invite.getTargetEmployeeId(), "Registration complete - you can log in now");
 	}
 
 	@Transactional
 	public RegistrationSubmittedResponse registerParentViaGoogle(ParentGoogleRegistrationRequest request) {
 		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
-
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = studentRepository.findBySchoolIdAndRollNumber(schoolId, request.getStudentRollNumber())
-				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
+		Student student = verifyParentClaim(request.getStudentRegistrationNumber(), request.getParentContact());
 
 		Parent parent = new Parent();
 		parent.setSchoolId(schoolId);
-		parent.setName(request.getName());
+		parent.setName(student.getParentName());
 		parent.setEmail(identity.email());
-		parent.setPhone(request.getPhone());
+		parent.setPhone(student.getParentContact());
 		parent = parentRepository.save(parent);
 
 		ParentStudentLink link = new ParentStudentLink();
@@ -224,16 +147,74 @@ public class RegistrationService {
 		return new RegistrationSubmittedResponse(parent.getId(), "Registration submitted - pending admin approval");
 	}
 
+	private Student findClaimableStudent(String registrationNumber) {
+		UUID schoolId = schoolContext.getSchoolId();
+		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, registrationNumber)
+				.orElseThrow(() -> new EntityNotFoundException("No student found with that registration number"));
+		if (credentialRepository.findByOwnerTypeAndOwnerId(OwnerType.STUDENT, student.getId()).isPresent()) {
+			throw new IllegalArgumentException("This student has already claimed a login");
+		}
+		return student;
+	}
+
+	private TeacherInvite consumeInvite(String code) {
+		UUID schoolId = schoolContext.getSchoolId();
+		TeacherInvite invite = teacherInviteRepository.findBySchoolIdAndCode(schoolId, code)
+				.orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
+		if (invite.isUsed()) {
+			throw new IllegalArgumentException("This invite code has already been used");
+		}
+		if (invite.getExpiresAt().isBefore(Instant.now())) {
+			throw new IllegalArgumentException("This invite code has expired");
+		}
+		if (invite.getTargetEmployeeId() == null) {
+			throw new IllegalArgumentException("This invite code is not tied to an employee record");
+		}
+		if (credentialRepository.findByOwnerTypeAndOwnerId(OwnerType.EMPLOYEE, invite.getTargetEmployeeId()).isPresent()) {
+			throw new IllegalArgumentException("This employee has already claimed a login");
+		}
+		invite.setUsed(true);
+		teacherInviteRepository.save(invite);
+		return invite;
+	}
+
+	/**
+	 * Rate-limits guessing parentContact, since a registrationNumber + phone number are not secret
+	 * data. Uses registrationNumber (not rollNumber) as the claim key - rollNumber is only unique
+	 * within a class-section (server-computed alphabetical rank) and can change as classmates
+	 * join/leave, so it can't safely identify a specific student on its own.
+	 * Delegates the attempt-counter writes to ParentClaimRateLimiter's own REQUIRES_NEW transaction -
+	 * this method throws on every failure, which would otherwise roll back the increment right along
+	 * with the rest of this transaction and silently defeat the rate limit.
+	 */
+	private Student verifyParentClaim(String studentRegistrationNumber, String parentContact) {
+		UUID schoolId = schoolContext.getSchoolId();
+		if (parentClaimRateLimiter.isLocked(schoolId, studentRegistrationNumber)) {
+			throw new IllegalArgumentException("Too many failed attempts - try again later");
+		}
+
+		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, studentRegistrationNumber)
+				.orElseThrow(() -> new EntityNotFoundException("No student found with that registration number"));
+
+		if (!student.getParentContact().equals(parentContact)) {
+			parentClaimRateLimiter.recordFailure(schoolId, studentRegistrationNumber);
+			throw new IllegalArgumentException("Registration number and parent contact do not match our records");
+		}
+
+		parentClaimRateLimiter.recordSuccess(schoolId, studentRegistrationNumber);
+		return student;
+	}
+
 	/**
 	 * An already-approved parent linking another child (e.g. a sibling enrolling later) - no
 	 * further approval needed, since the parent identity itself is already trusted; only the
-	 * student-roll-number lookup needs to succeed.
+	 * registrationNumber lookup needs to succeed.
 	 */
 	@Transactional
 	public void linkAdditionalChild(UUID parentId, LinkChildRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = studentRepository.findBySchoolIdAndRollNumber(schoolId, request.getStudentRollNumber())
-				.orElseThrow(() -> new EntityNotFoundException("No student found with that roll number"));
+		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, request.getStudentRegistrationNumber())
+				.orElseThrow(() -> new EntityNotFoundException("No student found with that registration number"));
 		if (parentStudentLinkRepository.existsByParentIdAndStudentId(parentId, student.getId())) {
 			throw new IllegalArgumentException("This child is already linked to your account");
 		}
@@ -276,6 +257,19 @@ public class RegistrationService {
 	}
 
 	private void createDisabledCredential(OwnerType ownerType, UUID ownerId, Role role, String username, String password) {
+		Credential credential = buildCredential(ownerType, ownerId, role, username, password);
+		credential.setEnabled(false);
+		credentialRepository.save(credential);
+	}
+
+	/** Student/teacher claims auto-activate immediately - admin already vetted the claimed record's existence. */
+	private void createEnabledCredential(OwnerType ownerType, UUID ownerId, Role role, String username, String password) {
+		Credential credential = buildCredential(ownerType, ownerId, role, username, password);
+		credential.setEnabled(true);
+		credentialRepository.save(credential);
+	}
+
+	private Credential buildCredential(OwnerType ownerType, UUID ownerId, Role role, String username, String password) {
 		UUID schoolId = schoolContext.getSchoolId();
 		if (credentialRepository.existsBySchoolIdAndUsername(schoolId, username)) {
 			throw new IllegalArgumentException("Username already taken for this school");
@@ -287,8 +281,7 @@ public class RegistrationService {
 		credential.setUsername(username);
 		credential.setPasswordHash(passwordEncoder.encode(password));
 		credential.setRole(role);
-		credential.setEnabled(false);
-		credentialRepository.save(credential);
+		return credential;
 	}
 
 	/**
@@ -298,6 +291,19 @@ public class RegistrationService {
 	 * password-login path simply can never match it - this account only ever logs in via Google.
 	 */
 	private void createDisabledGoogleCredential(OwnerType ownerType, UUID ownerId, Role role, GoogleIdentity identity) {
+		Credential credential = buildGoogleCredential(ownerType, ownerId, role, identity);
+		credential.setEnabled(false);
+		credentialRepository.save(credential);
+	}
+
+	/** Student/teacher claims auto-activate immediately - admin already vetted the claimed record's existence. */
+	private void createEnabledGoogleCredential(OwnerType ownerType, UUID ownerId, Role role, GoogleIdentity identity) {
+		Credential credential = buildGoogleCredential(ownerType, ownerId, role, identity);
+		credential.setEnabled(true);
+		credentialRepository.save(credential);
+	}
+
+	private Credential buildGoogleCredential(OwnerType ownerType, UUID ownerId, Role role, GoogleIdentity identity) {
 		if (!identity.emailVerified()) {
 			throw new IllegalArgumentException("Your Google account's email isn't verified");
 		}
@@ -316,8 +322,7 @@ public class RegistrationService {
 		credential.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
 		credential.setRole(role);
 		credential.setGoogleSubject(identity.subject());
-		credential.setEnabled(false);
-		credentialRepository.save(credential);
+		return credential;
 	}
 
 	private OwnerType ownerTypeFor(String entityType) {

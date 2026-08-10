@@ -30,15 +30,14 @@ class StudentSectionIntegrationTest {
 	private MockMvc mockMvc;
 
 	private String studentId;
-	private String rollNumber;
+	private String studentName;
 
 	@BeforeEach
 	void enrollStudent() throws Exception {
-		rollNumber = "SEC-" + UUID.randomUUID().toString().substring(0, 8);
+		studentName = "Section Test Student " + UUID.randomUUID();
 		String enrollStudent = """
 				{
-				  "rollNumber": "%s",
-				  "name": "Section Test Student",
+				  "name": "%s",
 				  "dob": "2012-05-15",
 				  "gender": "MALE",
 				  "address": "123 MG Road",
@@ -47,7 +46,7 @@ class StudentSectionIntegrationTest {
 				  "classSectionId": "%s",
 				  "admissionDate": "2026-04-01"
 				}
-				""".formatted(rollNumber, CLASS_SECTION_A);
+				""".formatted(studentName, CLASS_SECTION_A);
 
 		MvcResult result = mockMvc.perform(post("/api/v1/students")
 						.header("X-School-Id", SCHOOL_ID)
@@ -67,7 +66,7 @@ class StudentSectionIntegrationTest {
 						.param("section", "A")
 						.param("academicYear", "2026-27"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == '" + rollNumber + "')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == '" + studentName + "')]").exists());
 	}
 
 	@Test
@@ -75,7 +74,7 @@ class StudentSectionIntegrationTest {
 		mockMvc.perform(get("/api/v1/class-sections/" + CLASS_SECTION_A + "/students")
 						.header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == '" + rollNumber + "')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == '" + studentName + "')]").exists());
 	}
 
 	@Test
@@ -100,7 +99,7 @@ class StudentSectionIntegrationTest {
 						.param("section", "B")
 						.param("academicYear", "2026-27"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.rollNumber == '" + rollNumber + "')]").exists());
+				.andExpect(jsonPath("$.data[?(@.name == '" + studentName + "')]").exists());
 	}
 
 }
