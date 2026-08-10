@@ -56,10 +56,13 @@ public class ReportCardService {
 	@Transactional
 	public PublicationResponse publish(UUID sectionId, String term) {
 		AuthPrincipal principal = AuthContext.current();
-		if (principal.getRole() != Role.ADMIN) {
-			throw new AccessDeniedException("Only an admin can publish report cards");
-		}
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
+		boolean isClassTeacher = principal.getRole() == Role.TEACHER
+				&& section.getClassTeacher() != null
+				&& section.getClassTeacher().getId().equals(principal.getOwnerId());
+		if (principal.getRole() != Role.ADMIN && !isClassTeacher) {
+			throw new AccessDeniedException("Only an admin or this section's class teacher can publish report cards");
+		}
 		ReportCardPublication publication = reportCardPublicationRepository.findByClassSection_IdAndTerm(sectionId, term)
 				.orElseGet(ReportCardPublication::new);
 		publication.setSchoolId(schoolContext.getSchoolId());

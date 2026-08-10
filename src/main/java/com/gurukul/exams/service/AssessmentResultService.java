@@ -109,7 +109,12 @@ public class AssessmentResultService {
 		boolean isSubjectTeacher = assessment.getSubject() != null
 				&& sectionSubjectTeacherRepository.findBySectionIdAndSubjectIdAndTeacherId(
 						assessment.getSection().getId(), assessment.getSubject().getId(), principal.getOwnerId()).isPresent();
-		if (!isCreator && !isSubjectTeacher) {
+		// A class teacher has full edit access across every subject in their own section - not
+		// just their own subject - so they can correct/complete marks a subject teacher hasn't
+		// gotten to yet before checking everything and publishing.
+		boolean isClassTeacher = assessment.getSection().getClassTeacher() != null
+				&& assessment.getSection().getClassTeacher().getId().equals(principal.getOwnerId());
+		if (!isCreator && !isSubjectTeacher && !isClassTeacher) {
 			throw new AccessDeniedException("You are not authorized to manage results for this assessment");
 		}
 	}
