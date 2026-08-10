@@ -184,6 +184,7 @@ public class FeePaymentService {
 				payeeName,
 				school.getBankAccountNumber(),
 				school.getBankIfsc(),
+				payeeVpa,
 				upiUri,
 				referenceId,
 				Instant.now());

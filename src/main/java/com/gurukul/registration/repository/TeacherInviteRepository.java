@@ -10,6 +10,6 @@ public interface TeacherInviteRepository extends JpaRepository<TeacherInvite, UU
 
 	Optional<TeacherInvite> findBySchoolIdAndCode(UUID schoolId, String code);
 
-	boolean existsBySchoolIdAndTargetEmployeeIdAndUsedFalse(UUID schoolId, UUID targetEmployeeId);
+	Optional<TeacherInvite> findBySchoolIdAndTargetEmployeeIdAndUsedFalse(UUID schoolId, UUID targetEmployeeId);
 
 }

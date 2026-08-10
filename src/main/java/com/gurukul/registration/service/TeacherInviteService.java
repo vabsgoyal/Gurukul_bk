@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -27,16 +28,27 @@ public class TeacherInviteService {
 	private final EmployeeRepository employeeRepository;
 	private final SchoolContext schoolContext;
 
-	/** Generates an invite tied to a specific, already-created Employee - the registering teacher just claims that record. */
+	/**
+	 * Generates an invite tied to a specific, already-created Employee - the registering teacher
+	 * just claims that record. Idempotent: calling this again for the same employee while a prior
+	 * invite is still unused and unexpired just re-returns that same code, rather than erroring -
+	 * a principal re-opening this screen (e.g. because the teacher lost the code) should see the
+	 * invite again, not a "such an invite already exists" dead end. An unused-but-expired invite is
+	 * silently replaced with a fresh one.
+	 */
 	@Transactional
 	public TeacherInviteResponse createInviteForEmployee(AuthPrincipal principal, UUID employeeId) {
 		UUID schoolId = schoolContext.getSchoolId();
 		if (employeeRepository.findByIdAndSchoolId(employeeId, schoolId).isEmpty()) {
 			throw new EntityNotFoundException("No employee found with that id");
 		}
-		if (teacherInviteRepository.existsBySchoolIdAndTargetEmployeeIdAndUsedFalse(schoolId, employeeId)) {
-			throw new IllegalArgumentException("An unused invite already exists for this employee");
+
+		Optional<TeacherInvite> existing = teacherInviteRepository.findBySchoolIdAndTargetEmployeeIdAndUsedFalse(schoolId, employeeId);
+		if (existing.isPresent() && existing.get().getExpiresAt().isAfter(Instant.now())) {
+			TeacherInvite invite = existing.get();
+			return new TeacherInviteResponse(invite.getCode(), invite.getExpiresAt());
 		}
+		existing.ifPresent(teacherInviteRepository::delete);
 
 		TeacherInvite invite = new TeacherInvite();
 		invite.setSchoolId(schoolId);
