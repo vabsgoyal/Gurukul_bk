@@ -29,6 +29,9 @@ public class FeePaymentRequestResponse {
 	@Schema(description = "School's bank IFSC code")
 	private String ifsc;
 
+	@Schema(description = "The UPI ID (VPA) payments go to - shown as a manual fallback when no UPI app can be auto-launched")
+	private String payeeVpa;
+
 	@Schema(description = "UPI deep link (upi://pay?...) to open in a UPI app such as PhonePe, with the amount pre-filled")
 	private String upiUri;
 
