@@ -32,16 +32,24 @@ public class FeePaymentController {
 	private final FeePaymentService feePaymentService;
 
 	@GetMapping("/api/v1/fee-assessments")
-	@Operation(summary = "List fee assessments, optionally filtered by status")
+	@Operation(summary = "List fee assessments, optionally filtered by status and/or class-section")
 	public ApiResponse<List<FeeAssessmentResponse>> listAssessments(
-			@RequestParam(required = false) FeeAssessmentStatus status) {
-		return ApiResponse.success(feePaymentService.listAssessments(status));
+			@RequestParam(required = false) FeeAssessmentStatus status,
+			@RequestParam(required = false) UUID classSectionId) {
+		return ApiResponse.success(feePaymentService.listAssessments(status, classSectionId));
 	}
 
 	@GetMapping("/api/v1/students/{studentId}/fee-assessments")
 	@Operation(summary = "List fee assessments for a student")
 	public ApiResponse<List<FeeAssessmentResponse>> listByStudent(@PathVariable UUID studentId) {
 		return ApiResponse.success(feePaymentService.listByStudent(studentId));
+	}
+
+	@GetMapping("/api/v1/class-sections/{id}/fee-status")
+	@Operation(summary = "List fee assessments for every student in a class-section",
+			description = "Admin, or that section's own class teacher only.")
+	public ApiResponse<List<FeeAssessmentResponse>> getClassSectionFeeStatus(@PathVariable UUID id) {
+		return ApiResponse.success(feePaymentService.getClassSectionFeeStatus(id));
 	}
 
 	@PostMapping("/api/v1/fee-payments")

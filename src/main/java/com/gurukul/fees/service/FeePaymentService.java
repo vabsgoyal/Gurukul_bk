@@ -28,6 +28,8 @@ import com.gurukul.finance.service.LedgerService;
 import com.gurukul.parents.service.ParentService;
 import com.gurukul.schools.entity.School;
 import com.gurukul.schools.repository.SchoolRepository;
+import com.gurukul.students.entity.ClassSection;
+import com.gurukul.students.service.ClassSectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
@@ -78,6 +80,7 @@ public class FeePaymentService {
 	private final ParentService parentService;
 	private final SchoolRepository schoolRepository;
 	private final PaymentAttemptRepository paymentAttemptRepository;
+	private final ClassSectionService classSectionService;
 
 	/**
 	 * Prototype-only convenience: with no payment gateway wired up, RESPONSE_SUCCESS is the UPI
@@ -90,11 +93,17 @@ public class FeePaymentService {
 	private boolean unverifiedUpiAutoMarkPaid;
 
 	@Transactional(readOnly = true)
-	public List<FeeAssessmentResponse> listAssessments(FeeAssessmentStatus status) {
+	public List<FeeAssessmentResponse> listAssessments(FeeAssessmentStatus status, UUID classSectionId) {
 		UUID schoolId = schoolContext.getSchoolId();
 		List<StudentFeeAssessment> assessments = status != null
 				? assessmentRepository.findAllBySchoolIdAndStatus(schoolId, status)
 				: assessmentRepository.findAllBySchoolId(schoolId);
+		if (classSectionId != null) {
+			assessments = assessments.stream()
+					.filter(a -> a.getStudent().getClassSection() != null
+							&& a.getStudent().getClassSection().getId().equals(classSectionId))
+					.toList();
+		}
 		return assessments.stream().map(FeeAssessmentResponse::from).toList();
 	}
 
@@ -111,6 +120,26 @@ public class FeePaymentService {
 			parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
 		}
 		return assessmentRepository.findAllBySchoolIdAndStudentId(schoolContext.getSchoolId(), studentId).stream()
+				.map(FeeAssessmentResponse::from)
+				.toList();
+	}
+
+	/**
+	 * A class teacher's own view of their section's fee dues - ADMIN may pull any section, a
+	 * TEACHER only the section(s) they're the class teacher of, matching the pattern already
+	 * established for report-card authority (AssessmentResultService).
+	 */
+	@Transactional(readOnly = true)
+	public List<FeeAssessmentResponse> getClassSectionFeeStatus(UUID classSectionId) {
+		ClassSection section = classSectionService.getScopedClassSection(classSectionId);
+		AuthPrincipal principal = AuthContext.current();
+		boolean isClassTeacher = principal.getRole() == Role.TEACHER
+				&& section.getClassTeacher() != null
+				&& section.getClassTeacher().getId().equals(principal.getOwnerId());
+		if (principal.getRole() != Role.ADMIN && !isClassTeacher) {
+			throw new AccessDeniedException("You are not the class teacher of this section");
+		}
+		return assessmentRepository.findAllBySchoolIdAndStudent_ClassSection_Id(schoolContext.getSchoolId(), classSectionId).stream()
 				.map(FeeAssessmentResponse::from)
 				.toList();
 	}

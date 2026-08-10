@@ -8,6 +8,7 @@ import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.service.FeePaymentService;
 import com.gurukul.finance.dto.FundSummaryResponse;
 import com.gurukul.finance.service.LedgerService;
+import com.gurukul.payroll.entity.PayrollLine;
 import com.gurukul.payroll.entity.PayrollRun;
 import com.gurukul.payroll.entity.PayrollRunStatus;
 import com.gurukul.payroll.repository.PayrollLineRepository;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -46,11 +48,46 @@ public class ReportService {
 
 	@Transactional(readOnly = true)
 	public ReportDtos.DuesReport duesReport() {
-		List<FeeAssessmentResponse> overdue = feePaymentService.listAssessments(FeeAssessmentStatus.OVERDUE);
-		BigDecimal total = overdue.stream()
+		List<FeeAssessmentResponse> unpaid = feePaymentService.listAssessments(null, null).stream()
+				.filter(a -> a.getRemainingDue().compareTo(BigDecimal.ZERO) > 0)
+				.toList();
+		BigDecimal totalUnpaid = sumRemaining(unpaid);
+		List<FeeAssessmentResponse> overdue = feePaymentService.listAssessments(FeeAssessmentStatus.OVERDUE, null);
+		BigDecimal totalOverdue = sumRemaining(overdue);
+		return new ReportDtos.DuesReport(unpaid, totalUnpaid, overdue, totalOverdue);
+	}
+
+	private static BigDecimal sumRemaining(List<FeeAssessmentResponse> assessments) {
+		return assessments.stream()
 				.map(FeeAssessmentResponse::getRemainingDue)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
-		return new ReportDtos.DuesReport(overdue, total);
+	}
+
+	@Transactional(readOnly = true)
+	public ReportDtos.PayrollOverview payrollOverview() {
+		List<PayrollRun> runs = payrollRunRepository.findAllBySchoolId(schoolContext.getSchoolId());
+		long paidEmployeeCount = 0;
+		long pendingEmployeeCount = 0;
+		BigDecimal paidAmount = BigDecimal.ZERO;
+		BigDecimal pendingAmount = BigDecimal.ZERO;
+		List<ReportDtos.PayrollOverview.RunSummary> runSummaries = new ArrayList<>();
+
+		for (PayrollRun run : runs) {
+			List<PayrollLine> lines = payrollLineRepository.findAllByRunId(run.getId());
+			BigDecimal runTotal = lines.stream().map(PayrollLine::getNet).reduce(BigDecimal.ZERO, BigDecimal::add);
+			boolean paid = run.getStatus() == PayrollRunStatus.PAID;
+			if (paid) {
+				paidEmployeeCount += lines.size();
+				paidAmount = paidAmount.add(runTotal);
+			} else {
+				pendingEmployeeCount += lines.size();
+				pendingAmount = pendingAmount.add(runTotal);
+			}
+			runSummaries.add(new ReportDtos.PayrollOverview.RunSummary(
+					run.getMonth(), run.getYear(), run.getStatus().name(), lines.size(), runTotal));
+		}
+
+		return new ReportDtos.PayrollOverview(paidEmployeeCount, pendingEmployeeCount, paidAmount, pendingAmount, runSummaries);
 	}
 
 	@Transactional(readOnly = true)

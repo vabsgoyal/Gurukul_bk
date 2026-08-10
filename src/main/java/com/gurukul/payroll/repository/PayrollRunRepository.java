@@ -15,4 +15,6 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, UUID> {
 
 	List<PayrollRun> findAllBySchoolIdAndYear(UUID schoolId, int year);
 
+	List<PayrollRun> findAllBySchoolId(UUID schoolId);
+
 }

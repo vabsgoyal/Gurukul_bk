@@ -16,6 +16,8 @@ public interface StudentFeeAssessmentRepository extends JpaRepository<StudentFee
 
 	List<StudentFeeAssessment> findAllBySchoolIdAndStudentId(UUID schoolId, UUID studentId);
 
+	List<StudentFeeAssessment> findAllBySchoolIdAndStudent_ClassSection_Id(UUID schoolId, UUID classSectionId);
+
 	Optional<StudentFeeAssessment> findByIdAndSchoolId(UUID id, UUID schoolId);
 
 	Optional<StudentFeeAssessment> findBySchoolIdAndStudentIdAndAcademicYear(
