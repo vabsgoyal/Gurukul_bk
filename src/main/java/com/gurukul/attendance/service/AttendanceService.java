@@ -155,18 +155,18 @@ public class AttendanceService {
 				.sorted(Comparator.comparing(Student::getRollNumber))
 				.toList();
 
-		List<AttendanceRecord> records = (from != null && to != null)
-				? attendanceRecordRepository.findAllBySchoolIdAndSectionIdAndAttendanceDateBetween(schoolId, sectionId, from, to)
-				: attendanceRecordRepository.findAllBySchoolIdAndSectionId(schoolId, sectionId);
+		List<AttendanceRecordRepository.StudentStatusView> records = (from != null && to != null)
+				? attendanceRecordRepository.findStudentStatusesBySchoolIdAndSectionIdAndAttendanceDateBetween(schoolId, sectionId, from, to)
+				: attendanceRecordRepository.findStudentStatusesBySchoolIdAndSectionId(schoolId, sectionId);
 
-		Map<UUID, List<AttendanceRecord>> recordsByStudentId = records.stream()
-				.collect(Collectors.groupingBy(r -> r.getStudent().getId()));
+		Map<UUID, List<AttendanceRecordRepository.StudentStatusView>> recordsByStudentId = records.stream()
+				.collect(Collectors.groupingBy(AttendanceRecordRepository.StudentStatusView::getStudentId));
 
 		List<SectionStudentAttendanceSummary> summaries = students.stream()
 				.map(student -> {
-					List<AttendanceRecord> studentRecords = recordsByStudentId.getOrDefault(student.getId(), List.of());
+					List<AttendanceRecordRepository.StudentStatusView> studentRecords = recordsByStudentId.getOrDefault(student.getId(), List.of());
 					Map<AttendanceStatus, Long> counts = studentRecords.stream()
-							.collect(Collectors.groupingBy(AttendanceRecord::getStatus, Collectors.counting()));
+							.collect(Collectors.groupingBy(AttendanceRecordRepository.StudentStatusView::getStatus, Collectors.counting()));
 					return new SectionStudentAttendanceSummary(
 							student.getId(),
 							student.getName(),
