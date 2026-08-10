@@ -51,6 +51,25 @@ public class School {
 	@Column(name = "director_name", nullable = false)
 	private String directorName;
 
+	/** Bank details students pay fees into. Null until an admin sets them in Fee Payment Settings. */
+	@Column(name = "bank_account_number")
+	private String bankAccountNumber;
+
+	@Column(name = "bank_ifsc")
+	private String bankIfsc;
+
+	@Column(name = "bank_account_holder_name")
+	private String bankAccountHolderName;
+
+	/**
+	 * Optional real UPI VPA to use as-is for the payment intent instead of deriving one from
+	 * bankAccountNumber+bankIfsc. The derived VPA is a best-effort guess (accountNumber@bankHandle)
+	 * that may not resolve to a real payee - this field lets an admin enter their bank's actual
+	 * issued VPA directly for a guaranteed-valid destination, e.g. for testing against a real account.
+	 */
+	@Column(name = "upi_vpa_override")
+	private String upiVpaOverride;
+
 	/** Null until an admin configures the school's geofence via PUT /api/v1/schools/{id}/location. */
 	private Double latitude;
 

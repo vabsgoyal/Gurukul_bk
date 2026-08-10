@@ -43,6 +43,19 @@ public class SchoolResponse {
 	@Schema(description = "Director full name")
 	private String directorName;
 
+	@Schema(description = "Bank account number fees are paid into, null until an admin sets it")
+	private String bankAccountNumber;
+
+	@Schema(description = "IFSC code of the fee-receiving bank account, null until an admin sets it")
+	private String bankIfsc;
+
+	@Schema(description = "Account holder name shown to students when paying, null until an admin sets it")
+	private String bankAccountHolderName;
+
+	@Schema(description = "Optional real UPI VPA used as-is for payment intents instead of deriving one "
+			+ "from the bank account number/IFSC — for testing against a real, guaranteed-valid account")
+	private String upiVpaOverride;
+
 	@Schema(description = "Latitude of the school, null until an admin configures it")
 	private Double latitude;
 
@@ -79,6 +92,10 @@ public class SchoolResponse {
 				school.getContactPhone(),
 				school.getPrincipalName(),
 				school.getDirectorName(),
+				school.getBankAccountNumber(),
+				school.getBankIfsc(),
+				school.getBankAccountHolderName(),
+				school.getUpiVpaOverride(),
 				school.getLatitude(),
 				school.getLongitude(),
 				school.getGeofenceRadiusMeters(),

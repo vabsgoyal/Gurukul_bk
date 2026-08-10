@@ -3,7 +3,10 @@ package com.gurukul.fees.controller;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.fees.dto.FeeAssessmentResponse;
 import com.gurukul.fees.dto.FeePaymentRequest;
+import com.gurukul.fees.dto.FeePaymentRequestResponse;
 import com.gurukul.fees.dto.FeePaymentResponse;
+import com.gurukul.fees.dto.PaymentAttemptResponse;
+import com.gurukul.fees.dto.PaymentAttemptResultRequest;
 import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.service.FeePaymentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,10 +50,38 @@ public class FeePaymentController {
 		return ApiResponse.success(feePaymentService.recordPayment(request), "Payment recorded");
 	}
 
+	@PostMapping("/api/v1/fee-assessments/{id}/payment-request")
+	@Operation(summary = "Create a UPI payment request for a student's remaining due, "
+			+ "returning a deep link that opens a UPI app (e.g. PhonePe) with the amount pre-filled")
+	public ApiResponse<FeePaymentRequestResponse> createPaymentRequest(@PathVariable UUID id) {
+		return ApiResponse.success(feePaymentService.createPaymentRequest(id));
+	}
+
 	@GetMapping("/api/v1/fee-payments/{id}")
 	@Operation(summary = "Get fee payment by ID")
 	public ApiResponse<FeePaymentResponse> getPayment(@PathVariable UUID id) {
 		return ApiResponse.success(feePaymentService.getPayment(id));
+	}
+
+	@GetMapping("/api/v1/fee-assessments/{id}/payment-attempts/pending")
+	@Operation(summary = "Check for an in-flight (INITIATED/PENDING) payment attempt on this assessment, "
+			+ "so the client can warn before starting another one")
+	public ApiResponse<PaymentAttemptResponse> findPendingAttempt(@PathVariable UUID id) {
+		return ApiResponse.success(feePaymentService.findPendingAttempt(id).orElse(null));
+	}
+
+	@GetMapping("/api/v1/fee-assessments/{id}/payment-attempts")
+	@Operation(summary = "List all payment attempts for a fee assessment, most recent first")
+	public ApiResponse<List<PaymentAttemptResponse>> listAttempts(@PathVariable UUID id) {
+		return ApiResponse.success(feePaymentService.listAttemptsForAssessment(id));
+	}
+
+	@PostMapping("/api/v1/payment-attempts/{transactionRef}/result")
+	@Operation(summary = "Record what the UPI app returned (or the user self-reported) after control "
+			+ "returned to this app for a given payment attempt")
+	public ApiResponse<PaymentAttemptResponse> recordAttemptResult(
+			@PathVariable String transactionRef, @Valid @RequestBody PaymentAttemptResultRequest request) {
+		return ApiResponse.success(feePaymentService.recordAttemptResult(transactionRef, request));
 	}
 
 }

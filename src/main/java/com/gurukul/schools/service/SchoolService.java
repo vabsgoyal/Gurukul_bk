@@ -118,6 +118,16 @@ public class SchoolService {
 		school.setContactPhone(request.getContactPhone());
 		school.setPrincipalName(request.getPrincipalName());
 		school.setDirectorName(request.getDirectorName());
+		school.setBankAccountNumber(request.getBankAccountNumber());
+		school.setBankIfsc(request.getBankIfsc() != null ? request.getBankIfsc().toUpperCase() : null);
+		school.setBankAccountHolderName(
+				request.getBankAccountHolderName() != null && !request.getBankAccountHolderName().isBlank()
+						? request.getBankAccountHolderName()
+						: request.getName());
+		school.setUpiVpaOverride(
+				request.getUpiVpaOverride() != null && !request.getUpiVpaOverride().isBlank()
+						? request.getUpiVpaOverride().trim()
+						: null);
 		return toResponse(schoolRepository.save(school));
 	}
 
