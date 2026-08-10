@@ -191,6 +191,34 @@ class AttendanceIntegrationTest {
 				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].absentCount").value(1));
 	}
 
+	/**
+	 * The test above only covers the from/to branch. This covers the other branch of the same
+	 * service method - omitting the date range, which falls back to fetching the section's entire
+	 * attendance history (see AttendanceRecordRepository.findStudentStatusesBySchoolIdAndSectionId).
+	 */
+	@Test
+	void sectionHistoryAggregatesEveryStudentsAttendanceWithoutDateRange() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+		String teacherId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "History Teacher No Range");
+
+		String studentAId = AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, CLASS_SECTION_B, "History Student NoRange A");
+		String studentBId = AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, CLASS_SECTION_B, "History Student NoRange B");
+
+		markDay(adminBearer, teacherId, "2026-08-05", studentAId, "PRESENT", studentBId, "ABSENT");
+		markDay(adminBearer, teacherId, "2026-08-06", studentAId, "LATE", studentBId, "HALF_DAY");
+
+		mockMvc.perform(get("/api/v1/class-sections/" + CLASS_SECTION_B + "/attendance/history")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentAId + "')].totalRecords").value(2))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentAId + "')].presentCount").value(1))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentAId + "')].lateCount").value(1))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].totalRecords").value(2))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].absentCount").value(1))
+				.andExpect(jsonPath("$.data.students[?(@.studentId == '" + studentBId + "')].halfDayCount").value(1));
+	}
+
 	private void markDay(String adminBearer, String teacherId, String date,
 			String studentAId, String statusA, String studentBId, String statusB) throws Exception {
 		String payload = """
