@@ -58,6 +58,11 @@ public class SchoolService {
 		school.setContactPhone(request.getContactPhone());
 		school.setPrincipalName(request.getPrincipalName());
 		school.setDirectorName(request.getDirectorName());
+		school.setLatitude(request.getLatitude());
+		school.setLongitude(request.getLongitude());
+		if (request.getGeofenceRadiusMeters() != null) {
+			school.setGeofenceRadiusMeters(request.getGeofenceRadiusMeters());
+		}
 		School saved = schoolRepository.save(school);
 
 		LoginResponse principalLogin = createAdminLogin(saved.getId(), request.getPrincipalName(), "Principal",
