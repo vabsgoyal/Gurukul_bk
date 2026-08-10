@@ -9,8 +9,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -88,11 +91,13 @@ class FeePaymentIntegrationTest {
 				}
 				""".formatted(classSectionId);
 
-		mockMvc.perform(post("/api/v1/students")
+		MvcResult enrollResult = mockMvc.perform(post("/api/v1/students")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(enrollPayload))
-				.andExpect(status().isOk());
+				.andExpect(status().isOk())
+				.andReturn();
+		String studentId = JsonPath.read(enrollResult.getResponse().getContentAsString(), "$.data.id");
 
 		mockMvc.perform(post("/api/v1/fee-structures/" + structureId + "/generate-assessments")
 						.header("X-School-Id", SCHOOL_ID))
@@ -101,11 +106,9 @@ class FeePaymentIntegrationTest {
 				.andExpect(jsonPath("$.data[0].status").value("UNPAID"))
 				.andExpect(jsonPath("$.data[0].totalDue").value(10000.00));
 
-		String assessmentId = JsonPath.read(
-				mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
-						.andExpect(status().isOk())
-						.andReturn().getResponse().getContentAsString(),
-				"$.data[0].id");
+		// GET /fee-assessments lists every assessment for the whole school, not just this test's -
+		// filter by studentId rather than assuming index [0], since other tests share this school id.
+		String assessmentId = (String) findAssessmentForStudent(studentId).get("id");
 
 		String partialPayment = String.format("""
 				{
@@ -122,10 +125,9 @@ class FeePaymentIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.receiptNumber").exists());
 
-		mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].status").value("PARTIAL"))
-				.andExpect(jsonPath("$.data[0].totalPaid").value(4000.00));
+		Map<String, Object> afterPartialPayment = findAssessmentForStudent(studentId);
+		assertThat(afterPartialPayment.get("status")).isEqualTo("PARTIAL");
+		assertThat(((Number) afterPartialPayment.get("totalPaid")).doubleValue()).isEqualTo(4000.00);
 
 		String fullPayment = String.format("""
 				{
@@ -141,9 +143,7 @@ class FeePaymentIntegrationTest {
 						.content(fullPayment))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].status").value("PAID"));
+		assertThat(findAssessmentForStudent(studentId).get("status")).isEqualTo("PAID");
 
 		String overpay = String.format("""
 				{
@@ -158,6 +158,24 @@ class FeePaymentIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(overpay))
 				.andExpect(status().isBadRequest());
+	}
+
+	/**
+	 * GET /fee-assessments has no filter params and lists every assessment for the whole school, not
+	 * just this test's - other tests share this same school id, so index [0] isn't reliable. JsonPath
+	 * filter predicates (e.g. "$.data[?(@.studentId=='x')]") always evaluate to a List even with a
+	 * trailing index, so this filters in plain Java instead.
+	 */
+	@SuppressWarnings("unchecked")
+	private Map<String, Object> findAssessmentForStudent(String studentId) throws Exception {
+		String body = mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		List<Map<String, Object>> assessments = JsonPath.read(body, "$.data");
+		return assessments.stream()
+				.filter(a -> studentId.equals(a.get("studentId")))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("No fee assessment found for studentId " + studentId));
 	}
 
 }
