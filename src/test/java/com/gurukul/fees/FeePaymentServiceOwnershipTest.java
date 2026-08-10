@@ -17,6 +17,7 @@ import com.gurukul.parents.service.ParentService;
 import com.gurukul.schools.entity.School;
 import com.gurukul.schools.repository.SchoolRepository;
 import com.gurukul.students.entity.Student;
+import com.gurukul.students.service.ClassSectionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,8 @@ class FeePaymentServiceOwnershipTest {
 				schoolContext,
 				mock(ParentService.class),
 				schoolRepository,
-				mock(PaymentAttemptRepository.class));
+				mock(PaymentAttemptRepository.class),
+				mock(ClassSectionService.class));
 
 		Student student = new Student();
 		student.setId(OWNING_STUDENT_ID);
