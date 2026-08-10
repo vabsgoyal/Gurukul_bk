@@ -25,7 +25,7 @@ public class AssessmentResultController {
 
 	@PostMapping("/api/v1/assessments/{assessmentId}/results")
 	@Operation(summary = "Submit/update marks for an assessment",
-			description = "Teacher/admin only, scoped to the assessment's own section+subject teacher. Rejected once the section's term has been published.")
+			description = "Admin, the assessment's own section+subject teacher, its creator, or that section's class teacher (any subject). Rejected once the section's term has been published.")
 	public ApiResponse<AssessmentResultsResponse> submit(
 			@PathVariable UUID assessmentId, @Valid @RequestBody SubmitResultsRequest request) {
 		return ApiResponse.success(assessmentResultService.submitResults(assessmentId, request), "Results saved");

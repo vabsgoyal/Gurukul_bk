@@ -72,9 +72,10 @@ public class SecurityConfig {
 						// Grading scale: any authenticated role reads it (needed to interpret a grade card),
 						// only an admin may redefine the bands.
 						.requestMatchers(HttpMethod.PUT, "/api/v1/grading-scale").hasRole("ADMIN")
-						// Report cards: publishing is an admin action; viewing is student/teacher/admin with
-						// the student-sees-only-their-own-and-only-once-published check in the service layer.
-						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasRole("ADMIN")
+						// Report cards: publishing is admin or that section's class teacher (checked in the
+						// service layer); viewing is student/teacher/admin/parent with the
+						// student-sees-only-their-own-and-only-once-published check in the service layer.
+						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
