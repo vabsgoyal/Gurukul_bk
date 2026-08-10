@@ -11,7 +11,9 @@ import com.gurukul.common.EntityNotFoundException;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -35,6 +37,7 @@ public class CallSessionService {
 	private final CallEventPublisher eventPublisher;
 	private final TaskScheduler taskScheduler;
 	private final JitsiBotService jitsiBotService;
+	private final TransactionTemplate transactionTemplate;
 
 	public CallSessionService(
 			CallLogRepository callLogRepository,
@@ -42,16 +45,17 @@ public class CallSessionService {
 			ActiveCallRegistry activeCallRegistry,
 			CallEventPublisher eventPublisher,
 			TaskScheduler taskScheduler,
-			JitsiBotService jitsiBotService) {
+			JitsiBotService jitsiBotService,
+			PlatformTransactionManager transactionManager) {
 		this.callLogRepository = callLogRepository;
 		this.callAuthorizationService = callAuthorizationService;
 		this.activeCallRegistry = activeCallRegistry;
 		this.eventPublisher = eventPublisher;
 		this.taskScheduler = taskScheduler;
 		this.jitsiBotService = jitsiBotService;
+		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
 
-	@Transactional
 	public CallLog startImmediateCall(AuthPrincipal principal, OwnerType calleeType, UUID calleeId) {
 		UUID schoolId = principal.getSchoolId();
 		OwnerType callerType = principal.getOwnerType();
@@ -64,20 +68,27 @@ public class CallSessionService {
 			throw new IllegalStateException("You are already on a call");
 		}
 		if (activeCallRegistry.isBusy(calleeType, calleeId)) {
-			return callLogRepository.save(newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.BUSY, true));
+			return transactionTemplate.execute(status -> callLogRepository.save(
+					newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.BUSY, true, RoomNames.generate())));
 		}
 
-		CallLog callLog = callLogRepository.save(
-				newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.IN_PROGRESS, false));
+		String roomName = RoomNames.generate();
+		// Warmed before any DB writes or the callee notification - otherwise a fast callee could
+		// join the Jitsi room before the bot has finished "starting" it. Deliberately run outside a
+		// transaction: this call to Jitsi's server can take up to warmTimeoutSeconds, and must not
+		// hold a DB connection open for that long. A failure here means the call would otherwise land
+		// both participants on Jitsi's login wall, so we refuse to start it instead of proceeding.
+		if (!jitsiBotService.warmRoom(roomName)) {
+			throw new IllegalStateException("Could not start the call right now - please try again");
+		}
 
-		activeCallRegistry.markActive(callerType, callerId, callLog.getId());
-		activeCallRegistry.markActive(calleeType, calleeId, callLog.getId());
-
-		// Must happen before the callee is notified below - otherwise a fast callee could join the
-		// Jitsi room before the bot has finished "starting" it. Best-effort/no-op when unconfigured
-		// (see JitsiBotService); holds this transaction's DB connection open a little longer when
-		// it does run, an accepted tradeoff at this app's current single-instance scale.
-		jitsiBotService.warmRoom(callLog.getRoomName());
+		CallLog callLog = transactionTemplate.execute(status -> {
+			CallLog saved = callLogRepository.save(
+					newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.IN_PROGRESS, false, roomName));
+			activeCallRegistry.markActive(callerType, callerId, saved.getId());
+			activeCallRegistry.markActive(calleeType, calleeId, saved.getId());
+			return saved;
+		});
 
 		eventPublisher.sendTo(schoolId, calleeType, calleeId, CallEvent.incomingCall(callLog, callerType, callerId));
 		taskScheduler.schedule(() -> handleRingTimeout(callLog.getId()), Instant.now().plus(RING_TIMEOUT));
@@ -184,14 +195,14 @@ public class CallSessionService {
 
 	private CallLog newLog(
 			UUID schoolId, OwnerType callerType, UUID callerId, OwnerType calleeType, UUID calleeId,
-			CallOutcome outcome, boolean endedImmediately) {
+			CallOutcome outcome, boolean endedImmediately, String roomName) {
 		CallLog callLog = new CallLog();
 		callLog.setSchoolId(schoolId);
 		callLog.setCallerOwnerType(callerType);
 		callLog.setCallerOwnerId(callerId);
 		callLog.setCalleeOwnerType(calleeType);
 		callLog.setCalleeOwnerId(calleeId);
-		callLog.setRoomName(RoomNames.generate());
+		callLog.setRoomName(roomName);
 		callLog.setStartedAt(Instant.now());
 		callLog.setOutcome(outcome);
 		if (endedImmediately) {

@@ -38,8 +38,9 @@ class JitsiBotServiceTest {
 		JitsiBotProperties disabled = new JitsiBotProperties(false, "https://meet.jit.si", "", "", "", 20);
 		JitsiBotService service = new JitsiBotService(disabled);
 
-		// Must return immediately without touching a browser - no exception, no hang.
-		service.warmRoom("some-room-name");
+		// Must return immediately without touching a browser - no exception, no hang - and report
+		// success so callers don't refuse to start calls just because the bot feature is off.
+		assertThat(service.warmRoom("some-room-name")).isTrue();
 	}
 
 	@Test
@@ -47,7 +48,7 @@ class JitsiBotServiceTest {
 		JitsiBotProperties noProfile = new JitsiBotProperties(true, "https://meet.jit.si", "  ", "", "", 20);
 		JitsiBotService service = new JitsiBotService(noProfile);
 
-		service.warmRoom("some-room-name");
+		assertThat(service.warmRoom("some-room-name")).isTrue();
 	}
 
 	@Test

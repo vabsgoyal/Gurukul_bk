@@ -18,7 +18,9 @@ import com.gurukul.common.EntityNotFoundException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +44,7 @@ public class ScheduledCallService {
 	private final CallAuthorizationService callAuthorizationService;
 	private final CallEventPublisher eventPublisher;
 	private final JitsiBotService jitsiBotService;
+	private final TransactionTemplate transactionTemplate;
 
 	public ScheduledCallService(
 			ScheduledCallRepository scheduledCallRepository,
@@ -49,13 +52,15 @@ public class ScheduledCallService {
 			CallLogRepository callLogRepository,
 			CallAuthorizationService callAuthorizationService,
 			CallEventPublisher eventPublisher,
-			JitsiBotService jitsiBotService) {
+			JitsiBotService jitsiBotService,
+			PlatformTransactionManager transactionManager) {
 		this.scheduledCallRepository = scheduledCallRepository;
 		this.callInviteeRepository = callInviteeRepository;
 		this.callLogRepository = callLogRepository;
 		this.callAuthorizationService = callAuthorizationService;
 		this.eventPublisher = eventPublisher;
 		this.jitsiBotService = jitsiBotService;
+		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
 
 	@Transactional
@@ -154,28 +159,35 @@ public class ScheduledCallService {
 		return call;
 	}
 
-	@Transactional
 	public ScheduledCall start(AuthPrincipal principal, UUID scheduledCallId) {
 		ScheduledCall call = requireHost(principal, scheduledCallId);
 		if (call.getStatus() != CallStatus.SCHEDULED) {
 			throw new IllegalStateException("This call cannot be started (status: " + call.getStatus() + ")");
 		}
-		call.setStatus(CallStatus.STARTED);
-		scheduledCallRepository.save(call);
 
-		CallLog log = new CallLog();
-		log.setSchoolId(call.getSchoolId());
-		log.setScheduledCallId(call.getId());
-		log.setCallerOwnerType(call.getHostOwnerType());
-		log.setCallerOwnerId(call.getHostOwnerId());
-		log.setRoomName(call.getRoomName());
-		log.setStartedAt(Instant.now());
-		log.setOutcome(CallOutcome.IN_PROGRESS);
-		callLogRepository.save(log);
+		// Warmed before any DB writes or the invitee notifications below - otherwise a fast joiner
+		// could beat the bot into the room. Deliberately run outside a transaction: this call to
+		// Jitsi's server can take up to warmTimeoutSeconds, and must not hold a DB connection open
+		// for that long. A failure here means invitees would otherwise land on Jitsi's login wall,
+		// so we refuse to start the session instead of proceeding.
+		if (!jitsiBotService.warmRoom(call.getRoomName())) {
+			throw new IllegalStateException("Could not start the call right now - please try again");
+		}
 
-		// Same ordering requirement as CallSessionService.startImmediateCall - must complete before
-		// invitees are notified below, or a fast joiner could beat the bot into the room.
-		jitsiBotService.warmRoom(call.getRoomName());
+		transactionTemplate.executeWithoutResult(status -> {
+			call.setStatus(CallStatus.STARTED);
+			scheduledCallRepository.save(call);
+
+			CallLog log = new CallLog();
+			log.setSchoolId(call.getSchoolId());
+			log.setScheduledCallId(call.getId());
+			log.setCallerOwnerType(call.getHostOwnerType());
+			log.setCallerOwnerId(call.getHostOwnerId());
+			log.setRoomName(call.getRoomName());
+			log.setStartedAt(Instant.now());
+			log.setOutcome(CallOutcome.IN_PROGRESS);
+			callLogRepository.save(log);
+		});
 
 		callInviteeRepository.findAllByScheduledCall_IdAndRsvpStatus(call.getId(), RsvpStatus.ACCEPTED)
 				.forEach(invitee -> eventPublisher.sendTo(call.getSchoolId(), invitee.getOwnerType(), invitee.getOwnerId(),
