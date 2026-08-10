@@ -77,6 +77,9 @@ public class SecurityConfig {
 						// student-sees-only-their-own-and-only-once-published check in the service layer.
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// Class-section fee status: admin, or that section's own class teacher (checked in
+						// the service layer) - a class-fees overview tile for a class teacher.
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/fee-status").hasAnyRole("TEACHER", "ADMIN")
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")

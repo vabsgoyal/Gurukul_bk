@@ -55,4 +55,10 @@ public class ReportController {
 		return ApiResponse.success(reportService.payrollYearReport(year));
 	}
 
+	@GetMapping("/payroll/overview")
+	@Operation(summary = "How many employees have been paid vs. are still pending, across every payroll run")
+	public ApiResponse<ReportDtos.PayrollOverview> payrollOverview() {
+		return ApiResponse.success(reportService.payrollOverview());
+	}
+
 }
