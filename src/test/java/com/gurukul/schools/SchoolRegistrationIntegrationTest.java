@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -65,6 +66,46 @@ class SchoolRegistrationIntegrationTest {
 		String principalOwnerId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.principal.ownerId");
 		String adminOwnerId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.admin.ownerId");
 		org.assertj.core.api.Assertions.assertThat(principalOwnerId).isNotEqualTo(adminOwnerId);
+	}
+
+	@Test
+	void registerSchoolWithLocationPersistsGeofenceFields() throws Exception {
+		mockMvc.perform(post("/api/v1/schools")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "Geo Setup School",
+								  "address": "1 Geo Street",
+								  "city": "Jaipur",
+								  "state": "Rajasthan",
+								  "pincode": "302001",
+								  "contactEmail": "office@geosetup.example",
+								  "contactPhone": "9223456789",
+								  "principalName": "Dr. Test Principal",
+								  "directorName": "Mr. Test Director",
+								  "principalPhone": "9223456789",
+								  "adminPhone": "8223456789",
+								  "latitude": 26.9124,
+								  "longitude": 75.7873,
+								  "geofenceRadiusMeters": 150
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.school.latitude").value(26.9124))
+				.andExpect(jsonPath("$.data.school.longitude").value(75.7873))
+				.andExpect(jsonPath("$.data.school.geofenceRadiusMeters").value(150));
+	}
+
+	@Test
+	void registerSchoolWithoutLocationLeavesItUnsetWithDefaultRadius() throws Exception {
+		mockMvc.perform(post("/api/v1/schools")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(schoolRegistrationJson(
+								"No Geo School", "2 Plain Street", "office@nogeo.example", "9323456789")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.school.latitude").value(nullValue()))
+				.andExpect(jsonPath("$.data.school.longitude").value(nullValue()))
+				.andExpect(jsonPath("$.data.school.geofenceRadiusMeters").value(100));
 	}
 
 	@Test

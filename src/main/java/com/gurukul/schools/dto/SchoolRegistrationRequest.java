@@ -2,6 +2,8 @@ package com.gurukul.schools.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
@@ -67,5 +69,17 @@ public class SchoolRegistrationRequest {
 
 	@Schema(description = "Optional Admin password for password-based login; if omitted, only OTP login works for the Admin")
 	private String adminPassword;
+
+	@Min(-90) @Max(90)
+	@Schema(description = "Latitude of the school, for the teacher self-attendance geofence - optional, can be set/edited later via PUT /api/v1/schools/{id}/location", example = "26.9124")
+	private Double latitude;
+
+	@Min(-180) @Max(180)
+	@Schema(description = "Longitude of the school, for the teacher self-attendance geofence - optional, can be set/edited later", example = "75.7873")
+	private Double longitude;
+
+	@Min(1)
+	@Schema(description = "Geofence radius in meters for teacher self-attendance; defaults to the School entity's default (100) if omitted", example = "100")
+	private Integer geofenceRadiusMeters;
 
 }
