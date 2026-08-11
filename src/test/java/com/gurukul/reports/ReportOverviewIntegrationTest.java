@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -30,6 +31,7 @@ class ReportOverviewIntegrationTest {
 
 	@Test
 	void duesReportIncludesUnpaidAssessmentAndItsOverdueSubset() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
 
 		MvcResult sectionResult = mockMvc.perform(post("/api/v1/class-sections")
@@ -44,6 +46,7 @@ class ReportOverviewIntegrationTest {
 
 		MvcResult categoryResult = mockMvc.perform(post("/api/v1/fee-categories")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"code": "DUES-TUITION-%s", "name": "Dues Tuition"}
@@ -54,6 +57,7 @@ class ReportOverviewIntegrationTest {
 
 		MvcResult structureResult = mockMvc.perform(post("/api/v1/fee-structures")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -69,7 +73,8 @@ class ReportOverviewIntegrationTest {
 		AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, sectionId, "Dues Test Student " + suffix);
 
 		mockMvc.perform(post("/api/v1/fee-structures/" + structureId + "/generate-assessments")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk());
 
 		String body = mockMvc.perform(get("/api/v1/reports/dues").header("X-School-Id", SCHOOL_ID))
@@ -84,6 +89,7 @@ class ReportOverviewIntegrationTest {
 
 	@Test
 	void payrollOverviewCountsPaidAndPendingEmployeesAcrossRuns() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
 
 		MvcResult employeeResult = mockMvc.perform(post("/api/v1/employees")
@@ -98,6 +104,7 @@ class ReportOverviewIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/salary-structures")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"employeeId": "%s", "basic": 20000.00, "allowances": 2000.00, "deductions": 1000.00, "effectiveFrom": "2024-04-01"}
@@ -111,6 +118,7 @@ class ReportOverviewIntegrationTest {
 
 		MvcResult runResult = mockMvc.perform(post("/api/v1/payroll/runs")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"month\": " + month + ", \"year\": " + year + "}"))
 				.andExpect(status().isOk())
@@ -118,7 +126,8 @@ class ReportOverviewIntegrationTest {
 		String runId = JsonPath.read(runResult.getResponse().getContentAsString(), "$.data.id");
 
 		mockMvc.perform(post("/api/v1/payroll/runs/" + runId + "/process")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk());
 
 		String beforePayBody = mockMvc.perform(get("/api/v1/reports/payroll/overview").header("X-School-Id", SCHOOL_ID))
@@ -129,6 +138,7 @@ class ReportOverviewIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/payroll/runs/" + runId + "/pay")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"paymentMethod\": \"BANK_TRANSFER\"}"))
 				.andExpect(status().isOk());
