@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -108,13 +109,45 @@ public class ReportCardService {
 			throw new IllegalStateException("Student is not currently assigned to a class-section");
 		}
 
-		boolean published = reportCardPublicationRepository.existsByClassSection_IdAndTerm(section.getId(), term);
-		if (!published && (principal.getRole() == Role.STUDENT || principal.getRole() == Role.PARENT)) {
+		Optional<ReportCardPublication> publication = reportCardPublicationRepository.findByClassSection_IdAndTerm(section.getId(), term);
+		if (publication.isEmpty() && (principal.getRole() == Role.STUDENT || principal.getRole() == Role.PARENT)) {
 			throw new IllegalStateException("The report card for " + term + " has not been published yet");
 		}
 
+		return computeReportCard(student, section, term, publication.isPresent(),
+				publication.map(ReportCardPublication::getPublishedAt).orElse(null));
+	}
+
+	/**
+	 * Every student in a section, side by side - powers a principal/class-teacher tabular marks
+	 * overview instead of opening each student's report card one at a time (TASK.md 6.8).
+	 */
+	@Transactional(readOnly = true)
+	public List<ReportCardResponse> getSectionReportCards(UUID sectionId, String term) {
+		AuthPrincipal principal = AuthContext.current();
+		ClassSection section = classSectionService.getScopedClassSection(sectionId);
+		boolean isClassTeacher = principal.getRole() == Role.TEACHER
+				&& section.getClassTeacher() != null
+				&& section.getClassTeacher().getId().equals(principal.getOwnerId());
+		if (principal.getRole() != Role.ADMIN && !isClassTeacher) {
+			throw new AccessDeniedException("Only an admin or this section's class teacher can view the section's report cards");
+		}
+
+		Optional<ReportCardPublication> publication = reportCardPublicationRepository.findByClassSection_IdAndTerm(sectionId, term);
+		boolean published = publication.isPresent();
+		Instant publishedAt = publication.map(ReportCardPublication::getPublishedAt).orElse(null);
+
+		List<Student> roster = studentRepository.findAllBySchoolIdAndClassSectionId(schoolContext.getSchoolId(), sectionId);
+		return roster.stream()
+				.sorted(Comparator.comparing(Student::getRollNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+				.map(student -> computeReportCard(student, section, term, published, publishedAt))
+				.toList();
+	}
+
+	private ReportCardResponse computeReportCard(Student student, ClassSection section, String term, boolean published, Instant publishedAt) {
 		List<AssessmentResult> results = assessmentResultRepository
-				.findAllBySchoolIdAndStudentIdAndAssessment_Section_IdAndAssessment_Term(schoolId, studentId, section.getId(), term);
+				.findAllBySchoolIdAndStudentIdAndAssessment_Section_IdAndAssessment_Term(
+						schoolContext.getSchoolId(), student.getId(), section.getId(), term);
 
 		Map<UUID, List<AssessmentResult>> bySubject = results.stream()
 				.filter(r -> r.getAssessment().getSubject() != null)
@@ -130,14 +163,9 @@ public class ReportCardService {
 		BigDecimal overallPercentage = percentageOf(totalObtained, totalMax);
 		String overallGrade = gradingScaleService.resolveGrade(overallPercentage);
 
-		StudentAttendanceHistoryResponse attendance = attendanceService.getStudentHistory(studentId, null, null);
+		StudentAttendanceHistoryResponse attendance = attendanceService.getStudentHistory(student.getId(), null, null);
 		BigDecimal attendancePercentage = attendance.getTotalRecords() > 0
 				? percentageOf(BigDecimal.valueOf(attendance.getPresentCount()), BigDecimal.valueOf(attendance.getTotalRecords()))
-				: null;
-
-		Instant publishedAt = published
-				? reportCardPublicationRepository.findByClassSection_IdAndTerm(section.getId(), term)
-						.map(ReportCardPublication::getPublishedAt).orElse(null)
 				: null;
 
 		return new ReportCardResponse(
