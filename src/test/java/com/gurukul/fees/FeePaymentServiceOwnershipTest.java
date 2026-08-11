@@ -132,4 +132,21 @@ class FeePaymentServiceOwnershipTest {
 		assertThat(response.getAssessmentId()).isEqualTo(ASSESSMENT_ID);
 	}
 
+	@Test
+	void studentCanListOwnAssessments() {
+		authenticateAs(OWNING_STUDENT_ID, Role.STUDENT, OwnerType.STUDENT);
+		when(assessmentRepository.findAllBySchoolIdAndStudentId(SCHOOL_ID, OWNING_STUDENT_ID))
+				.thenReturn(java.util.List.of());
+
+		assertThat(feePaymentService.listByStudent(OWNING_STUDENT_ID)).isEmpty();
+	}
+
+	@Test
+	void studentCannotListSomeoneElsesAssessments() {
+		authenticateAs(OTHER_STUDENT_ID, Role.STUDENT, OwnerType.STUDENT);
+
+		assertThatThrownBy(() -> feePaymentService.listByStudent(OWNING_STUDENT_ID))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
 }
