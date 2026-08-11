@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -38,6 +39,13 @@ public class ReportCardController {
 			description = "A STUDENT session only ever sees their own, and only once published. TEACHER/ADMIN may preview any time.")
 	public ApiResponse<ReportCardResponse> get(@PathVariable UUID studentId, @RequestParam String term) {
 		return ApiResponse.success(reportCardService.getReportCard(studentId, term));
+	}
+
+	@GetMapping("/api/v1/class-sections/{sectionId}/report-cards")
+	@Operation(summary = "Get every student's report card for a term, section-wide",
+			description = "Admin, or that section's class teacher only. Powers a tabular marks-overview grid instead of opening each student's report card one at a time.")
+	public ApiResponse<List<ReportCardResponse>> getForSection(@PathVariable UUID sectionId, @RequestParam String term) {
+		return ApiResponse.success(reportCardService.getSectionReportCards(sectionId, term));
 	}
 
 }
