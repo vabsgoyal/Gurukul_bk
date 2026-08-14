@@ -13,23 +13,23 @@ import java.util.UUID;
 
 public interface StudentRepository extends JpaRepository<Student, UUID> {
 
-	@EntityGraph(attributePaths = "classSection")
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	List<Student> findAllBySchoolId(UUID schoolId);
 
-	@EntityGraph(attributePaths = "classSection")
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	Page<Student> findAllBySchoolIdOrderByNameAsc(UUID schoolId, Pageable pageable);
 
-	@EntityGraph(attributePaths = "classSection")
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	List<Student> findAllBySchoolIdAndClassSectionId(UUID schoolId, UUID classSectionId);
 
-	@EntityGraph(attributePaths = "classSection")
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	List<Student> findAllBySchoolIdAndClassSection_ClassNameAndClassSection_SectionAndClassSection_AcademicYear(
 			UUID schoolId, String className, String section, String academicYear);
 
-	@EntityGraph(attributePaths = "classSection")
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	List<Student> findAllBySchoolIdAndClassSection_ClassName(UUID schoolId, String className);
 
-	@EntityGraph(attributePaths = "classSection")
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	Optional<Student> findByIdAndSchoolId(UUID id, UUID schoolId);
 
 	List<Student> findAllBySchoolIdAndParentContact(UUID schoolId, String parentContact);
