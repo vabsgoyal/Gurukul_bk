@@ -9,6 +9,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.List;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -60,10 +62,16 @@ class PayrollIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PROCESSED"));
 
-		mockMvc.perform(get("/api/v1/payroll/runs/" + runId + "/lines")
+		// Filtered by this test's own employeeId rather than assuming position - the shared test
+		// school can carry other active employees (with their own payroll lines under this same run)
+		// left behind by other integration tests, e.g. ReportOverviewIntegrationTest.
+		String linesBody = mockMvc.perform(get("/api/v1/payroll/runs/" + runId + "/lines")
 						.header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].net").value(33000.00));
+				.andReturn().getResponse().getContentAsString();
+		List<Number> matchingNets = JsonPath.read(linesBody, "$.data[?(@.employeeId == '" + employeeId + "')].net");
+		org.assertj.core.api.Assertions.assertThat(matchingNets).hasSize(1);
+		org.assertj.core.api.Assertions.assertThat(matchingNets.get(0).doubleValue()).isEqualTo(33000.00);
 
 		mockMvc.perform(post("/api/v1/payroll/runs/" + runId + "/pay")
 						.header("X-School-Id", SCHOOL_ID)
