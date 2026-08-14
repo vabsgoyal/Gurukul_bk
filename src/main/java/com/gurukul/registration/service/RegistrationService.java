@@ -20,10 +20,14 @@ import com.gurukul.registration.dto.RegistrationDtos.ParentRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.PendingRegistrationResponse;
 import com.gurukul.registration.dto.RegistrationDtos.RegistrationSubmittedResponse;
 import com.gurukul.registration.dto.RegistrationDtos.StudentGoogleRegistrationRequest;
+import com.gurukul.registration.dto.RegistrationDtos.StudentInviteGoogleRegistrationRequest;
+import com.gurukul.registration.dto.RegistrationDtos.StudentInviteRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.StudentRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherGoogleRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherRegistrationRequest;
+import com.gurukul.registration.entity.StudentInvite;
 import com.gurukul.registration.entity.TeacherInvite;
+import com.gurukul.registration.repository.StudentInviteRepository;
 import com.gurukul.registration.repository.TeacherInviteRepository;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
@@ -63,6 +67,7 @@ public class RegistrationService {
 	private final ParentRepository parentRepository;
 	private final ParentStudentLinkRepository parentStudentLinkRepository;
 	private final TeacherInviteRepository teacherInviteRepository;
+	private final StudentInviteRepository studentInviteRepository;
 	private final ParentClaimRateLimiter parentClaimRateLimiter;
 	private final CredentialRepository credentialRepository;
 	private final ApprovalRequestRepository approvalRequestRepository;
@@ -83,6 +88,13 @@ public class RegistrationService {
 		TeacherInvite invite = consumeInvite(request.getInviteCode());
 		createEnabledCredential(OwnerType.EMPLOYEE, invite.getTargetEmployeeId(), Role.TEACHER, request.getUsername(), request.getPassword());
 		return new RegistrationSubmittedResponse(invite.getTargetEmployeeId(), "Registration complete - you can log in now");
+	}
+
+	@Transactional
+	public RegistrationSubmittedResponse registerStudentViaInvite(StudentInviteRegistrationRequest request) {
+		StudentInvite invite = consumeStudentInvite(request.getInviteCode());
+		createEnabledCredential(OwnerType.STUDENT, invite.getTargetStudentId(), Role.STUDENT, request.getUsername(), request.getPassword());
+		return new RegistrationSubmittedResponse(invite.getTargetStudentId(), "Registration complete - you can log in now");
 	}
 
 	@Transactional
@@ -121,6 +133,14 @@ public class RegistrationService {
 		TeacherInvite invite = consumeInvite(request.getInviteCode());
 		createEnabledGoogleCredential(OwnerType.EMPLOYEE, invite.getTargetEmployeeId(), Role.TEACHER, identity);
 		return new RegistrationSubmittedResponse(invite.getTargetEmployeeId(), "Registration complete - you can log in now");
+	}
+
+	@Transactional
+	public RegistrationSubmittedResponse registerStudentViaInviteGoogle(StudentInviteGoogleRegistrationRequest request) {
+		GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
+		StudentInvite invite = consumeStudentInvite(request.getInviteCode());
+		createEnabledGoogleCredential(OwnerType.STUDENT, invite.getTargetStudentId(), Role.STUDENT, identity);
+		return new RegistrationSubmittedResponse(invite.getTargetStudentId(), "Registration complete - you can log in now");
 	}
 
 	@Transactional
@@ -175,6 +195,24 @@ public class RegistrationService {
 		}
 		invite.setUsed(true);
 		teacherInviteRepository.save(invite);
+		return invite;
+	}
+
+	private StudentInvite consumeStudentInvite(String code) {
+		UUID schoolId = schoolContext.getSchoolId();
+		StudentInvite invite = studentInviteRepository.findBySchoolIdAndCode(schoolId, code)
+				.orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
+		if (invite.isUsed()) {
+			throw new IllegalArgumentException("This invite code has already been used");
+		}
+		if (invite.getExpiresAt().isBefore(Instant.now())) {
+			throw new IllegalArgumentException("This invite code has expired");
+		}
+		if (credentialRepository.findByOwnerTypeAndOwnerId(OwnerType.STUDENT, invite.getTargetStudentId()).isPresent()) {
+			throw new IllegalArgumentException("This student has already claimed a login");
+		}
+		invite.setUsed(true);
+		studentInviteRepository.save(invite);
 		return invite;
 	}
 
