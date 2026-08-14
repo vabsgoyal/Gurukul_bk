@@ -94,6 +94,10 @@ public class SecurityConfig {
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// Academic Helper: server-side proxy for the Bedrock/Anthropic tutor chat - requires
+						// auth so the client-embedded-AWS-key issue it replaces (SECURITY_AND_ACCESS.md SS9.3)
+						// isn't swapped for an unauthenticated backend endpoint instead.
+						.requestMatchers(HttpMethod.POST, "/api/v1/academic-helper/ask").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
 						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
 						// Everything else is unchanged (no auth) for now - see auth ticket for phased retrofit scope.
