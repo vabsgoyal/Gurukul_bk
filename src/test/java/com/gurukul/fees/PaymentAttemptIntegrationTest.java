@@ -134,9 +134,9 @@ class PaymentAttemptIntegrationTest {
 				.andExpect(jsonPath("$.data.status").value("RESPONSE_SUCCESS"))
 				.andExpect(jsonPath("$.data.upiTransactionId").value("UPI123456789"));
 
-		mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].status").value("PAID"));
+				.andExpect(jsonPath("$.data.content[?(@.id=='" + assessmentId + "')].status").value("PAID"));
 
 		// No more pending attempt - it resolved.
 		mockMvc.perform(get("/api/v1/fee-assessments/" + assessmentId + "/payment-attempts/pending")
@@ -154,10 +154,10 @@ class PaymentAttemptIntegrationTest {
 								"""))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].status").value("PAID"))
-				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].totalPaid").value(9000.00));
+				.andExpect(jsonPath("$.data.content[?(@.id=='" + assessmentId + "')].status").value("PAID"))
+				.andExpect(jsonPath("$.data.content[?(@.id=='" + assessmentId + "')].totalPaid").value(9000.00));
 	}
 
 }

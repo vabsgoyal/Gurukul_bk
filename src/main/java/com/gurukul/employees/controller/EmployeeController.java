@@ -4,6 +4,7 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.PageResponse;
 import com.gurukul.employees.dto.EmployeeRequest;
 import com.gurukul.employees.dto.EmployeeResponse;
 import com.gurukul.employees.service.EmployeeService;
@@ -39,9 +40,11 @@ public class EmployeeController {
 	private final TeacherInviteService teacherInviteService;
 
 	@GetMapping
-	@Operation(summary = "List employees")
-	public ApiResponse<List<EmployeeResponse>> list() {
-		return ApiResponse.success(employeeService.list());
+	@Operation(summary = "List employees, paginated", description = "Defaults to page 0, size 50.")
+	public ApiResponse<PageResponse<EmployeeResponse>> list(
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "50") int size) {
+		return ApiResponse.success(employeeService.list(page, size));
 	}
 
 	@GetMapping("/search")

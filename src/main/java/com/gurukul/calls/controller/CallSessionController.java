@@ -10,14 +10,18 @@ import com.gurukul.calls.entity.CallLog;
 import com.gurukul.calls.repository.CallLogRepository;
 import com.gurukul.calls.service.CallSessionService;
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -76,26 +80,33 @@ public class CallSessionController {
 	}
 
 	@GetMapping("/api/v1/calls/history")
-	@Operation(summary = "My call history (immediate and scheduled sessions I took part in)")
-	public ApiResponse<List<CallLogResponse>> history() {
-		List<CallLogResponse> responses = callSessionService.history(AuthContext.current()).stream()
-				.map(CallLogResponse::from)
-				.toList();
-		return ApiResponse.success(responses);
+	@Operation(summary = "My call history (immediate and scheduled sessions I took part in), paginated",
+			description = "Defaults to page 0, size 50.")
+	public ApiResponse<PageResponse<CallLogResponse>> history(
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "50") int size) {
+		Page<CallLog> result = callSessionService.history(AuthContext.current(), PageRequest.of(page, size));
+		return ApiResponse.success(new PageResponse<>(
+				result.getContent().stream().map(CallLogResponse::from).toList(),
+				result.hasNext(),
+				result.getTotalElements()));
 	}
 
 	@GetMapping("/api/v1/calls/history/school")
-	@Operation(summary = "Every call in the school (admin only)")
-	public ApiResponse<List<CallLogResponse>> schoolHistory() {
+	@Operation(summary = "Every call in the school (admin only), paginated", description = "Defaults to page 0, size 50.")
+	public ApiResponse<PageResponse<CallLogResponse>> schoolHistory(
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "50") int size) {
 		AuthPrincipal principal = AuthContext.current();
 		if (principal.getRole() != Role.ADMIN) {
 			throw new AccessDeniedException("Only an admin can view the whole school's call history");
 		}
-		List<CallLogResponse> responses = callLogRepository.findAllBySchoolIdOrderByStartedAtDesc(principal.getSchoolId())
-				.stream()
-				.map(CallLogResponse::from)
-				.toList();
-		return ApiResponse.success(responses);
+		Page<CallLog> result = callLogRepository.findAllBySchoolIdOrderByStartedAtDesc(
+				principal.getSchoolId(), PageRequest.of(page, size));
+		return ApiResponse.success(new PageResponse<>(
+				result.getContent().stream().map(CallLogResponse::from).toList(),
+				result.hasNext(),
+				result.getTotalElements()));
 	}
 
 }

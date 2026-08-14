@@ -5,6 +5,7 @@ import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.FuzzyMatcher;
+import com.gurukul.common.PageResponse;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.students.dto.StudentClassSectionUpdateRequest;
 import com.gurukul.students.dto.StudentRequest;
@@ -15,6 +16,8 @@ import com.gurukul.students.entity.StudentStatus;
 import com.gurukul.students.repository.StudentRepository;
 import com.gurukul.fees.service.FeeStructureService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,11 +38,14 @@ public class StudentService {
 	private final com.gurukul.documents.DocumentNumberGenerator documentNumberGenerator;
 
 	@Transactional(readOnly = true)
-	public List<StudentResponse> list() {
+	public PageResponse<StudentResponse> list(int page, int size) {
 		boolean includeRegistrationNumber = isAdmin();
-		return studentRepository.findAllBySchoolId(schoolContext.getSchoolId()).stream()
-				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
-				.toList();
+		Page<Student> result = studentRepository.findAllBySchoolIdOrderByNameAsc(
+				schoolContext.getSchoolId(), PageRequest.of(page, size));
+		return new PageResponse<>(
+				result.getContent().stream().map(s -> StudentResponse.from(s, includeRegistrationNumber)).toList(),
+				result.hasNext(),
+				result.getTotalElements());
 	}
 
 	@Transactional(readOnly = true)

@@ -168,10 +168,10 @@ class FeePaymentIntegrationTest {
 	 */
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> findAssessmentForStudent(String studentId) throws Exception {
-		String body = mockMvc.perform(get("/api/v1/fee-assessments").header("X-School-Id", SCHOOL_ID))
+		String body = mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
-		List<Map<String, Object>> assessments = JsonPath.read(body, "$.data");
+		List<Map<String, Object>> assessments = JsonPath.read(body, "$.data.content");
 		return assessments.stream()
 				.filter(a -> studentId.equals(a.get("studentId")))
 				.findFirst()

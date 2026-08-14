@@ -4,6 +4,7 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.PageResponse;
 import com.gurukul.registration.dto.RegistrationDtos.StudentInviteResponse;
 import com.gurukul.registration.service.StudentInviteService;
 import com.gurukul.students.dto.StudentClassSectionUpdateRequest;
@@ -47,8 +48,9 @@ public class StudentController {
 
 	@GetMapping
 	@Operation(
-			summary = "List students",
-			description = "Returns every student for the current school, ordered by creation time."
+			summary = "List students, paginated",
+			description = "Returns one page of students for the current school, ordered by name. "
+					+ "Defaults to page 0, size 50."
 	)
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -57,8 +59,10 @@ public class StudentController {
 					content = @Content(schema = @Schema(implementation = StudentResponse.class))
 			)
 	})
-	public ApiResponse<List<StudentResponse>> list() {
-		return ApiResponse.success(studentService.list());
+	public ApiResponse<PageResponse<StudentResponse>> list(
+			@Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
+			@Parameter(description = "Page size") @RequestParam(defaultValue = "50") int size) {
+		return ApiResponse.success(studentService.list(page, size));
 	}
 
 	@GetMapping("/by-class-section")

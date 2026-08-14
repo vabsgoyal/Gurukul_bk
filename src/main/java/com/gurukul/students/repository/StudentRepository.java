@@ -2,6 +2,8 @@ package com.gurukul.students.repository;
 
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.entity.StudentStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -13,6 +15,9 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
 	@EntityGraph(attributePaths = "classSection")
 	List<Student> findAllBySchoolId(UUID schoolId);
+
+	@EntityGraph(attributePaths = "classSection")
+	Page<Student> findAllBySchoolIdOrderByNameAsc(UUID schoolId, Pageable pageable);
 
 	@EntityGraph(attributePaths = "classSection")
 	List<Student> findAllBySchoolIdAndClassSectionId(UUID schoolId, UUID classSectionId);
