@@ -33,6 +33,15 @@ public class RegistrationDtos {
 	}
 
 	@Getter @Setter
+	@Schema(description = "Self-registration for a student via invite code - claims the specific Student record the "
+			+ "invite code was issued for; auto-activates immediately since admin already vetted the record")
+	public static class StudentInviteRegistrationRequest {
+		@NotBlank private String inviteCode;
+		@NotBlank @Size(min = 3, max = 50) private String username;
+		@NotBlank @Size(min = 8) private String password;
+	}
+
+	@Getter @Setter
 	@Schema(description = "Self-registration for a parent - links to an existing student by registrationNumber, "
 			+ "verified by matching parentContact against the value already on the student record; goes to admin approval")
 	public static class ParentRegistrationRequest {
@@ -69,6 +78,14 @@ public class RegistrationDtos {
 	@Schema(description = "Self-registration for a teacher via Google - still requires an admin-issued invite code, "
 			+ "claims the specific Employee record it was issued for")
 	public static class TeacherGoogleRegistrationRequest {
+		@NotBlank private String idToken;
+		@NotBlank private String inviteCode;
+	}
+
+	@Getter @Setter
+	@Schema(description = "Self-registration for a student via Google using an invite code - idToken replaces "
+			+ "username/password; claims the specific Student record the invite code was issued for")
+	public static class StudentInviteGoogleRegistrationRequest {
 		@NotBlank private String idToken;
 		@NotBlank private String inviteCode;
 	}
@@ -112,6 +129,13 @@ public class RegistrationDtos {
 	@Getter @AllArgsConstructor
 	@Schema(description = "A freshly generated teacher invite - share the code/link with the prospective teacher")
 	public static class TeacherInviteResponse {
+		private String code;
+		private Instant expiresAt;
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(description = "A freshly generated student invite - share the code/link with the student (or their parent)")
+	public static class StudentInviteResponse {
 		private String code;
 		private Instant expiresAt;
 	}
