@@ -33,8 +33,9 @@ import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.service.ClassSectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -120,22 +121,34 @@ public class FeePaymentService {
 	public PageResponse<FeeAssessmentResponse> listAssessmentsPage(
 			FeeAssessmentStatus status, UUID classSectionId, int page, int size) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Page<StudentFeeAssessment> result;
+		Pageable pageable = PageRequest.of(page, size);
+		Slice<StudentFeeAssessment> result;
+		Long totalElements = null;
 		if (status != null && classSectionId != null) {
-			result = assessmentRepository.findAllBySchoolIdAndStatusAndStudent_ClassSection_Id(
-					schoolId, status, classSectionId, PageRequest.of(page, size));
+			result = assessmentRepository.findAllBySchoolIdAndStatusAndStudent_ClassSection_Id(schoolId, status, classSectionId, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolIdAndStatusAndStudent_ClassSection_Id(schoolId, status, classSectionId);
+			}
 		} else if (status != null) {
-			result = assessmentRepository.findAllBySchoolIdAndStatus(schoolId, status, PageRequest.of(page, size));
+			result = assessmentRepository.findAllBySchoolIdAndStatus(schoolId, status, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolIdAndStatus(schoolId, status);
+			}
 		} else if (classSectionId != null) {
-			result = assessmentRepository.findAllBySchoolIdAndStudent_ClassSection_Id(
-					schoolId, classSectionId, PageRequest.of(page, size));
+			result = assessmentRepository.findAllBySchoolIdAndStudent_ClassSection_Id(schoolId, classSectionId, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolIdAndStudent_ClassSection_Id(schoolId, classSectionId);
+			}
 		} else {
-			result = assessmentRepository.findAllBySchoolId(schoolId, PageRequest.of(page, size));
+			result = assessmentRepository.findAllBySchoolId(schoolId, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolId(schoolId);
+			}
 		}
 		return new PageResponse<>(
 				result.getContent().stream().map(FeeAssessmentResponse::from).toList(),
 				result.hasNext(),
-				result.getTotalElements());
+				totalElements);
 	}
 
 	/**

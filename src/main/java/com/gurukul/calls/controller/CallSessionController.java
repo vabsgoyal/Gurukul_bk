@@ -13,8 +13,8 @@ import com.gurukul.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -84,11 +84,13 @@ public class CallSessionController {
 	public ApiResponse<List<CallLogResponse>> history(
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "50") int size) {
-		Page<CallLog> result = callSessionService.history(AuthContext.current(), PageRequest.of(page, size));
+		AuthPrincipal principal = AuthContext.current();
+		Slice<CallLog> result = callSessionService.history(principal, PageRequest.of(page, size));
+		Long totalElements = page == 0 ? callSessionService.countHistory(principal) : null;
 		return ApiResponse.page(
 				result.getContent().stream().map(CallLogResponse::from).toList(),
 				result.hasNext(),
-				result.getTotalElements());
+				totalElements);
 	}
 
 	@GetMapping("/api/v1/calls/history/school")
@@ -100,12 +102,13 @@ public class CallSessionController {
 		if (principal.getRole() != Role.ADMIN) {
 			throw new AccessDeniedException("Only an admin can view the whole school's call history");
 		}
-		Page<CallLog> result = callLogRepository.findAllBySchoolIdOrderByStartedAtDesc(
+		Slice<CallLog> result = callLogRepository.findAllBySchoolIdOrderByStartedAtDesc(
 				principal.getSchoolId(), PageRequest.of(page, size));
+		Long totalElements = page == 0 ? callLogRepository.countBySchoolId(principal.getSchoolId()) : null;
 		return ApiResponse.page(
 				result.getContent().stream().map(CallLogResponse::from).toList(),
 				result.hasNext(),
-				result.getTotalElements());
+				totalElements);
 	}
 
 }

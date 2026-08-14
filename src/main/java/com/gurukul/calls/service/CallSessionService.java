@@ -8,8 +8,8 @@ import com.gurukul.calls.entity.CallOutcome;
 import com.gurukul.calls.jitsi.JitsiBotService;
 import com.gurukul.calls.repository.CallLogRepository;
 import com.gurukul.common.EntityNotFoundException;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -134,9 +134,15 @@ public class CallSessionService {
 	}
 
 	@Transactional(readOnly = true)
-	public Page<CallLog> history(AuthPrincipal principal, Pageable pageable) {
+	public Slice<CallLog> history(AuthPrincipal principal, Pageable pageable) {
 		return callLogRepository.findAllForParticipant(
 				principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId(), pageable);
+	}
+
+	/** Only worth calling on page 0 - see CallSessionController. */
+	@Transactional(readOnly = true)
+	public long countHistory(AuthPrincipal principal) {
+		return callLogRepository.countForParticipant(principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId());
 	}
 
 	private void handleRingTimeout(UUID callLogId) {
