@@ -1,5 +1,6 @@
 package com.gurukul.attendance.dto;
 
+import com.gurukul.attendance.entity.AttendanceMethod;
 import com.gurukul.attendance.entity.AttendanceStatus;
 import com.gurukul.attendance.entity.StaffAttendanceRecord;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -54,6 +55,8 @@ public class StaffAttendanceDtos {
 		private String markedByEmployeeName;
 		private String remarks;
 		private boolean selfMarked;
+		@Schema(description = "Set when a registered device marked this record, instead of a human")
+		private AttendanceMethod method;
 		private Instant createdAt;
 		private Instant updatedAt;
 
@@ -64,10 +67,11 @@ public class StaffAttendanceDtos {
 					record.getEmployee().getName(),
 					record.getAttendanceDate(),
 					record.getStatus(),
-					record.getMarkedByEmployee().getId(),
-					record.getMarkedByEmployee().getName(),
+					record.getMarkedByEmployee() != null ? record.getMarkedByEmployee().getId() : null,
+					record.getMarkedByEmployee() != null ? record.getMarkedByEmployee().getName() : null,
 					record.getRemarks(),
 					record.isSelfMarked(),
+					record.getMethod(),
 					record.getCreatedAt(),
 					record.getUpdatedAt()
 			);
@@ -83,6 +87,7 @@ public class StaffAttendanceDtos {
 		private AttendanceStatus status;
 		private String remarks;
 		private boolean selfMarked;
+		private AttendanceMethod method;
 	}
 
 	@Getter @AllArgsConstructor
