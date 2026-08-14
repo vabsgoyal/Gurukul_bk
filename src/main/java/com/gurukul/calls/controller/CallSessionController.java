@@ -10,7 +10,6 @@ import com.gurukul.calls.entity.CallLog;
 import com.gurukul.calls.repository.CallLogRepository;
 import com.gurukul.calls.service.CallSessionService;
 import com.gurukul.common.ApiResponse;
-import com.gurukul.common.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -82,19 +81,19 @@ public class CallSessionController {
 	@GetMapping("/api/v1/calls/history")
 	@Operation(summary = "My call history (immediate and scheduled sessions I took part in), paginated",
 			description = "Defaults to page 0, size 50.")
-	public ApiResponse<PageResponse<CallLogResponse>> history(
+	public ApiResponse<List<CallLogResponse>> history(
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "50") int size) {
 		Page<CallLog> result = callSessionService.history(AuthContext.current(), PageRequest.of(page, size));
-		return ApiResponse.success(new PageResponse<>(
+		return ApiResponse.page(
 				result.getContent().stream().map(CallLogResponse::from).toList(),
 				result.hasNext(),
-				result.getTotalElements()));
+				result.getTotalElements());
 	}
 
 	@GetMapping("/api/v1/calls/history/school")
 	@Operation(summary = "Every call in the school (admin only), paginated", description = "Defaults to page 0, size 50.")
-	public ApiResponse<PageResponse<CallLogResponse>> schoolHistory(
+	public ApiResponse<List<CallLogResponse>> schoolHistory(
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "50") int size) {
 		AuthPrincipal principal = AuthContext.current();
@@ -103,10 +102,10 @@ public class CallSessionController {
 		}
 		Page<CallLog> result = callLogRepository.findAllBySchoolIdOrderByStartedAtDesc(
 				principal.getSchoolId(), PageRequest.of(page, size));
-		return ApiResponse.success(new PageResponse<>(
+		return ApiResponse.page(
 				result.getContent().stream().map(CallLogResponse::from).toList(),
 				result.hasNext(),
-				result.getTotalElements()));
+				result.getTotalElements());
 	}
 
 }

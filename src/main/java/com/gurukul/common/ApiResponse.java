@@ -1,13 +1,13 @@
 package com.gurukul.common;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Getter
 @NoArgsConstructor
-@AllArgsConstructor
 @Schema(description = "Standard API response wrapper")
 public class ApiResponse<T> {
 
@@ -20,6 +20,18 @@ public class ApiResponse<T> {
 	@Schema(description = "Human-readable message, often used for errors or confirmations", example = "Student created")
 	private String message;
 
+	@Schema(description = "Paginated list endpoints only: whether a further page exists beyond this one")
+	private Boolean hasNext;
+
+	@Schema(description = "Paginated list endpoints only: total row count across every page")
+	private Long totalElements;
+
+	public ApiResponse(boolean success, T data, String message) {
+		this.success = success;
+		this.data = data;
+		this.message = message;
+	}
+
 	public static <T> ApiResponse<T> success(T data) {
 		return new ApiResponse<>(true, data, null);
 	}
@@ -30,6 +42,19 @@ public class ApiResponse<T> {
 
 	public static <T> ApiResponse<T> error(String message) {
 		return new ApiResponse<>(false, null, message);
+	}
+
+	/**
+	 * Backward-compatible pagination shape: {@code data} stays the literal array of this page's rows
+	 * (exactly what pre-pagination clients already expect and parse - they'll just silently only see
+	 * one page's worth instead of every row, no crash), with hasNext/totalElements added as sibling
+	 * fields old clients simply ignore. New clients read those two fields to drive "load more".
+	 */
+	public static <T> ApiResponse<List<T>> page(List<T> content, boolean hasNext, long totalElements) {
+		ApiResponse<List<T>> response = new ApiResponse<>(true, content, null);
+		response.hasNext = hasNext;
+		response.totalElements = totalElements;
+		return response;
 	}
 
 }
