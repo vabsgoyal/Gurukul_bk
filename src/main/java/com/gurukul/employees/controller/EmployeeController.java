@@ -41,10 +41,11 @@ public class EmployeeController {
 
 	@GetMapping
 	@Operation(summary = "List employees, paginated", description = "Defaults to page 0, size 50.")
-	public ApiResponse<PageResponse<EmployeeResponse>> list(
+	public ApiResponse<List<EmployeeResponse>> list(
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "50") int size) {
-		return ApiResponse.success(employeeService.list(page, size));
+		PageResponse<EmployeeResponse> result = employeeService.list(page, size);
+		return ApiResponse.page(result.getContent(), result.isHasNext(), result.getTotalElements());
 	}
 
 	@GetMapping("/search")

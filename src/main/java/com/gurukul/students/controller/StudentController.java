@@ -59,10 +59,11 @@ public class StudentController {
 					content = @Content(schema = @Schema(implementation = StudentResponse.class))
 			)
 	})
-	public ApiResponse<PageResponse<StudentResponse>> list(
+	public ApiResponse<List<StudentResponse>> list(
 			@Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
 			@Parameter(description = "Page size") @RequestParam(defaultValue = "50") int size) {
-		return ApiResponse.success(studentService.list(page, size));
+		PageResponse<StudentResponse> result = studentService.list(page, size);
+		return ApiResponse.page(result.getContent(), result.isHasNext(), result.getTotalElements());
 	}
 
 	@GetMapping("/by-class-section")

@@ -35,12 +35,13 @@ public class FeePaymentController {
 	@GetMapping("/api/v1/fee-assessments")
 	@Operation(summary = "List fee assessments, paginated, optionally filtered by status and/or class-section",
 			description = "Defaults to page 0, size 50.")
-	public ApiResponse<PageResponse<FeeAssessmentResponse>> listAssessments(
+	public ApiResponse<List<FeeAssessmentResponse>> listAssessments(
 			@RequestParam(required = false) FeeAssessmentStatus status,
 			@RequestParam(required = false) UUID classSectionId,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "50") int size) {
-		return ApiResponse.success(feePaymentService.listAssessmentsPage(status, classSectionId, page, size));
+		PageResponse<FeeAssessmentResponse> result = feePaymentService.listAssessmentsPage(status, classSectionId, page, size);
+		return ApiResponse.page(result.getContent(), result.isHasNext(), result.getTotalElements());
 	}
 
 	@GetMapping("/api/v1/students/{studentId}/fee-assessments")
