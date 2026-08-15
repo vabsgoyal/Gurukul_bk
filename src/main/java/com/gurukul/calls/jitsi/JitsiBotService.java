@@ -34,6 +34,13 @@ import java.io.File;
  * feature IS configured and warming fails (expired session, Chrome missing, timeout), it returns
  * {@code false} so the caller can refuse to start a call that would otherwise land both
  * participants on Jitsi's "waiting for moderator... please log-in" screen.
+ *
+ * <p>{@link #warmRoom} is {@code synchronized}: every call launches Chrome against the same
+ * shared {@code app.jitsi.bot.profile-dir} (there's only one bot account by design - see
+ * docs/jitsi-bot-setup.md), and Chrome refuses to open a second instance against a profile
+ * directory another process already has open. Two calls to warmRoom running concurrently would
+ * otherwise race for that same profile lock and fail unpredictably (session-not-created, or a
+ * corrupted mid-handshake response) - serializing them queues callers instead of failing them.
  */
 @Service
 @EnableConfigurationProperties(JitsiBotProperties.class)
@@ -49,7 +56,7 @@ public class JitsiBotService {
 		this.properties = properties;
 	}
 
-	public boolean warmRoom(String roomName) {
+	public synchronized boolean warmRoom(String roomName) {
 		if (!properties.isConfigured()) {
 			log.debug("Jitsi bot not configured (disabled or no profile-dir) - skipping warm for room {}", roomName);
 			return true;
