@@ -45,6 +45,7 @@ public class CallProviderResolver {
 			String joinUrl = googleMeetService.createMeeting(hostOwnerId, meetingTitle, startTime, endTime);
 			return new Resolution(CallProvider.GOOGLE_MEET, joinUrl);
 		}
+		requireFallbackAllowed(hostOwnerType, hostOwnerId);
 		String roomName = RoomNames.generate();
 		if (!jitsiBotService.warmRoom(roomName)) {
 			throw new IllegalStateException("Could not start the call right now - please try again");
@@ -67,6 +68,7 @@ public class CallProviderResolver {
 			String joinUrl = googleMeetService.createMeeting(hostOwnerId, meetingTitle, startTime, endTime);
 			return new Resolution(CallProvider.GOOGLE_MEET, joinUrl);
 		}
+		requireFallbackAllowed(hostOwnerType, hostOwnerId);
 		return new Resolution(CallProvider.JITSI, RoomNames.generate());
 	}
 
@@ -74,6 +76,16 @@ public class CallProviderResolver {
 		return properties.preferredProvider() == CallProvider.GOOGLE_MEET
 				&& hostOwnerType == OwnerType.EMPLOYEE
 				&& googleMeetService.isConnected(hostOwnerId);
+	}
+
+	/**
+	 * Only relevant once GOOGLE_MEET is preferred - requireGoogleMeet has no effect while the
+	 * system default is still JITSI, since there's nothing to "require" yet.
+	 */
+	private void requireFallbackAllowed(OwnerType hostOwnerType, UUID hostOwnerId) {
+		if (properties.preferredProvider() == CallProvider.GOOGLE_MEET && properties.requireGoogleMeet()) {
+			throw new GoogleAccountNotConnectedException();
+		}
 	}
 
 }

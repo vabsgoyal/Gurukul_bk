@@ -26,6 +26,11 @@ public class ApiResponse<T> {
 	@Schema(description = "Paginated list endpoints only: total row count across every page")
 	private Long totalElements;
 
+	@Schema(description = "Stable machine-readable code for specific error cases the client should "
+			+ "branch on (e.g. \"GOOGLE_ACCOUNT_NOT_CONNECTED\"); null for generic errors and all "
+			+ "successes - clients should fall back to displaying `message` when absent")
+	private String errorCode;
+
 	public ApiResponse(boolean success, T data, String message) {
 		this.success = success;
 		this.data = data;
@@ -42,6 +47,12 @@ public class ApiResponse<T> {
 
 	public static <T> ApiResponse<T> error(String message) {
 		return new ApiResponse<>(false, null, message);
+	}
+
+	public static <T> ApiResponse<T> error(String message, String errorCode) {
+		ApiResponse<T> response = new ApiResponse<>(false, null, message);
+		response.errorCode = errorCode;
+		return response;
 	}
 
 	/**

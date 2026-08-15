@@ -42,6 +42,7 @@ a Google account. Students and parents never need a Google account themselves.
    | `GOOGLE_MEET_CLIENT_SECRET` | from step 3 |
    | `GOOGLE_MEET_REDIRECT_URI` | the exact URI from step 4 |
    | `CALL_PREFERRED_PROVIDER` | `GOOGLE_MEET` to prefer it, or leave unset/`JITSI` to keep today's behavior |
+   | `CALL_REQUIRE_GOOGLE_MEET` | `true` to remove the Jitsi fallback entirely (see below) — only meaningful when `CALL_PREFERRED_PROVIDER=GOOGLE_MEET`; leave unset/`false` to keep the transparent-fallback behavior |
    | `APP_ENCRYPTION_KEY` | a base64 256-bit key — generate with `openssl rand -base64 32` (used to encrypt teachers' refresh tokens at rest; **do not** reuse across environments) |
 
 6. **Restart the backend.**
@@ -64,6 +65,15 @@ To disconnect: `DELETE /api/v1/calls/google/disconnect`.
   system-wide does not force Google Meet on every call — `CallProviderResolver` only uses it for a
   specific call when that call's host is an employee who has personally connected their account;
   every other call transparently falls back to the existing Jitsi flow.
+- **Removing the Jitsi fallback (`CALL_REQUIRE_GOOGLE_MEET=true`)**: instead of transparently
+  falling back to Jitsi, a call from a host who hasn't connected their Google account fails with
+  HTTP 409 and `errorCode: "GOOGLE_ACCOUNT_NOT_CONNECTED"` on the response envelope (see
+  `ApiResponse.errorCode`) — the FE should match on that code, not the `message` text, to show a
+  "connect your Google account" prompt instead of a generic failure. This is a **global** switch;
+  there's no per-school/per-host settings store yet to stage the rollout more narrowly, so flipping
+  it affects every school at once. If a staged rollout is needed before that exists, connect the
+  relevant hosts' Google accounts first and flip the flag only once every host who might place a
+  call from an affected school is connected.
 - **Immediate calls**: the caller is treated as the "host" for Google Meet purposes.
 - **Scheduled calls**: the real Calendar event (with its real join link) is created **at scheduling
   time**, not when the call is started — unlike Jitsi, there's no "warm the room later" step for a

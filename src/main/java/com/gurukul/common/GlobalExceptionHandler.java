@@ -48,6 +48,14 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
 	}
 
+	@ExceptionHandler(com.gurukul.calls.service.GoogleAccountNotConnectedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleGoogleAccountNotConnected(
+			com.gurukul.calls.service.GoogleAccountNotConnectedException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(ApiResponse.error(ex.getMessage(),
+						com.gurukul.calls.service.GoogleAccountNotConnectedException.ERROR_CODE));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
