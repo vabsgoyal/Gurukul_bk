@@ -29,6 +29,11 @@ a Google account. Students and parents never need a Google account themselves.
    authorization-code exchange (Sign-In only verifies an already-issued ID token, no secret
    needed).
 4. **Add an authorized redirect URI**: `https://<your-backend-host>/api/v1/calls/google/callback`.
+   Google rejects bare IP addresses here — the backend needs a real domain with HTTPS. In
+   production this is `https://api.smartgurukul.org/api/v1/calls/google/callback`, served via an
+   nginx reverse proxy (`80`/`443` → `127.0.0.1:8080`) with a Let's Encrypt certificate
+   auto-renewed by a systemd timer (`certbot-renew.timer`) — Amazon Linux 2023 has no `cron.d`, so
+   a plain crontab entry won't run.
 5. **Set these environment variables** on the backend deployment:
 
    | Variable | Value |
