@@ -7,6 +7,7 @@ import com.gurukul.calls.dto.CallEvent;
 import com.gurukul.calls.entity.CallInvitee;
 import com.gurukul.calls.entity.CallLog;
 import com.gurukul.calls.entity.CallOutcome;
+import com.gurukul.calls.entity.CallProvider;
 import com.gurukul.calls.entity.CallStatus;
 import com.gurukul.calls.entity.RsvpStatus;
 import com.gurukul.calls.entity.ScheduledCall;
@@ -43,6 +44,7 @@ public class ScheduledCallService {
 	private final CallLogRepository callLogRepository;
 	private final CallAuthorizationService callAuthorizationService;
 	private final CallEventPublisher eventPublisher;
+	private final CallProviderResolver callProviderResolver;
 	private final JitsiBotService jitsiBotService;
 	private final TransactionTemplate transactionTemplate;
 
@@ -52,6 +54,7 @@ public class ScheduledCallService {
 			CallLogRepository callLogRepository,
 			CallAuthorizationService callAuthorizationService,
 			CallEventPublisher eventPublisher,
+			CallProviderResolver callProviderResolver,
 			JitsiBotService jitsiBotService,
 			PlatformTransactionManager transactionManager) {
 		this.scheduledCallRepository = scheduledCallRepository;
@@ -59,6 +62,7 @@ public class ScheduledCallService {
 		this.callLogRepository = callLogRepository;
 		this.callAuthorizationService = callAuthorizationService;
 		this.eventPublisher = eventPublisher;
+		this.callProviderResolver = callProviderResolver;
 		this.jitsiBotService = jitsiBotService;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
@@ -71,13 +75,20 @@ public class ScheduledCallService {
 			callAuthorizationService.requireCanCall(principal, request.getInviteeOwnerType(), inviteeId);
 		}
 
+		// Google Meet: the real Calendar event (with its real join link) is created right now, same
+		// as scheduling an actual calendar meeting - see CallProviderResolver.resolveForSchedule.
+		CallProviderResolver.Resolution resolution = callProviderResolver.resolveForSchedule(
+				principal.getOwnerType(), principal.getOwnerId(), request.getTitle(),
+				request.getScheduledAt(), request.getScheduledAt().plus(Duration.ofHours(1)));
+
 		ScheduledCall call = new ScheduledCall();
 		call.setSchoolId(schoolId);
 		call.setHostOwnerType(principal.getOwnerType());
 		call.setHostOwnerId(principal.getOwnerId());
 		call.setTitle(request.getTitle());
 		call.setScheduledAt(request.getScheduledAt());
-		call.setRoomName(RoomNames.generate());
+		call.setRoomName(resolution.roomNameOrUrl());
+		call.setProvider(resolution.provider());
 		call.setStatus(CallStatus.SCHEDULED);
 		call.setReminderSent(false);
 		call = scheduledCallRepository.save(call);
@@ -165,12 +176,14 @@ public class ScheduledCallService {
 			throw new IllegalStateException("This call cannot be started (status: " + call.getStatus() + ")");
 		}
 
-		// Warmed before any DB writes or the invitee notifications below - otherwise a fast joiner
-		// could beat the bot into the room. Deliberately run outside a transaction: this call to
-		// Jitsi's server can take up to warmTimeoutSeconds, and must not hold a DB connection open
-		// for that long. A failure here means invitees would otherwise land on Jitsi's login wall,
-		// so we refuse to start the session instead of proceeding.
-		if (!jitsiBotService.warmRoom(call.getRoomName())) {
+		// Only the Jitsi path needs warming here - warmed before any DB writes or the invitee
+		// notifications below, otherwise a fast joiner could beat the bot into the room. Deliberately
+		// run outside a transaction: this call to Jitsi's server can take up to warmTimeoutSeconds,
+		// and must not hold a DB connection open for that long. A failure here means invitees would
+		// otherwise land on Jitsi's login wall, so we refuse to start the session instead of
+		// proceeding. Google Meet needs no equivalent step - its event/link already exists since
+		// scheduling time (see create()/CallProviderResolver.resolveForSchedule).
+		if (call.getProvider() == CallProvider.JITSI && !jitsiBotService.warmRoom(call.getRoomName())) {
 			throw new IllegalStateException("Could not start the call right now - please try again");
 		}
 
@@ -184,6 +197,7 @@ public class ScheduledCallService {
 			log.setCallerOwnerType(call.getHostOwnerType());
 			log.setCallerOwnerId(call.getHostOwnerId());
 			log.setRoomName(call.getRoomName());
+			log.setProvider(call.getProvider());
 			log.setStartedAt(Instant.now());
 			log.setOutcome(CallOutcome.IN_PROGRESS);
 			callLogRepository.save(log);
@@ -191,7 +205,7 @@ public class ScheduledCallService {
 
 		callInviteeRepository.findAllByScheduledCall_IdAndRsvpStatus(call.getId(), RsvpStatus.ACCEPTED)
 				.forEach(invitee -> eventPublisher.sendTo(call.getSchoolId(), invitee.getOwnerType(), invitee.getOwnerId(),
-						CallEvent.scheduledStarted(call.getId(), call.getRoomName(), call.getTitle())));
+						CallEvent.scheduledStarted(call.getId(), call.getRoomName(), call.getProvider(), call.getTitle())));
 		return call;
 	}
 
@@ -216,7 +230,7 @@ public class ScheduledCallService {
 	private void notifyInvitees(ScheduledCall call, CallEvent.Type type) {
 		invitees(call.getId()).forEach(invitee -> eventPublisher.sendTo(call.getSchoolId(),
 				invitee.getOwnerType(), invitee.getOwnerId(),
-				new CallEvent(type, null, call.getId(), call.getRoomName(), null, null, call.getTitle(), call.getScheduledAt())));
+				new CallEvent(type, null, call.getId(), call.getRoomName(), call.getProvider(), null, null, call.getTitle(), call.getScheduledAt())));
 	}
 
 	/** Every minute: send the 30-minute-out reminder once per call, and auto-expire no-shows. */
