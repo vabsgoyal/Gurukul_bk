@@ -35,6 +35,11 @@ public class ScheduledCall extends BaseEntity {
 	@Column(name = "room_name", nullable = false, unique = true)
 	private String roomName;
 
+	/** JITSI: roomName is a bare room slug. GOOGLE_MEET: roomName IS the full join URL directly. */
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private CallProvider provider = CallProvider.JITSI;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private CallStatus status;

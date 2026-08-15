@@ -2,6 +2,7 @@ package com.gurukul.calls.dto;
 
 import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.calls.entity.CallLog;
+import com.gurukul.calls.entity.CallProvider;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -26,25 +27,28 @@ public class CallEvent {
 	private UUID callLogId;
 	private UUID scheduledCallId;
 	private String roomName;
+	/** JITSI: roomName is a bare slug, join via meet.jit.si/roomName. GOOGLE_MEET: roomName IS the
+	 *  full join URL directly. Null on events that carry no roomName (e.g. reminders). */
+	private CallProvider provider;
 	private OwnerType counterpartOwnerType;
 	private UUID counterpartOwnerId;
 	private String title;
 	private Instant scheduledAt;
 
 	public static CallEvent incomingCall(CallLog log, OwnerType callerType, UUID callerId) {
-		return new CallEvent(Type.INCOMING_CALL, log.getId(), null, log.getRoomName(), callerType, callerId, null, null);
+		return new CallEvent(Type.INCOMING_CALL, log.getId(), null, log.getRoomName(), log.getProvider(), callerType, callerId, null, null);
 	}
 
 	public static CallEvent simple(Type type, CallLog log) {
-		return new CallEvent(type, log.getId(), null, log.getRoomName(), null, null, null, null);
+		return new CallEvent(type, log.getId(), null, log.getRoomName(), log.getProvider(), null, null, null, null);
 	}
 
-	public static CallEvent scheduledStarted(UUID scheduledCallId, String roomName, String title) {
-		return new CallEvent(Type.SCHEDULED_CALL_STARTED, null, scheduledCallId, roomName, null, null, title, null);
+	public static CallEvent scheduledStarted(UUID scheduledCallId, String roomName, CallProvider provider, String title) {
+		return new CallEvent(Type.SCHEDULED_CALL_STARTED, null, scheduledCallId, roomName, provider, null, null, title, null);
 	}
 
 	public static CallEvent scheduledReminder(UUID scheduledCallId, String title, Instant scheduledAt) {
-		return new CallEvent(Type.SCHEDULED_CALL_REMINDER, null, scheduledCallId, null, null, null, title, scheduledAt);
+		return new CallEvent(Type.SCHEDULED_CALL_REMINDER, null, scheduledCallId, null, null, null, null, title, scheduledAt);
 	}
 
 }

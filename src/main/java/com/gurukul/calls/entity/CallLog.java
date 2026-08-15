@@ -44,6 +44,12 @@ public class CallLog extends BaseEntity {
 	@Column(name = "room_name", nullable = false)
 	private String roomName;
 
+	/** JITSI: roomName is a bare room slug (join URL is meet.jit.si/roomName). GOOGLE_MEET: roomName
+	 *  IS the full https://meet.google.com/... join URL directly. */
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private CallProvider provider = CallProvider.JITSI;
+
 	@Column(name = "started_at", nullable = false)
 	private Instant startedAt;
 
