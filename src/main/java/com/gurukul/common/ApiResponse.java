@@ -49,8 +49,10 @@ public class ApiResponse<T> {
 	 * (exactly what pre-pagination clients already expect and parse - they'll just silently only see
 	 * one page's worth instead of every row, no crash), with hasNext/totalElements added as sibling
 	 * fields old clients simply ignore. New clients read those two fields to drive "load more".
+	 * totalElements is nullable - it's only computed on page 0 to avoid a second DB round-trip on
+	 * every subsequent page (see PageResponse); callers should carry forward the page-0 value.
 	 */
-	public static <T> ApiResponse<List<T>> page(List<T> content, boolean hasNext, long totalElements) {
+	public static <T> ApiResponse<List<T>> page(List<T> content, boolean hasNext, Long totalElements) {
 		ApiResponse<List<T>> response = new ApiResponse<>(true, content, null);
 		response.hasNext = hasNext;
 		response.totalElements = totalElements;

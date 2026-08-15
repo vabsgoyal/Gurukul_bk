@@ -2,8 +2,8 @@ package com.gurukul.students.repository;
 
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.entity.StudentStatus;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -16,8 +16,11 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	List<Student> findAllBySchoolId(UUID schoolId);
 
+	/** Slice, not Page: avoids Spring Data's automatic separate COUNT(*) query on every page - over a
+	 *  cross-region DB link that's a full extra round-trip per request. Total count is fetched
+	 *  separately (see StudentService.list) only on page 0. */
 	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
-	Page<Student> findAllBySchoolIdOrderByNameAsc(UUID schoolId, Pageable pageable);
+	Slice<Student> findAllBySchoolIdOrderByNameAsc(UUID schoolId, Pageable pageable);
 
 	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
 	List<Student> findAllBySchoolIdAndClassSectionId(UUID schoolId, UUID classSectionId);

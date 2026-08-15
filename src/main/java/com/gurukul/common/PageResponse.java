@@ -17,7 +17,9 @@ public class PageResponse<T> {
 	@Schema(description = "Whether a further page exists")
 	private boolean hasNext;
 
-	@Schema(description = "Total row count across every page")
-	private long totalElements;
+	@Schema(description = "Total row count across every page - only computed on page 0 (a separate "
+			+ "COUNT query is a full extra DB round-trip); null on later pages, carry forward the "
+			+ "value from page 0")
+	private Long totalElements;
 
 }

@@ -16,8 +16,8 @@ import com.gurukul.students.entity.StudentStatus;
 import com.gurukul.students.repository.StudentRepository;
 import com.gurukul.fees.service.FeeStructureService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,12 +40,13 @@ public class StudentService {
 	@Transactional(readOnly = true)
 	public PageResponse<StudentResponse> list(int page, int size) {
 		boolean includeRegistrationNumber = isAdmin();
-		Page<Student> result = studentRepository.findAllBySchoolIdOrderByNameAsc(
-				schoolContext.getSchoolId(), PageRequest.of(page, size));
+		UUID schoolId = schoolContext.getSchoolId();
+		Slice<Student> result = studentRepository.findAllBySchoolIdOrderByNameAsc(schoolId, PageRequest.of(page, size));
+		Long totalElements = page == 0 ? studentRepository.countBySchoolId(schoolId) : null;
 		return new PageResponse<>(
 				result.getContent().stream().map(s -> StudentResponse.from(s, includeRegistrationNumber)).toList(),
 				result.hasNext(),
-				result.getTotalElements());
+				totalElements);
 	}
 
 	@Transactional(readOnly = true)
