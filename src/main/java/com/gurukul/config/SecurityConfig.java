@@ -90,6 +90,13 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/bot/conversation").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// Academic Helper: any authenticated in-app role may ask. Which system prompt is
+						// used (a student is taught the method, a teacher gets the answer key) is decided
+						// in AiChatService from the caller's own role, never from the request body - so
+						// this matcher only has to establish that there *is* a principal. The per-user
+						// hourly cost cap is applied there too.
+						.requestMatchers(HttpMethod.POST, "/api/v1/ai/chat")
+						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						// Announcements: creation role-gated here; the fine-grained "which section" check
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")

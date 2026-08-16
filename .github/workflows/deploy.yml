@@ -65,6 +65,11 @@ jobs:
         env:
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Academic Helper (com.gurukul.ai). Separate from ANTHROPIC_API_KEY above, which is the
+          # helpdesk bot's - the two features use different providers and neither reads the other's
+          # variable. A blank/absent value is safe: the app still boots and the assistant reports
+          # "isn't set up correctly" rather than failing (OpenRouterProperties.isConfigured()).
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DB_PROVIDER: ${{ secrets.DB_PROVIDER }}
           DS_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
           DS_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
@@ -83,6 +88,7 @@ jobs:
           # All secrets are base64-wrapped before embedding in the SSM command - a DB password (or
           # a Google client secret) is exactly the kind of value that can contain quotes/$/backticks,
           # which would otherwise corrupt or inject into the remote shell command built below.
+          OPENROUTER_API_KEY_B64=$(printf '%s' "$OPENROUTER_API_KEY" | base64 -w0)
           DB_PROVIDER_B64=$(printf '%s' "$DB_PROVIDER" | base64 -w0)
           DS_URL_B64=$(printf '%s' "$DS_URL" | base64 -w0)
           DS_USERNAME_B64=$(printf '%s' "$DS_USERNAME" | base64 -w0)
@@ -94,6 +100,7 @@ jobs:
 
           COMMANDS=$(jq -n \
             --arg key "$ANTHROPIC_API_KEY" \
+            --arg orKey "$OPENROUTER_API_KEY_B64" \
             --arg provider "$DB_PROVIDER_B64" \
             --arg url "$DS_URL_B64" \
             --arg username "$DS_USERNAME_B64" \
@@ -105,6 +112,8 @@ jobs:
             --arg script "$SCRIPT_B64" '[
             "sudo sed -i /^ANTHROPIC_API_KEY=/d /etc/gurukul/backend.env",
             "echo \"ANTHROPIC_API_KEY=\($key)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^OPENROUTER_API_KEY=/d /etc/gurukul/backend.env",
+            "echo \"OPENROUTER_API_KEY=$(echo \($orKey) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^DB_PROVIDER=/d /etc/gurukul/backend.env",
             "echo \"DB_PROVIDER=$(echo \($provider) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^SPRING_DATASOURCE_URL=/d /etc/gurukul/backend.env",

@@ -56,6 +56,18 @@ public class GlobalExceptionHandler {
 						com.gurukul.calls.service.GoogleAccountNotConnectedException.ERROR_CODE));
 	}
 
+	/**
+	 * 503 rather than 500: the request was fine, the assistant just can't answer it right now
+	 * (unconfigured, rate-limited, or the upstream provider is unhappy). The message is written to
+	 * be shown to a student or teacher as-is, and the errorCode lets the app distinguish "assistant
+	 * is down" from "your request was invalid" without parsing prose.
+	 */
+	@ExceptionHandler(com.gurukul.ai.service.AiUnavailableException.class)
+	public ResponseEntity<ApiResponse<Void>> handleAiUnavailable(com.gurukul.ai.service.AiUnavailableException ex) {
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+				.body(ApiResponse.error(ex.getMessage(), com.gurukul.ai.service.AiUnavailableException.ERROR_CODE));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
