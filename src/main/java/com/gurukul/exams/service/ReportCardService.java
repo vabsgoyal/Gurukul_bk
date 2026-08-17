@@ -10,6 +10,7 @@ import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.service.EmployeeService;
 import com.gurukul.exams.dto.ReportCardDtos.PublicationResponse;
+import com.gurukul.exams.dto.ReportCardDtos.PublishedTermResponse;
 import com.gurukul.exams.dto.ReportCardDtos.ReportCardResponse;
 import com.gurukul.exams.dto.ReportCardDtos.SubjectResultResponse;
 import com.gurukul.exams.entity.AssessmentResult;
@@ -64,11 +65,12 @@ public class ReportCardService {
 		if (principal.getRole() != Role.ADMIN && !isClassTeacher) {
 			throw new AccessDeniedException("Only an admin or this section's class teacher can publish report cards");
 		}
-		ReportCardPublication publication = reportCardPublicationRepository.findByClassSection_IdAndTerm(sectionId, term)
+		String normalizedTerm = term == null ? null : term.trim();
+		ReportCardPublication publication = reportCardPublicationRepository.findByClassSection_IdAndTerm(sectionId, normalizedTerm)
 				.orElseGet(ReportCardPublication::new);
 		publication.setSchoolId(schoolContext.getSchoolId());
 		publication.setClassSection(section);
-		publication.setTerm(term);
+		publication.setTerm(normalizedTerm);
 		publication.setPublishedAt(Instant.now());
 		publication.setPublishedByEmployee(employeeService.getScopedEntity(principal.getOwnerId()));
 		ReportCardPublication saved = reportCardPublicationRepository.save(publication);
@@ -116,6 +118,33 @@ public class ReportCardService {
 
 		return computeReportCard(student, section, term, publication.isPresent(),
 				publication.map(ReportCardPublication::getPublishedAt).orElse(null));
+	}
+
+	/**
+	 * Every term published for a student's own class-section, most-recent first - lets the student
+	 * view auto-select the latest one instead of guessing a term string (previously hardcoded to
+	 * the literal "Term 1" on the frontend, which silently showed nothing whenever a teacher had
+	 * actually published under a different term string).
+	 */
+	@Transactional(readOnly = true)
+	public List<PublishedTermResponse> listPublishedTerms(UUID studentId) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.STUDENT && !principal.getOwnerId().equals(studentId)) {
+			throw new AccessDeniedException("Students can only view their own report card");
+		}
+		if (principal.getRole() == Role.PARENT) {
+			parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
+		}
+
+		Student student = studentRepository.findByIdAndSchoolId(studentId, schoolContext.getSchoolId())
+				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
+		ClassSection section = student.getClassSection();
+		if (section == null) {
+			return List.of();
+		}
+		return reportCardPublicationRepository.findAllByClassSection_IdOrderByPublishedAtDesc(section.getId()).stream()
+				.map(p -> new PublishedTermResponse(p.getTerm(), p.getPublishedAt()))
+				.toList();
 	}
 
 	/**

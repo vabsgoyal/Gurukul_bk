@@ -3,6 +3,7 @@ package com.gurukul.exams.controller;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.exams.dto.ReportCardDtos.PublicationResponse;
 import com.gurukul.exams.dto.ReportCardDtos.PublishRequest;
+import com.gurukul.exams.dto.ReportCardDtos.PublishedTermResponse;
 import com.gurukul.exams.dto.ReportCardDtos.ReportCardResponse;
 import com.gurukul.exams.service.ReportCardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,14 @@ public class ReportCardController {
 			description = "A STUDENT session only ever sees their own, and only once published. TEACHER/ADMIN may preview any time.")
 	public ApiResponse<ReportCardResponse> get(@PathVariable UUID studentId, @RequestParam String term) {
 		return ApiResponse.success(reportCardService.getReportCard(studentId, term));
+	}
+
+	@GetMapping("/api/v1/students/{studentId}/report-card/published-terms")
+	@Operation(summary = "List every term published for a student's own class-section, most recent first",
+			description = "Lets the student's own report-card view auto-select the latest published term instead of "
+					+ "guessing a term string.")
+	public ApiResponse<List<PublishedTermResponse>> listPublishedTerms(@PathVariable UUID studentId) {
+		return ApiResponse.success(reportCardService.listPublishedTerms(studentId));
 	}
 
 	@GetMapping("/api/v1/class-sections/{sectionId}/report-cards")
