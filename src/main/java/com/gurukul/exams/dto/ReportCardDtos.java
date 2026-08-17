@@ -60,4 +60,11 @@ public class ReportCardDtos {
 		private Instant publishedAt;
 	}
 
+	@Getter @AllArgsConstructor
+	@Schema(description = "One term published for a student's class-section")
+	public static class PublishedTermResponse {
+		private String term;
+		private Instant publishedAt;
+	}
+
 }

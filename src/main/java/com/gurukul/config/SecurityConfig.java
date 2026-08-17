@@ -77,6 +77,14 @@ public class SecurityConfig {
 						// student-sees-only-their-own-and-only-once-published check in the service layer.
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card/published-terms").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// Section-wide report-card grid: admin, or that section's class teacher (checked in
+						// the service layer) - same authority pattern as publish/fee-status above.
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/report-cards").hasAnyRole("TEACHER", "ADMIN")
+						// Term picker + backfill: same admin-or-class-teacher authority as publish, checked
+						// in the service layer (AssessmentService.requireCanManageTerms).
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/terms").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.PATCH, "/api/v1/class-sections/*/assessments/backfill-term").hasAnyRole("TEACHER", "ADMIN")
 						// Class-section fee status: admin, or that section's own class teacher (checked in
 						// the service layer) - a class-fees overview tile for a class teacher.
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/fee-status").hasAnyRole("TEACHER", "ADMIN")

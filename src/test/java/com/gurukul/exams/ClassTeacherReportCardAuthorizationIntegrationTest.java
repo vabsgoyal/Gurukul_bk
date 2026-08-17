@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -120,6 +121,15 @@ class ClassTeacherReportCardAuthorizationIntegrationTest {
 								{"term": "Term 1"}
 								"""))
 				.andExpect(status().isOk());
+
+		// And can view the section-wide marks grid, which includes the marks just entered.
+		mockMvc.perform(get("/api/v1/class-sections/" + sectionId + "/report-cards")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + classTeacherBearer)
+						.param("term", "Term 1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].studentId").value(studentId))
+				.andExpect(jsonPath("$.data[0].totalMarksObtained").value(45.00));
 	}
 
 	@Test
@@ -196,6 +206,12 @@ class ClassTeacherReportCardAuthorizationIntegrationTest {
 						.content("""
 								{"term": "Term 1"}
 								"""))
+				.andExpect(status().isForbidden());
+
+		mockMvc.perform(get("/api/v1/class-sections/" + sectionId + "/report-cards")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + unrelatedTeacherBearer)
+						.param("term", "Term 1"))
 				.andExpect(status().isForbidden());
 	}
 
