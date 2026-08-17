@@ -1,5 +1,8 @@
 package com.gurukul.payroll.service;
 
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.entity.EmployeeStatus;
@@ -13,6 +16,7 @@ import com.gurukul.payroll.dto.PayrollDtos;
 import com.gurukul.payroll.entity.*;
 import com.gurukul.payroll.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -142,6 +146,10 @@ public class PayrollService {
 	@Transactional(readOnly = true)
 	public List<PayrollDtos.SalaryHistoryResponse> salaryHistory(UUID employeeId) {
 		employeeService.getScopedEntity(employeeId);
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.TEACHER && !principal.getOwnerId().equals(employeeId)) {
+			throw new AccessDeniedException("You can only view your own salary history");
+		}
 		return payrollLineRepository.findAllByEmployeeId(employeeId).stream()
 				.sorted(Comparator.comparing((PayrollLine l) -> l.getRun().getYear()).reversed()
 						.thenComparing(l -> l.getRun().getMonth(), Comparator.reverseOrder()))
@@ -155,6 +163,10 @@ public class PayrollService {
 	public PayrollDtos.PayslipResponse getPayslip(UUID lineId) {
 		PayrollLine line = payrollLineRepository.findByIdAndSchoolId(lineId, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Payroll line not found"));
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.TEACHER && !principal.getOwnerId().equals(line.getEmployee().getId())) {
+			throw new AccessDeniedException("You can only view your own payslip");
+		}
 		Payslip payslip = payslipRepository.findByPayrollLineId(lineId)
 				.orElseThrow(() -> new EntityNotFoundException("Payslip not found"));
 		return new PayrollDtos.PayslipResponse(

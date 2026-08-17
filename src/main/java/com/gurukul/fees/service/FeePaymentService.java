@@ -152,16 +152,21 @@ public class FeePaymentService {
 	}
 
 	/**
-	 * No SecurityConfig role restriction on this endpoint historically (open to any authenticated
-	 * caller) - that pre-existing gap is out of scope here. The one new check: a PARENT caller must
-	 * be linked to this specific student, since Parent is a real distinct identity now and
-	 * shouldn't be able to view an arbitrary student's fees just by guessing an id.
+	 * A PARENT caller must be linked to this specific student (mirrors assertCanPayOrRecord), and a
+	 * STUDENT caller may only list their own assessments - both added so Parent/Student can't view an
+	 * arbitrary student's fees just by guessing an id. Any other caller (EMPLOYEE, or no principal at
+	 * all in tests) passes through unchanged, matching assertCanPayOrRecord's existing behavior.
 	 */
 	@Transactional(readOnly = true)
 	public List<FeeAssessmentResponse> listByStudent(UUID studentId) {
 		AuthPrincipal principal = AuthContext.currentOrNull();
-		if (principal != null && principal.getRole() == Role.PARENT) {
-			parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
+		if (principal != null) {
+			if (principal.getRole() == Role.PARENT) {
+				parentService.requireLinkedChild(principal.getOwnerId(), studentId, principal.getSchoolId());
+			} else if ((principal.getRole() == Role.STUDENT || principal.getOwnerType() == OwnerType.STUDENT)
+					&& !principal.getOwnerId().equals(studentId)) {
+				throw new AccessDeniedException("You can only view your own fee assessments");
+			}
 		}
 		return assessmentRepository.findAllBySchoolIdAndStudentId(schoolContext.getSchoolId(), studentId).stream()
 				.map(FeeAssessmentResponse::from)
