@@ -13,4 +13,6 @@ public interface ConversationParticipantRepository extends JpaRepository<Convers
 
 	List<ConversationParticipant> findAllByConversation_Id(UUID conversationId);
 
+	List<ConversationParticipant> findAllByConversation_IdIn(List<UUID> conversationIds);
+
 }

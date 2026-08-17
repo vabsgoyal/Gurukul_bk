@@ -88,6 +88,14 @@ public class SecurityConfig {
 						// student-sees-only-their-own-and-only-once-published check in the service layer.
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card/published-terms").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// Section-wide report-card grid: admin, or that section's class teacher (checked in
+						// the service layer) - same authority pattern as publish/fee-status above.
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/report-cards").hasAnyRole("TEACHER", "ADMIN")
+						// Term picker + backfill: same admin-or-class-teacher authority as publish, checked
+						// in the service layer (AssessmentService.requireCanManageTerms).
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/terms").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.PATCH, "/api/v1/class-sections/*/assessments/backfill-term").hasAnyRole("TEACHER", "ADMIN")
 						// Class-section fee status: admin, or that section's own class teacher (checked in
 						// the service layer) - a class-fees overview tile for a class teacher.
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/fee-status").hasAnyRole("TEACHER", "ADMIN")
@@ -101,6 +109,13 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/bot/conversation").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// Academic Helper: any authenticated in-app role may ask. Which system prompt is
+						// used (a student is taught the method, a teacher gets the answer key) is decided
+						// in AiChatService from the caller's own role, never from the request body - so
+						// this matcher only has to establish that there *is* a principal. The per-user
+						// hourly cost cap is applied there too.
+						.requestMatchers(HttpMethod.POST, "/api/v1/ai/chat")
+						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						// Announcements: creation role-gated here; the fine-grained "which section" check
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")

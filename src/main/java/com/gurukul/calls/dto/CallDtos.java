@@ -4,6 +4,7 @@ import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.calls.entity.CallInvitee;
 import com.gurukul.calls.entity.CallLog;
 import com.gurukul.calls.entity.CallOutcome;
+import com.gurukul.calls.entity.CallProvider;
 import com.gurukul.calls.entity.CallStatus;
 import com.gurukul.calls.entity.RsvpStatus;
 import com.gurukul.calls.entity.ScheduledCall;
@@ -65,6 +66,9 @@ public class CallDtos {
 		private UUID hostOwnerId;
 		private Instant scheduledAt;
 		private String roomName;
+		@Schema(description = "JITSI: roomName is a bare slug, join via meet.jit.si/roomName. "
+				+ "GOOGLE_MEET: roomName IS the full join URL directly.")
+		private CallProvider provider;
 		private CallStatus status;
 		private List<InviteeResponse> invitees;
 
@@ -76,6 +80,7 @@ public class CallDtos {
 					call.getHostOwnerId(),
 					call.getScheduledAt(),
 					call.getRoomName(),
+					call.getProvider(),
 					call.getStatus(),
 					invitees.stream().map(InviteeResponse::from).toList());
 		}
@@ -105,10 +110,13 @@ public class CallDtos {
 	public static class CallSessionResponse {
 		private UUID callLogId;
 		private String roomName;
+		@Schema(description = "JITSI: roomName is a bare slug, join via meet.jit.si/roomName. "
+				+ "GOOGLE_MEET: roomName IS the full join URL directly.")
+		private CallProvider provider;
 		private CallOutcome outcome;
 
 		public static CallSessionResponse from(CallLog callLog) {
-			return new CallSessionResponse(callLog.getId(), callLog.getRoomName(), callLog.getOutcome());
+			return new CallSessionResponse(callLog.getId(), callLog.getRoomName(), callLog.getProvider(), callLog.getOutcome());
 		}
 	}
 

@@ -26,13 +26,28 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 public class SchoolService {
+
+	/**
+	 * requireExists() is called by SchoolContextFilter on every single authenticated request - over
+	 * the cross-region (Stockholm app / Seoul DB) link, that's a full extra round-trip tax on every
+	 * call. Schools are never deleted or deactivated anywhere in this codebase, so "exists" can only
+	 * ever go false->true, never true->false - caching a positive result can't go stale in a way that
+	 * matters. TTL is just a bound on how long a school stays "known" after its one confirming query,
+	 * not a correctness requirement.
+	 */
+	private static final Duration EXISTENCE_CACHE_TTL = Duration.ofMinutes(10);
+	private final Map<UUID, Instant> existenceCache = new ConcurrentHashMap<>();
 
 	private final SchoolRepository schoolRepository;
 	private final StudentRepository studentRepository;
@@ -146,7 +161,12 @@ public class SchoolService {
 	}
 
 	public void requireExists(UUID id) {
+		Instant cachedUntil = existenceCache.get(id);
+		if (cachedUntil != null && cachedUntil.isAfter(Instant.now())) {
+			return;
+		}
 		findSchool(id);
+		existenceCache.put(id, Instant.now().plus(EXISTENCE_CACHE_TTL));
 	}
 
 	private SchoolResponse toResponse(School school) {

@@ -12,4 +12,7 @@ public interface TeacherInviteRepository extends JpaRepository<TeacherInvite, UU
 
 	Optional<TeacherInvite> findBySchoolIdAndTargetEmployeeIdAndUsedFalse(UUID schoolId, UUID targetEmployeeId);
 
+	/** Used so admin can re-view/re-share a previously generated invite - the create response is otherwise the only place it's shown. */
+	Optional<TeacherInvite> findFirstBySchoolIdAndTargetEmployeeIdOrderByCreatedAtDesc(UUID schoolId, UUID targetEmployeeId);
+
 }

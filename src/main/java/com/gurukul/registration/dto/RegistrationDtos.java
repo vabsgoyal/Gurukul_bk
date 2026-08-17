@@ -33,6 +33,15 @@ public class RegistrationDtos {
 	}
 
 	@Getter @Setter
+	@Schema(description = "Self-registration for a student via invite code - claims the specific Student record the "
+			+ "invite code was issued for; auto-activates immediately since admin already vetted the record")
+	public static class StudentInviteRegistrationRequest {
+		@NotBlank private String inviteCode;
+		@NotBlank @Size(min = 3, max = 50) private String username;
+		@NotBlank @Size(min = 8) private String password;
+	}
+
+	@Getter @Setter
 	@Schema(description = "Self-registration for a parent - links to an existing student by registrationNumber, "
 			+ "verified by matching parentContact against the value already on the student record; goes to admin approval")
 	public static class ParentRegistrationRequest {
@@ -74,6 +83,14 @@ public class RegistrationDtos {
 	}
 
 	@Getter @Setter
+	@Schema(description = "Self-registration for a student via Google using an invite code - idToken replaces "
+			+ "username/password; claims the specific Student record the invite code was issued for")
+	public static class StudentInviteGoogleRegistrationRequest {
+		@NotBlank private String idToken;
+		@NotBlank private String inviteCode;
+	}
+
+	@Getter @Setter
 	@Schema(description = "Self-registration for a parent via Google, linking to an existing student by "
 			+ "registrationNumber, verified by matching parentContact against the value already on the student record")
 	public static class ParentGoogleRegistrationRequest {
@@ -110,8 +127,20 @@ public class RegistrationDtos {
 	}
 
 	@Getter @AllArgsConstructor
-	@Schema(description = "A freshly generated teacher invite - share the code/link with the prospective teacher")
+	@Schema(description = "A teacher invite for a specific employee - share the code with the prospective teacher. "
+			+ "Returned both when generating a new one and when re-viewing an existing one (GET /employees/{id}/invite)")
 	public static class TeacherInviteResponse {
+		private String code;
+		private Instant expiresAt;
+		@Schema(description = "Whether this code has already been used to claim a login")
+		private boolean used;
+		@Schema(description = "Whether this code is past its expiresAt and can no longer be claimed")
+		private boolean expired;
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(description = "A freshly generated student invite - share the code/link with the student (or their parent)")
+	public static class StudentInviteResponse {
 		private String code;
 		private Instant expiresAt;
 	}

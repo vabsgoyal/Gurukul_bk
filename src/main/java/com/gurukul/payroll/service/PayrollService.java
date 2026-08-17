@@ -135,7 +135,7 @@ public class PayrollService {
 	@Transactional(readOnly = true)
 	public List<PayrollDtos.PayrollLineResponse> listRunLines(UUID runId) {
 		findRun(runId);
-		return payrollLineRepository.findAllByRunId(runId).stream()
+		return payrollLineRepository.findAllByRunIdOrderByEmployee_NameAsc(runId).stream()
 				.map(PayrollDtos.PayrollLineResponse::from).toList();
 	}
 

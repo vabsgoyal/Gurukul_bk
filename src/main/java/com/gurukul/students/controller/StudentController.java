@@ -1,6 +1,12 @@
 package com.gurukul.students.controller;
 
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.PageResponse;
+import com.gurukul.registration.dto.RegistrationDtos.StudentInviteResponse;
+import com.gurukul.registration.service.StudentInviteService;
 import com.gurukul.students.dto.StudentClassSectionUpdateRequest;
 import com.gurukul.students.dto.StudentRequest;
 import com.gurukul.students.dto.StudentResponse;
@@ -13,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -37,11 +44,13 @@ import java.util.UUID;
 public class StudentController {
 
 	private final StudentService studentService;
+	private final StudentInviteService studentInviteService;
 
 	@GetMapping
 	@Operation(
-			summary = "List students",
-			description = "Returns every student for the current school, ordered by creation time."
+			summary = "List students, paginated",
+			description = "Returns one page of students for the current school, ordered by name. "
+					+ "Defaults to page 0, size 50."
 	)
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -50,8 +59,11 @@ public class StudentController {
 					content = @Content(schema = @Schema(implementation = StudentResponse.class))
 			)
 	})
-	public ApiResponse<List<StudentResponse>> list() {
-		return ApiResponse.success(studentService.list());
+	public ApiResponse<List<StudentResponse>> list(
+			@Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
+			@Parameter(description = "Page size") @RequestParam(defaultValue = "50") int size) {
+		PageResponse<StudentResponse> result = studentService.list(page, size);
+		return ApiResponse.page(result.getContent(), result.isHasNext(), result.getTotalElements());
 	}
 
 	@GetMapping("/by-class-section")
@@ -225,6 +237,18 @@ public class StudentController {
 			@PathVariable UUID id) {
 		studentService.delete(id);
 		return ApiResponse.success(null, "Student deleted");
+	}
+
+	@PostMapping("/{id}/invite")
+	@Operation(summary = "Generate a self-registration invite code for this specific student (valid 72h, single use)")
+	public ApiResponse<StudentInviteResponse> invite(
+			@Parameter(description = "Student UUID", required = true)
+			@PathVariable UUID id) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() != Role.ADMIN) {
+			throw new AccessDeniedException("Only an admin can do this");
+		}
+		return ApiResponse.success(studentInviteService.createInviteForStudent(principal, id));
 	}
 
 }

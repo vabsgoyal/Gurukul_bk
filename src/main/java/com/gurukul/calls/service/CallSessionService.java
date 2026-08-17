@@ -5,9 +5,11 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.calls.dto.CallEvent;
 import com.gurukul.calls.entity.CallLog;
 import com.gurukul.calls.entity.CallOutcome;
-import com.gurukul.calls.jitsi.JitsiBotService;
+import com.gurukul.calls.entity.CallProvider;
 import com.gurukul.calls.repository.CallLogRepository;
 import com.gurukul.common.EntityNotFoundException;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,7 @@ public class CallSessionService {
 	private final ActiveCallRegistry activeCallRegistry;
 	private final CallEventPublisher eventPublisher;
 	private final TaskScheduler taskScheduler;
-	private final JitsiBotService jitsiBotService;
+	private final CallProviderResolver callProviderResolver;
 	private final TransactionTemplate transactionTemplate;
 
 	public CallSessionService(
@@ -45,14 +47,14 @@ public class CallSessionService {
 			ActiveCallRegistry activeCallRegistry,
 			CallEventPublisher eventPublisher,
 			TaskScheduler taskScheduler,
-			JitsiBotService jitsiBotService,
+			CallProviderResolver callProviderResolver,
 			PlatformTransactionManager transactionManager) {
 		this.callLogRepository = callLogRepository;
 		this.callAuthorizationService = callAuthorizationService;
 		this.activeCallRegistry = activeCallRegistry;
 		this.eventPublisher = eventPublisher;
 		this.taskScheduler = taskScheduler;
-		this.jitsiBotService = jitsiBotService;
+		this.callProviderResolver = callProviderResolver;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
 
@@ -69,22 +71,22 @@ public class CallSessionService {
 		}
 		if (activeCallRegistry.isBusy(calleeType, calleeId)) {
 			return transactionTemplate.execute(status -> callLogRepository.save(
-					newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.BUSY, true, RoomNames.generate())));
+					newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.BUSY, true,
+							RoomNames.generate(), CallProvider.JITSI)));
 		}
 
-		String roomName = RoomNames.generate();
-		// Warmed before any DB writes or the callee notification - otherwise a fast callee could
-		// join the Jitsi room before the bot has finished "starting" it. Deliberately run outside a
-		// transaction: this call to Jitsi's server can take up to warmTimeoutSeconds, and must not
-		// hold a DB connection open for that long. A failure here means the call would otherwise land
-		// both participants on Jitsi's login wall, so we refuse to start it instead of proceeding.
-		if (!jitsiBotService.warmRoom(roomName)) {
-			throw new IllegalStateException("Could not start the call right now - please try again");
-		}
+		// Resolved (Google Meet event created, or Jitsi room warmed) before any DB writes or the
+		// callee notification - otherwise a fast callee could join before the room/meeting is ready.
+		// Deliberately run outside a transaction: either path can take a few seconds, and must not
+		// hold a DB connection open that long. The caller is treated as the "host" for Google Meet
+		// purposes - see CallProviderResolver.
+		CallProviderResolver.Resolution resolution = callProviderResolver.resolveForImmediateUse(
+				callerType, callerId, "Gurukul call", Instant.now(), Instant.now().plus(Duration.ofHours(1)));
 
 		CallLog callLog = transactionTemplate.execute(status -> {
 			CallLog saved = callLogRepository.save(
-					newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.IN_PROGRESS, false, roomName));
+					newLog(schoolId, callerType, callerId, calleeType, calleeId, CallOutcome.IN_PROGRESS, false,
+							resolution.roomNameOrUrl(), resolution.provider()));
 			activeCallRegistry.markActive(callerType, callerId, saved.getId());
 			activeCallRegistry.markActive(calleeType, calleeId, saved.getId());
 			return saved;
@@ -131,9 +133,16 @@ public class CallSessionService {
 		return callLog;
 	}
 
-	public List<CallLog> history(AuthPrincipal principal) {
+	@Transactional(readOnly = true)
+	public Slice<CallLog> history(AuthPrincipal principal, Pageable pageable) {
 		return callLogRepository.findAllForParticipant(
-				principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId());
+				principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId(), pageable);
+	}
+
+	/** Only worth calling on page 0 - see CallSessionController. */
+	@Transactional(readOnly = true)
+	public long countHistory(AuthPrincipal principal) {
+		return callLogRepository.countForParticipant(principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId());
 	}
 
 	private void handleRingTimeout(UUID callLogId) {
@@ -195,7 +204,7 @@ public class CallSessionService {
 
 	private CallLog newLog(
 			UUID schoolId, OwnerType callerType, UUID callerId, OwnerType calleeType, UUID calleeId,
-			CallOutcome outcome, boolean endedImmediately, String roomName) {
+			CallOutcome outcome, boolean endedImmediately, String roomName, CallProvider provider) {
 		CallLog callLog = new CallLog();
 		callLog.setSchoolId(schoolId);
 		callLog.setCallerOwnerType(callerType);
@@ -203,6 +212,7 @@ public class CallSessionService {
 		callLog.setCalleeOwnerType(calleeType);
 		callLog.setCalleeOwnerId(calleeId);
 		callLog.setRoomName(roomName);
+		callLog.setProvider(provider);
 		callLog.setStartedAt(Instant.now());
 		callLog.setOutcome(outcome);
 		if (endedImmediately) {

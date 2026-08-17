@@ -5,6 +5,8 @@ import com.gurukul.registration.dto.RegistrationDtos.ParentGoogleRegistrationReq
 import com.gurukul.registration.dto.RegistrationDtos.ParentRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.RegistrationSubmittedResponse;
 import com.gurukul.registration.dto.RegistrationDtos.StudentGoogleRegistrationRequest;
+import com.gurukul.registration.dto.RegistrationDtos.StudentInviteGoogleRegistrationRequest;
+import com.gurukul.registration.dto.RegistrationDtos.StudentInviteRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.StudentRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherGoogleRegistrationRequest;
 import com.gurukul.registration.dto.RegistrationDtos.TeacherRegistrationRequest;
@@ -38,6 +40,18 @@ public class RegistrationController {
 	@Operation(summary = "Self-register as a student via Google")
 	public ApiResponse<RegistrationSubmittedResponse> registerStudentViaGoogle(@Valid @RequestBody StudentGoogleRegistrationRequest request) {
 		return ApiResponse.success(registrationService.registerStudentViaGoogle(request));
+	}
+
+	@PostMapping("/api/v1/register/student/invite")
+	@Operation(summary = "Self-register as a student using an admin-issued invite code, instead of the registration number")
+	public ApiResponse<RegistrationSubmittedResponse> registerStudentViaInvite(@Valid @RequestBody StudentInviteRegistrationRequest request) {
+		return ApiResponse.success(registrationService.registerStudentViaInvite(request));
+	}
+
+	@PostMapping("/api/v1/register/student/invite/google")
+	@Operation(summary = "Self-register as a student via Google using an admin-issued invite code, instead of the registration number")
+	public ApiResponse<RegistrationSubmittedResponse> registerStudentViaInviteGoogle(@Valid @RequestBody StudentInviteGoogleRegistrationRequest request) {
+		return ApiResponse.success(registrationService.registerStudentViaInviteGoogle(request));
 	}
 
 	@PostMapping("/api/v1/register/teacher")
