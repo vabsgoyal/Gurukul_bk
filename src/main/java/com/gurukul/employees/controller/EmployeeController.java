@@ -2,7 +2,6 @@ package com.gurukul.employees.controller;
 
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
-import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.common.PageResponse;
 import com.gurukul.employees.dto.EmployeeRequest;
@@ -81,11 +80,23 @@ public class EmployeeController {
 	@PostMapping("/{id}/invite")
 	@Operation(summary = "Generate a self-registration invite code for this specific employee (valid 72h, single use)")
 	public ApiResponse<TeacherInviteResponse> invite(@PathVariable UUID id) {
-		AuthPrincipal principal = AuthContext.current();
-		if (principal.getRole() != Role.ADMIN) {
+		requireAdmin();
+		return ApiResponse.success(teacherInviteService.createInviteForEmployee(AuthContext.current(), id));
+	}
+
+	@GetMapping("/{id}/invite")
+	@Operation(summary = "View the most recently generated invite for this employee",
+			description = "Use this to re-share a code the admin lost or navigated away from, or to check "
+					+ "whether it's already been used/expired. 404 if no invite has ever been generated for this employee.")
+	public ApiResponse<TeacherInviteResponse> getInvite(@PathVariable UUID id) {
+		requireAdmin();
+		return ApiResponse.success(teacherInviteService.getInviteForEmployee(id));
+	}
+
+	private void requireAdmin() {
+		if (AuthContext.current().getRole() != Role.ADMIN) {
 			throw new AccessDeniedException("Only an admin can do this");
 		}
-		return ApiResponse.success(teacherInviteService.createInviteForEmployee(principal, id));
 	}
 
 }

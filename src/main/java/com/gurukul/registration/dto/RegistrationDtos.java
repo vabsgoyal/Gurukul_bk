@@ -127,10 +127,15 @@ public class RegistrationDtos {
 	}
 
 	@Getter @AllArgsConstructor
-	@Schema(description = "A freshly generated teacher invite - share the code/link with the prospective teacher")
+	@Schema(description = "A teacher invite for a specific employee - share the code with the prospective teacher. "
+			+ "Returned both when generating a new one and when re-viewing an existing one (GET /employees/{id}/invite)")
 	public static class TeacherInviteResponse {
 		private String code;
 		private Instant expiresAt;
+		@Schema(description = "Whether this code has already been used to claim a login")
+		private boolean used;
+		@Schema(description = "Whether this code is past its expiresAt and can no longer be claimed")
+		private boolean expired;
 	}
 
 	@Getter @AllArgsConstructor
