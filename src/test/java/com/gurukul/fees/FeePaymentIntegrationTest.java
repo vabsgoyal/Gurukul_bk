@@ -179,6 +179,7 @@ class FeePaymentIntegrationTest {
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> findAssessmentForStudent(String studentId, String adminBearer) throws Exception {
 		String body = mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())

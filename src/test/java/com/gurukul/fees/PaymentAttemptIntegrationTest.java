@@ -146,6 +146,7 @@ class PaymentAttemptIntegrationTest {
 				.andExpect(jsonPath("$.data.upiTransactionId").value("UPI123456789"));
 
 		mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
@@ -170,6 +171,7 @@ class PaymentAttemptIntegrationTest {
 				.andExpect(status().isOk());
 
 		mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())

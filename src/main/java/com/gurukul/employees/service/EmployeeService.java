@@ -6,6 +6,7 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.repository.CredentialRepository;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.FuzzyMatcher;
+import com.gurukul.common.PageResponse;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.dto.EmployeeRequest;
 import com.gurukul.employees.dto.EmployeeResponse;
@@ -13,6 +14,8 @@ import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.entity.EmployeeStatus;
 import com.gurukul.employees.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,12 +35,15 @@ public class EmployeeService {
 	private final CredentialRepository credentialRepository;
 	private final SchoolContext schoolContext;
 
-	public List<EmployeeResponse> list() {
+	public PageResponse<EmployeeResponse> list(int page, int size) {
 		UUID schoolId = schoolContext.getSchoolId();
 		Map<UUID, Role> roles = rolesByEmployeeId(schoolId);
-		return employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId).stream()
-				.map(e -> EmployeeResponse.from(e, roles.get(e.getId())))
-				.toList();
+		Slice<Employee> result = employeeRepository.findAllBySchoolIdOrderByNameAsc(schoolId, PageRequest.of(page, size));
+		Long totalElements = page == 0 ? employeeRepository.countBySchoolId(schoolId) : null;
+		return new PageResponse<>(
+				result.getContent().stream().map(e -> EmployeeResponse.from(e, roles.get(e.getId()))).toList(),
+				result.hasNext(),
+				totalElements);
 	}
 
 	public List<EmployeeResponse> search(String query) {

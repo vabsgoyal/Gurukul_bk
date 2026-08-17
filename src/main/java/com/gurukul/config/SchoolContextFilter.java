@@ -75,6 +75,12 @@ public class SchoolContextFilter extends OncePerRequestFilter {
 		if ("POST".equals(method) && "/api/v1/ops/admin-backfill".equals(uri)) {
 			return true;
 		}
+		// Google's OAuth redirect lands directly on the teacher's browser - it can't carry our
+		// X-School-Id header. The teacher's school is resolved from their employeeId (decoded from
+		// the signed state param), not from this header.
+		if ("GET".equals(method) && "/api/v1/calls/google/callback".equals(uri)) {
+			return true;
+		}
 		return "GET".equals(method) && SCHOOL_BY_ID_PATH.matcher(uri).matches();
 	}
 

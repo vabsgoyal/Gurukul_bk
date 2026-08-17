@@ -10,7 +10,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # S3 deploy-artifact bucket's region - unchanged, only the EC2 instance moved (see EC2_REGION).
   AWS_REGION: eu-north-1
+  # Where the EC2 instance / SSM target actually lives - kept separate from AWS_REGION since the
+  # two diverged when the instance moved to ap-south-1 but the S3 bucket didn't.
+  EC2_REGION: ap-south-1
 
 jobs:
   test:
@@ -61,10 +65,19 @@ jobs:
         env:
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Academic Helper (com.gurukul.ai). Separate from ANTHROPIC_API_KEY above, which is the
+          # helpdesk bot's - the two features use different providers and neither reads the other's
+          # variable. A blank/absent value is safe: the app still boots and the assistant reports
+          # "isn't set up correctly" rather than failing (OpenRouterProperties.isConfigured()).
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DB_PROVIDER: ${{ secrets.DB_PROVIDER }}
           DS_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
           DS_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
           DS_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+          GOOGLE_MEET_CLIENT_ID: ${{ secrets.GOOGLE_MEET_CLIENT_ID }}
+          GOOGLE_MEET_CLIENT_SECRET: ${{ secrets.GOOGLE_MEET_CLIENT_SECRET }}
+          GOOGLE_MEET_REDIRECT_URI: ${{ secrets.GOOGLE_MEET_REDIRECT_URI }}
+          APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY }}
         run: |
           # Always push the repo's deploy-from-s3.sh to the instance before running it, so the
           # instance can never silently drift from what's committed (it previously did - a stale
@@ -72,24 +85,35 @@ jobs:
           # intermittent false-failures on this exact step for several deploys).
           SCRIPT_B64=$(base64 -w0 deploy/aws/deploy-from-s3.sh)
 
-          # DB_PROVIDER/datasource secrets are base64-wrapped before embedding in the SSM command
-          # (same reasoning as SCRIPT_B64 above) - a DB password is exactly the kind of value
-          # that can contain quotes/$/backticks, which would otherwise corrupt or inject into the
-          # remote shell command built below.
+          # All secrets are base64-wrapped before embedding in the SSM command - a DB password (or
+          # a Google client secret) is exactly the kind of value that can contain quotes/$/backticks,
+          # which would otherwise corrupt or inject into the remote shell command built below.
+          OPENROUTER_API_KEY_B64=$(printf '%s' "$OPENROUTER_API_KEY" | base64 -w0)
           DB_PROVIDER_B64=$(printf '%s' "$DB_PROVIDER" | base64 -w0)
           DS_URL_B64=$(printf '%s' "$DS_URL" | base64 -w0)
           DS_USERNAME_B64=$(printf '%s' "$DS_USERNAME" | base64 -w0)
           DS_PASSWORD_B64=$(printf '%s' "$DS_PASSWORD" | base64 -w0)
+          GOOGLE_MEET_CLIENT_ID_B64=$(printf '%s' "$GOOGLE_MEET_CLIENT_ID" | base64 -w0)
+          GOOGLE_MEET_CLIENT_SECRET_B64=$(printf '%s' "$GOOGLE_MEET_CLIENT_SECRET" | base64 -w0)
+          GOOGLE_MEET_REDIRECT_URI_B64=$(printf '%s' "$GOOGLE_MEET_REDIRECT_URI" | base64 -w0)
+          APP_ENCRYPTION_KEY_B64=$(printf '%s' "$APP_ENCRYPTION_KEY" | base64 -w0)
 
           COMMANDS=$(jq -n \
             --arg key "$ANTHROPIC_API_KEY" \
+            --arg orKey "$OPENROUTER_API_KEY_B64" \
             --arg provider "$DB_PROVIDER_B64" \
             --arg url "$DS_URL_B64" \
             --arg username "$DS_USERNAME_B64" \
             --arg password "$DS_PASSWORD_B64" \
+            --arg gmClientId "$GOOGLE_MEET_CLIENT_ID_B64" \
+            --arg gmClientSecret "$GOOGLE_MEET_CLIENT_SECRET_B64" \
+            --arg gmRedirectUri "$GOOGLE_MEET_REDIRECT_URI_B64" \
+            --arg encKey "$APP_ENCRYPTION_KEY_B64" \
             --arg script "$SCRIPT_B64" '[
             "sudo sed -i /^ANTHROPIC_API_KEY=/d /etc/gurukul/backend.env",
             "echo \"ANTHROPIC_API_KEY=\($key)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^OPENROUTER_API_KEY=/d /etc/gurukul/backend.env",
+            "echo \"OPENROUTER_API_KEY=$(echo \($orKey) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^DB_PROVIDER=/d /etc/gurukul/backend.env",
             "echo \"DB_PROVIDER=$(echo \($provider) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^SPRING_DATASOURCE_URL=/d /etc/gurukul/backend.env",
@@ -98,6 +122,16 @@ jobs:
             "echo \"SPRING_DATASOURCE_USERNAME=$(echo \($username) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^SPRING_DATASOURCE_PASSWORD=/d /etc/gurukul/backend.env",
             "echo \"SPRING_DATASOURCE_PASSWORD=$(echo \($password) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^GOOGLE_MEET_CLIENT_ID=/d /etc/gurukul/backend.env",
+            "echo \"GOOGLE_MEET_CLIENT_ID=$(echo \($gmClientId) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^GOOGLE_MEET_CLIENT_SECRET=/d /etc/gurukul/backend.env",
+            "echo \"GOOGLE_MEET_CLIENT_SECRET=$(echo \($gmClientSecret) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^GOOGLE_MEET_REDIRECT_URI=/d /etc/gurukul/backend.env",
+            "echo \"GOOGLE_MEET_REDIRECT_URI=$(echo \($gmRedirectUri) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^APP_ENCRYPTION_KEY=/d /etc/gurukul/backend.env",
+            "echo \"APP_ENCRYPTION_KEY=$(echo \($encKey) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^CALL_PREFERRED_PROVIDER=/d /etc/gurukul/backend.env",
+            "echo \"CALL_PREFERRED_PROVIDER=GOOGLE_MEET\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "echo \($script) | base64 -d | sudo tee /opt/gurukul/deploy-from-s3.sh >/dev/null",
             "sudo chmod +x /opt/gurukul/deploy-from-s3.sh",
             "/opt/gurukul/deploy-from-s3.sh"
@@ -109,7 +143,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Gurukul JAR deploy ${GITHUB_SHA}" \
             --parameters "$PARAMS" \
-            --region "${AWS_REGION}" \
+            --region "${EC2_REGION}" \
             --output text \
             --query 'Command.CommandId' > command_id.txt
 
@@ -122,13 +156,13 @@ jobs:
               --details \
               --query 'CommandInvocations[0].Status' \
               --output text \
-              --region "${AWS_REGION}")
+              --region "${EC2_REGION}")
             echo "Status: $STATUS"
             if [[ "$STATUS" == "Success" ]]; then
               aws ssm get-command-invocation \
                 --command-id "$COMMAND_ID" \
                 --instance-id "$EC2_INSTANCE_ID" \
-                --region "${AWS_REGION}" \
+                --region "${EC2_REGION}" \
                 --query '[StandardOutputContent, StandardErrorContent]' \
                 --output text
               exit 0
@@ -137,7 +171,7 @@ jobs:
               aws ssm get-command-invocation \
                 --command-id "$COMMAND_ID" \
                 --instance-id "$EC2_INSTANCE_ID" \
-                --region "${AWS_REGION}" \
+                --region "${EC2_REGION}" \
                 --query '[StandardOutputContent, StandardErrorContent]' \
                 --output text
               exit 1
