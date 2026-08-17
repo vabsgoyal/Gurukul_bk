@@ -1,10 +1,12 @@
 package com.gurukul.payroll;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -27,6 +29,8 @@ class PayrollIntegrationTest {
 
 	@Test
 	void payrollRunProcessAndPay() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+
 		MvcResult employeeResult = mockMvc.perform(post("/api/v1/employees")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -50,6 +54,7 @@ class PayrollIntegrationTest {
 
 		MvcResult runResult = mockMvc.perform(post("/api/v1/payroll/runs")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"month\": 6, \"year\": 2026}"))
 				.andExpect(status().isOk())
@@ -58,7 +63,8 @@ class PayrollIntegrationTest {
 		String runId = JsonPath.read(runResult.getResponse().getContentAsString(), "$.data.id");
 
 		mockMvc.perform(post("/api/v1/payroll/runs/" + runId + "/process")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PROCESSED"));
 
@@ -66,7 +72,8 @@ class PayrollIntegrationTest {
 		// school can carry other active employees (with their own payroll lines under this same run)
 		// left behind by other integration tests, e.g. ReportOverviewIntegrationTest.
 		String linesBody = mockMvc.perform(get("/api/v1/payroll/runs/" + runId + "/lines")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		List<Number> matchingNets = JsonPath.read(linesBody, "$.data[?(@.employeeId == '" + employeeId + "')].net");
@@ -75,6 +82,7 @@ class PayrollIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/payroll/runs/" + runId + "/pay")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"paymentMethod\": \"BANK_TRANSFER\"}"))
 				.andExpect(status().isOk())

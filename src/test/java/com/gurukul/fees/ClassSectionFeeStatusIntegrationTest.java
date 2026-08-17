@@ -60,6 +60,7 @@ class ClassSectionFeeStatusIntegrationTest {
 
 		MvcResult categoryResult = mockMvc.perform(post("/api/v1/fee-categories")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"code": "CFS-TUITION-%s", "name": "CFS Tuition"}
@@ -70,6 +71,7 @@ class ClassSectionFeeStatusIntegrationTest {
 
 		MvcResult structureResult = mockMvc.perform(post("/api/v1/fee-structures")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -85,7 +87,8 @@ class ClassSectionFeeStatusIntegrationTest {
 		String studentId = AuthTestSupport.createStudent(mockMvc, SCHOOL_ID, sectionId, "CFS Student " + suffix);
 
 		mockMvc.perform(post("/api/v1/fee-structures/" + structureId + "/generate-assessments")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(get("/api/v1/class-sections/" + sectionId + "/fee-status")
