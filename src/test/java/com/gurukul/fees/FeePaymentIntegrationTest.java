@@ -1,10 +1,12 @@
 package com.gurukul.fees;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -30,6 +32,7 @@ class FeePaymentIntegrationTest {
 
 	@Test
 	void feeStructureAssessmentAndPartialPaymentFlow() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 		String sectionSuffix = UUID.randomUUID().toString().substring(0, 8);
 		MvcResult sectionResult = mockMvc.perform(post("/api/v1/class-sections")
 						.header("X-School-Id", SCHOOL_ID)
@@ -47,6 +50,7 @@ class FeePaymentIntegrationTest {
 
 		MvcResult categoryResult = mockMvc.perform(post("/api/v1/fee-categories")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(categoryPayload))
 				.andExpect(status().isOk())
@@ -64,6 +68,7 @@ class FeePaymentIntegrationTest {
 
 		MvcResult structureResult = mockMvc.perform(post("/api/v1/fee-structures")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(structurePayload))
 				.andExpect(status().isOk())
@@ -72,7 +77,8 @@ class FeePaymentIntegrationTest {
 		String structureId = JsonPath.read(structureResult.getResponse().getContentAsString(), "$.data.id");
 
 		MvcResult assessmentsResult = mockMvc.perform(post("/api/v1/fee-structures/" + structureId + "/generate-assessments")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()").value(0))
 				.andReturn();
@@ -100,7 +106,8 @@ class FeePaymentIntegrationTest {
 		String studentId = JsonPath.read(enrollResult.getResponse().getContentAsString(), "$.data.id");
 
 		mockMvc.perform(post("/api/v1/fee-structures/" + structureId + "/generate-assessments")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()").value(1))
 				.andExpect(jsonPath("$.data[0].status").value("UNPAID"))
@@ -108,7 +115,7 @@ class FeePaymentIntegrationTest {
 
 		// GET /fee-assessments lists every assessment for the whole school, not just this test's -
 		// filter by studentId rather than assuming index [0], since other tests share this school id.
-		String assessmentId = (String) findAssessmentForStudent(studentId).get("id");
+		String assessmentId = (String) findAssessmentForStudent(studentId, adminBearer).get("id");
 
 		String partialPayment = String.format("""
 				{
@@ -120,12 +127,13 @@ class FeePaymentIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/fee-payments")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(partialPayment))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.receiptNumber").exists());
 
-		Map<String, Object> afterPartialPayment = findAssessmentForStudent(studentId);
+		Map<String, Object> afterPartialPayment = findAssessmentForStudent(studentId, adminBearer);
 		assertThat(afterPartialPayment.get("status")).isEqualTo("PARTIAL");
 		assertThat(((Number) afterPartialPayment.get("totalPaid")).doubleValue()).isEqualTo(4000.00);
 
@@ -139,11 +147,12 @@ class FeePaymentIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/fee-payments")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(fullPayment))
 				.andExpect(status().isOk());
 
-		assertThat(findAssessmentForStudent(studentId).get("status")).isEqualTo("PAID");
+		assertThat(findAssessmentForStudent(studentId, adminBearer).get("status")).isEqualTo("PAID");
 
 		String overpay = String.format("""
 				{
@@ -155,6 +164,7 @@ class FeePaymentIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/fee-payments")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(overpay))
 				.andExpect(status().isBadRequest());
@@ -167,8 +177,11 @@ class FeePaymentIntegrationTest {
 	 * trailing index, so this filters in plain Java instead.
 	 */
 	@SuppressWarnings("unchecked")
-	private Map<String, Object> findAssessmentForStudent(String studentId) throws Exception {
-		String body = mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
+	private Map<String, Object> findAssessmentForStudent(String studentId, String adminBearer) throws Exception {
+		String body = mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		List<Map<String, Object>> assessments = JsonPath.read(body, "$.data");

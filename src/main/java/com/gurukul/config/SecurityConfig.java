@@ -122,6 +122,49 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
 						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
+						// Fee categories/structures: creation and per-structure assessment generation are
+						// admin-only financial configuration; reads (needed for "My Class Fees" and fee
+						// structure setup screens) are open to any staff member.
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-categories").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-categories").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-structures").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-structures/*/generate-assessments").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-structures").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-structures/*").hasAnyRole("TEACHER", "ADMIN")
+						// Fee assessments/payments: staff (teacher/admin) manage these for their class/school;
+						// a STUDENT may only ever act on their own assessment and a PARENT only a linked
+						// child's, both already enforced in FeePaymentService (assertCanPayOrRecord /
+						// listByStudent) - this role gate just adds the authentication this whole group was
+						// previously missing entirely. GET .../fee-payments/{id} (a staff receipt lookup, per
+						// PaymentReceiptScreen) has no such self-check, so it stays staff-only for now.
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-assessments").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/fee-assessments").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-payments").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-payments/*").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-assessments/*/payment-request").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-assessments/*/payment-attempts/pending").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/fee-assessments/*/payment-attempts").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/payment-attempts/*/result").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// Finance: aggregate ledger/fund-summary reporting, admin-only - not scoped to any
+						// individual, so there's no self-service case to carve out here.
+						.requestMatchers(HttpMethod.GET, "/api/v1/finance/transactions").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/finance/summary").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/finance/transactions").hasRole("ADMIN")
+						// Payroll: salary-structure/run administration is admin-only. Salary history and a
+						// payslip are also read by the owning employee today via the "My Payslips" dashboard
+						// tile (PrincipalDashboardScreen), but PayrollService doesn't check that the id in the
+						// path is actually the caller's own record - same unenforced-self-service shape as
+						// the employee attendance-history rule above. Matching that existing precedent here
+						// (rather than a stricter admin-only rule) avoids breaking the current self-service
+						// flow; closing the ownership gap itself is tracked as follow-up, not done here.
+						.requestMatchers(HttpMethod.GET, "/api/v1/salary-structures").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/salary-structures").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/payroll/runs").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/payroll/runs/*/process").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/payroll/runs/*/pay").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/payroll/runs/*/lines").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/salary-history").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/payroll/lines/*/payslip").hasAnyRole("TEACHER", "ADMIN")
 						// Everything else is unchanged (no auth) for now - see auth ticket for phased retrofit scope.
 						.anyRequest().permitAll());
 		return http.build();

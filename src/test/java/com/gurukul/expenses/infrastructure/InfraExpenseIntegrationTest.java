@@ -1,10 +1,12 @@
 package com.gurukul.expenses.infrastructure;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -26,6 +28,7 @@ class InfraExpenseIntegrationTest {
 
 	@Test
 	void infraExpenseWorkflow() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 		String createPayload = String.format("""
 				{"categoryId": "%s", "description": "New books", "estimatedAmount": 15000.00}
 				""", CATEGORY_ID);
@@ -70,7 +73,9 @@ class InfraExpenseIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PURCHASED"));
 
-		String summaryBefore = mockMvc.perform(get("/api/v1/finance/summary").header("X-School-Id", SCHOOL_ID))
+		String summaryBefore = mockMvc.perform(get("/api/v1/finance/summary")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		double outflowBefore = ((Number) JsonPath.read(summaryBefore, "$.data.totalOutflow")).doubleValue();
@@ -82,7 +87,9 @@ class InfraExpenseIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PAID"));
 
-		mockMvc.perform(get("/api/v1/finance/summary").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/finance/summary")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalOutflow").value(outflowBefore + 14500.00));
 	}

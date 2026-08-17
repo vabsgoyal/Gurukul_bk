@@ -1,10 +1,12 @@
 package com.gurukul.fees;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -34,6 +36,7 @@ class PaymentAttemptIntegrationTest {
 
 	@Test
 	void paymentAttemptLifecycleAndIdempotentSuccessReporting() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 		String suffix = UUID.randomUUID().toString().substring(0, 8);
 
 		mockMvc.perform(put("/api/v1/schools/" + SCHOOL_ID)
@@ -60,6 +63,7 @@ class PaymentAttemptIntegrationTest {
 
 		MvcResult categoryResult = mockMvc.perform(post("/api/v1/fee-categories")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"code": "TUITION-PA-%s", "name": "Tuition Fee"}
@@ -70,6 +74,7 @@ class PaymentAttemptIntegrationTest {
 
 		MvcResult structureResult = mockMvc.perform(post("/api/v1/fee-structures")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"classSectionId": "%s", "academicYear": "2026-27",
@@ -90,34 +95,39 @@ class PaymentAttemptIntegrationTest {
 				.andExpect(status().isOk());
 
 		MvcResult assessmentsResult = mockMvc.perform(post("/api/v1/fee-structures/" + structureId + "/generate-assessments")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andReturn();
 		String assessmentId = JsonPath.read(assessmentsResult.getResponse().getContentAsString(), "$.data[0].id");
 
 		// No pending attempt yet.
 		mockMvc.perform(get("/api/v1/fee-assessments/" + assessmentId + "/payment-attempts/pending")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data").doesNotExist());
 
 		// Creating a payment request persists an INITIATED attempt before any UPI app opens.
 		MvcResult paymentRequestResult = mockMvc.perform(post("/api/v1/fee-assessments/" + assessmentId + "/payment-request")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.amount").value(9000.00))
 				.andReturn();
 		String transactionRef = JsonPath.read(paymentRequestResult.getResponse().getContentAsString(), "$.data.referenceId");
 
 		mockMvc.perform(get("/api/v1/fee-assessments/" + assessmentId + "/payment-attempts")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].status").value("INITIATED"))
 				.andExpect(jsonPath("$.data[0].transactionRef").value(transactionRef));
 
 		// Now there IS a pending attempt - the client should warn before starting another.
 		mockMvc.perform(get("/api/v1/fee-assessments/" + assessmentId + "/payment-attempts/pending")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.transactionRef").value(transactionRef));
 
@@ -125,6 +135,7 @@ class PaymentAttemptIntegrationTest {
 		// RESPONSE_SUCCESS (not VERIFIED - no gateway has actually confirmed this).
 		mockMvc.perform(post("/api/v1/payment-attempts/" + transactionRef + "/result")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"status": "RESPONSE_SUCCESS", "upiTransactionId": "UPI123456789",
@@ -134,13 +145,17 @@ class PaymentAttemptIntegrationTest {
 				.andExpect(jsonPath("$.data.status").value("RESPONSE_SUCCESS"))
 				.andExpect(jsonPath("$.data.upiTransactionId").value("UPI123456789"));
 
-		mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].status").value("PAID"));
 
 		// No more pending attempt - it resolved.
 		mockMvc.perform(get("/api/v1/fee-assessments/" + assessmentId + "/payment-attempts/pending")
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data").doesNotExist());
 
@@ -148,13 +163,17 @@ class PaymentAttemptIntegrationTest {
 		// double-record the payment.
 		mockMvc.perform(post("/api/v1/payment-attempts/" + transactionRef + "/result")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"status": "RESPONSE_SUCCESS", "upiTransactionId": "UPI123456789", "responseCode": "00"}
 								"""))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].status").value("PAID"))
 				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].totalPaid").value(9000.00));
