@@ -45,8 +45,7 @@ public class TeacherInviteService {
 
 		Optional<TeacherInvite> existing = teacherInviteRepository.findBySchoolIdAndTargetEmployeeIdAndUsedFalse(schoolId, employeeId);
 		if (existing.isPresent() && existing.get().getExpiresAt().isAfter(Instant.now())) {
-			TeacherInvite invite = existing.get();
-			return new TeacherInviteResponse(invite.getCode(), invite.getExpiresAt());
+			return toResponse(existing.get());
 		}
 		existing.ifPresent(teacherInviteRepository::delete);
 
