@@ -7,6 +7,7 @@ import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceEntryReques
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceEntryResponse;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceRecordResponse;
 import com.gurukul.attendance.dto.StaffAttendanceDtos.StaffAttendanceRosterResponse;
+import com.gurukul.attendance.entity.AttendanceDevice;
 import com.gurukul.attendance.entity.AttendanceStatus;
 import com.gurukul.attendance.entity.StaffAttendanceRecord;
 import com.gurukul.attendance.repository.StaffAttendanceRecordRepository;
@@ -71,6 +72,8 @@ public class StaffAttendanceService {
 			record.setMarkedLatitude(null);
 			record.setMarkedLongitude(null);
 			record.setMarkedAccuracyMeters(null);
+			record.setMarkedByDevice(null);
+			record.setMethod(null);
 			staffAttendanceRecordRepository.save(record);
 		}
 
@@ -120,6 +123,38 @@ public class StaffAttendanceService {
 		record.setMarkedLatitude(request.getLatitude());
 		record.setMarkedLongitude(request.getLongitude());
 		record.setMarkedAccuracyMeters(request.getAccuracy());
+		record.setMarkedByDevice(null);
+		record.setMethod(null);
+		StaffAttendanceRecord saved = staffAttendanceRecordRepository.save(record);
+		return StaffAttendanceRecordResponse.from(saved);
+	}
+
+	/**
+	 * Called by AttendanceDeviceEventService when a registered RFID/fingerprint/face device scans an
+	 * employee. No geofence check here (unlike selfMark) - the device itself is bolted to the school
+	 * premises, so a successful, authenticated device event already implies on-site presence.
+	 */
+	@Transactional
+	public StaffAttendanceRecordResponse markByDevice(Employee employee, AttendanceDevice device) {
+		UUID schoolId = schoolContext.getSchoolId();
+		LocalDate today = LocalDate.now();
+		StaffAttendanceRecord record = staffAttendanceRecordRepository
+				.findBySchoolIdAndEmployeeIdAndAttendanceDate(schoolId, employee.getId(), today)
+				.orElseGet(() -> {
+					StaffAttendanceRecord newRecord = new StaffAttendanceRecord();
+					newRecord.setSchoolId(schoolId);
+					newRecord.setEmployee(employee);
+					newRecord.setAttendanceDate(today);
+					return newRecord;
+				});
+		record.setStatus(AttendanceStatus.PRESENT);
+		record.setMarkedByEmployee(null);
+		record.setSelfMarked(false);
+		record.setMarkedLatitude(null);
+		record.setMarkedLongitude(null);
+		record.setMarkedAccuracyMeters(null);
+		record.setMarkedByDevice(device);
+		record.setMethod(device.getDeviceType());
 		StaffAttendanceRecord saved = staffAttendanceRecordRepository.save(record);
 		return StaffAttendanceRecordResponse.from(saved);
 	}
@@ -140,7 +175,8 @@ public class StaffAttendanceService {
 							employee.getDesignation(),
 							record != null ? record.getStatus() : null,
 							record != null ? record.getRemarks() : null,
-							record != null && record.isSelfMarked()
+							record != null && record.isSelfMarked(),
+							record != null ? record.getMethod() : null
 					);
 				})
 				.toList();

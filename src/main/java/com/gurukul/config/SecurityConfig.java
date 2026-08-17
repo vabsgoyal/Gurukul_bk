@@ -54,6 +54,17 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/staff-attendance").hasRole("ADMIN")
 						// School location (geofence center/radius for self-mark attendance): admin-only.
 						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*/location").hasRole("ADMIN")
+						// Attendance devices (RFID/fingerprint/face) and identifier enrollment: admin-only to
+						// manage; reading an enrollment list is also open to a teacher. The device-event
+						// ingestion endpoint (/api/v1/attendance/device-events) is deliberately NOT listed
+						// here - it authenticates via X-Device-Key, not a human JWT, checked manually in
+						// AttendanceDeviceEventService (same pattern as /api/v1/ops/admin-backfill).
+						.requestMatchers("/api/v1/attendance-devices/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/students/*/attendance-identifiers", "/api/v1/employees/*/attendance-identifiers")
+						.hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/attendance-identifiers", "/api/v1/employees/*/attendance-identifiers")
+						.hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/attendance-identifiers/*").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/attendance").hasAnyRole("TEACHER", "ADMIN")
 						// Class teacher assignment: admin-only.
 						.requestMatchers(HttpMethod.PATCH, "/api/v1/class-sections/*/class-teacher").hasRole("ADMIN")

@@ -8,6 +8,7 @@ import com.gurukul.attendance.dto.AttendanceDtos.SectionAttendanceResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.SectionStudentAttendanceSummary;
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceEntryResponse;
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceHistoryResponse;
+import com.gurukul.attendance.entity.AttendanceDevice;
 import com.gurukul.attendance.entity.AttendanceRecord;
 import com.gurukul.attendance.entity.AttendanceStatus;
 import com.gurukul.attendance.repository.AttendanceRecordRepository;
@@ -75,11 +76,41 @@ public class AttendanceService {
 			record.setStatus(entry.getStatus());
 			record.setMarkedByTeacher(teacher);
 			record.setRemarks(entry.getRemarks());
+			record.setMarkedByDevice(null);
+			record.setMethod(null);
 			attendanceRecordRepository.save(record);
 			gamificationService.recordAttendanceXp(schoolId, student.getId(), request.getDate(), entry.getStatus());
 		}
 
 		return getSectionRoster(sectionId, request.getDate());
+	}
+
+	/**
+	 * Called by AttendanceDeviceEventService when a registered RFID/fingerprint/face device scans a
+	 * student. Mirrors StaffAttendanceService.selfMark's unconditional-upsert semantics rather than
+	 * inventing a new conflict rule - the newest mark for the day wins, whoever/whatever made it.
+	 */
+	@Transactional
+	public AttendanceRecord markByDevice(Student student, AttendanceDevice device) {
+		UUID schoolId = schoolContext.getSchoolId();
+		LocalDate today = LocalDate.now();
+		AttendanceRecord record = attendanceRecordRepository
+				.findBySchoolIdAndStudentIdAndAttendanceDate(schoolId, student.getId(), today)
+				.orElseGet(() -> {
+					AttendanceRecord newRecord = new AttendanceRecord();
+					newRecord.setSchoolId(schoolId);
+					newRecord.setStudent(student);
+					newRecord.setSection(student.getClassSection());
+					newRecord.setAttendanceDate(today);
+					return newRecord;
+				});
+		record.setStatus(AttendanceStatus.PRESENT);
+		record.setMarkedByTeacher(null);
+		record.setMarkedByDevice(device);
+		record.setMethod(device.getDeviceType());
+		AttendanceRecord saved = attendanceRecordRepository.save(record);
+		gamificationService.recordAttendanceXp(schoolId, student.getId(), today, AttendanceStatus.PRESENT);
+		return saved;
 	}
 
 	@Transactional(readOnly = true)
@@ -100,7 +131,8 @@ public class AttendanceService {
 							student.getRollNumber(),
 							student.getName(),
 							record != null ? record.getStatus() : null,
-							record != null ? record.getRemarks() : null
+							record != null ? record.getRemarks() : null,
+							record != null ? record.getMethod() : null
 					);
 				})
 				.toList();
