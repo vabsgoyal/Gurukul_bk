@@ -1,5 +1,6 @@
 package com.gurukul.attendance.dto;
 
+import com.gurukul.attendance.entity.AttendanceMethod;
 import com.gurukul.attendance.entity.AttendanceRecord;
 import com.gurukul.attendance.entity.AttendanceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -45,6 +46,8 @@ public class AttendanceDtos {
 		private UUID markedByTeacherId;
 		private String markedByTeacherName;
 		private String remarks;
+		@Schema(description = "Null when marked by a teacher; set to how a device marked this record otherwise")
+		private AttendanceMethod method;
 		private Instant createdAt;
 		private Instant updatedAt;
 
@@ -57,9 +60,10 @@ public class AttendanceDtos {
 					record.getSection().getId(),
 					record.getAttendanceDate(),
 					record.getStatus(),
-					record.getMarkedByTeacher().getId(),
-					record.getMarkedByTeacher().getName(),
+					record.getMarkedByTeacher() != null ? record.getMarkedByTeacher().getId() : null,
+					record.getMarkedByTeacher() != null ? record.getMarkedByTeacher().getName() : null,
 					record.getRemarks(),
+					record.getMethod(),
 					record.getCreatedAt(),
 					record.getUpdatedAt()
 			);
@@ -74,6 +78,7 @@ public class AttendanceDtos {
 		private String studentName;
 		private AttendanceStatus status;
 		private String remarks;
+		private AttendanceMethod method;
 	}
 
 	@Getter @AllArgsConstructor

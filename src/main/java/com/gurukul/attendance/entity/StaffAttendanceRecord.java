@@ -35,8 +35,8 @@ public class StaffAttendanceRecord extends BaseEntity {
 	@Column(nullable = false)
 	private AttendanceStatus status;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "marked_by_employee_id", nullable = false)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "marked_by_employee_id")
 	private Employee markedByEmployee;
 
 	@Column(length = 500)
@@ -53,5 +53,14 @@ public class StaffAttendanceRecord extends BaseEntity {
 
 	@Column(name = "marked_accuracy_meters")
 	private Double markedAccuracyMeters;
+
+	/** Set when a registered device (see AttendanceDevice) marked this record, instead of a human. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "marked_by_device_id")
+	private AttendanceDevice markedByDevice;
+
+	@Enumerated(EnumType.STRING)
+	@Column
+	private AttendanceMethod method;
 
 }

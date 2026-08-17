@@ -17,7 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Every method here takes an explicit {@link AuthPrincipal} and never reads
@@ -82,6 +84,19 @@ public class ConversationService {
 
 	public List<ConversationParticipant> participantsOf(UUID conversationId) {
 		return conversationParticipantRepository.findAllByConversation_Id(conversationId);
+	}
+
+	/**
+	 * Batch variant of {@link #participantsOf} for listing many conversations at once - one query
+	 * for every conversation's participants instead of one query per conversation (this was the
+	 * N+1 behind slow chat-list loads: {@code listForCaller} then a per-conversation lookup).
+	 */
+	public Map<UUID, List<ConversationParticipant>> participantsOf(List<UUID> conversationIds) {
+		if (conversationIds.isEmpty()) {
+			return Map.of();
+		}
+		return conversationParticipantRepository.findAllByConversation_IdIn(conversationIds).stream()
+				.collect(Collectors.groupingBy(p -> p.getConversation().getId()));
 	}
 
 	/**

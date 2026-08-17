@@ -1,6 +1,7 @@
 package com.gurukul.fees.controller;
 
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.PageResponse;
 import com.gurukul.fees.dto.FeeAssessmentResponse;
 import com.gurukul.fees.dto.FeePaymentRequest;
 import com.gurukul.fees.dto.FeePaymentRequestResponse;
@@ -32,11 +33,15 @@ public class FeePaymentController {
 	private final FeePaymentService feePaymentService;
 
 	@GetMapping("/api/v1/fee-assessments")
-	@Operation(summary = "List fee assessments, optionally filtered by status and/or class-section")
+	@Operation(summary = "List fee assessments, paginated, optionally filtered by status and/or class-section",
+			description = "Defaults to page 0, size 50.")
 	public ApiResponse<List<FeeAssessmentResponse>> listAssessments(
 			@RequestParam(required = false) FeeAssessmentStatus status,
-			@RequestParam(required = false) UUID classSectionId) {
-		return ApiResponse.success(feePaymentService.listAssessments(status, classSectionId));
+			@RequestParam(required = false) UUID classSectionId,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "50") int size) {
+		PageResponse<FeeAssessmentResponse> result = feePaymentService.listAssessmentsPage(status, classSectionId, page, size);
+		return ApiResponse.page(result.getContent(), result.isHasNext(), result.getTotalElements());
 	}
 
 	@GetMapping("/api/v1/students/{studentId}/fee-assessments")

@@ -9,6 +9,7 @@ import com.gurukul.chat.dto.ChatDtos.MessageResponse;
 import com.gurukul.chat.dto.ChatDtos.PresignAttachmentRequest;
 import com.gurukul.chat.dto.ChatDtos.PresignAttachmentResponse;
 import com.gurukul.chat.entity.Conversation;
+import com.gurukul.chat.entity.ConversationParticipant;
 import com.gurukul.chat.entity.Message;
 import com.gurukul.chat.service.AttachmentService;
 import com.gurukul.chat.service.ConversationService;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -54,8 +56,12 @@ public class ConversationController {
 	@Operation(summary = "List my conversations (1:1 and BOT), most recently updated first")
 	public ApiResponse<List<ConversationResponse>> list() {
 		AuthPrincipal principal = AuthContext.current();
-		List<ConversationResponse> responses = conversationService.listForCaller(principal).stream()
-				.map(this::toResponse)
+		List<Conversation> conversations = conversationService.listForCaller(principal);
+		Map<UUID, List<ConversationParticipant>> participantsByConversation = conversationService.participantsOf(
+				conversations.stream().map(Conversation::getId).toList());
+		List<ConversationResponse> responses = conversations.stream()
+				.map(c -> ConversationResponse.from(
+						c, participantsByConversation.getOrDefault(c.getId(), List.of())))
 				.toList();
 		return ApiResponse.success(responses);
 	}

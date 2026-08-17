@@ -41,11 +41,20 @@ public class AttendanceRecord extends BaseEntity {
 	@Column(nullable = false)
 	private AttendanceStatus status;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "marked_by_teacher_id", nullable = false)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "marked_by_teacher_id")
 	private Employee markedByTeacher;
 
 	@Column(length = 500)
 	private String remarks;
+
+	/** Null for a teacher-marked record; set when a registered device (see AttendanceDevice) marked it. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "marked_by_device_id")
+	private AttendanceDevice markedByDevice;
+
+	@Enumerated(EnumType.STRING)
+	@Column
+	private AttendanceMethod method;
 
 }

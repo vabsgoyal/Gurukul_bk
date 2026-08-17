@@ -11,6 +11,8 @@ public interface PayrollLineRepository extends JpaRepository<PayrollLine, UUID> 
 
 	List<PayrollLine> findAllByRunId(UUID runId);
 
+	List<PayrollLine> findAllByRunIdOrderByEmployee_NameAsc(UUID runId);
+
 	Optional<PayrollLine> findByIdAndSchoolId(UUID id, UUID schoolId);
 
 	List<PayrollLine> findAllByEmployeeId(UUID employeeId);

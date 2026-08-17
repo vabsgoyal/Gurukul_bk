@@ -5,6 +5,7 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.common.PageResponse;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.fees.dto.FeeAssessmentResponse;
 import com.gurukul.fees.dto.FeePaymentRequest;
@@ -32,6 +33,9 @@ import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.service.ClassSectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,6 +109,46 @@ public class FeePaymentService {
 					.toList();
 		}
 		return assessments.stream().map(FeeAssessmentResponse::from).toList();
+	}
+
+	/**
+	 * Paginated counterpart of {@link #listAssessments}, used by the public API endpoint - that
+	 * method stays unpaginated/in-memory-filtered since ReportService needs the full unfiltered set
+	 * for aggregation. classSectionId is filtered at the DB level here (unlike listAssessments'
+	 * post-fetch filter) so pagination stays correct regardless of which filters are applied.
+	 */
+	@Transactional(readOnly = true)
+	public PageResponse<FeeAssessmentResponse> listAssessmentsPage(
+			FeeAssessmentStatus status, UUID classSectionId, int page, int size) {
+		UUID schoolId = schoolContext.getSchoolId();
+		Pageable pageable = PageRequest.of(page, size);
+		Slice<StudentFeeAssessment> result;
+		Long totalElements = null;
+		if (status != null && classSectionId != null) {
+			result = assessmentRepository.findAllBySchoolIdAndStatusAndStudent_ClassSection_Id(schoolId, status, classSectionId, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolIdAndStatusAndStudent_ClassSection_Id(schoolId, status, classSectionId);
+			}
+		} else if (status != null) {
+			result = assessmentRepository.findAllBySchoolIdAndStatus(schoolId, status, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolIdAndStatus(schoolId, status);
+			}
+		} else if (classSectionId != null) {
+			result = assessmentRepository.findAllBySchoolIdAndStudent_ClassSection_Id(schoolId, classSectionId, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolIdAndStudent_ClassSection_Id(schoolId, classSectionId);
+			}
+		} else {
+			result = assessmentRepository.findAllBySchoolId(schoolId, pageable);
+			if (page == 0) {
+				totalElements = assessmentRepository.countBySchoolId(schoolId);
+			}
+		}
+		return new PageResponse<>(
+				result.getContent().stream().map(FeeAssessmentResponse::from).toList(),
+				result.hasNext(),
+				totalElements);
 	}
 
 	/**

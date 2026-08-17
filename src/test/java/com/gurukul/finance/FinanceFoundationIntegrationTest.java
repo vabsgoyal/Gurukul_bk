@@ -1,10 +1,12 @@
 package com.gurukul.finance;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -26,13 +28,16 @@ class FinanceFoundationIntegrationTest {
 
 	@Test
 	void financeEndpointsRequireSchoolIdHeader() throws Exception {
-		mockMvc.perform(get("/api/v1/finance/summary"))
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+		mockMvc.perform(get("/api/v1/finance/summary")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false));
 	}
 
 	@Test
 	void createVendorEmployeeEventAndRecordTransactions() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
 		String vendorPayload = """
 				{
 				  "name": "Test Vendor",
@@ -81,7 +86,9 @@ class FinanceFoundationIntegrationTest {
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.name").value("Sports Day"));
 
-		String summaryBefore = mockMvc.perform(get("/api/v1/finance/summary").header("X-School-Id", SCHOOL_ID))
+		String summaryBefore = mockMvc.perform(get("/api/v1/finance/summary")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 
@@ -100,6 +107,7 @@ class FinanceFoundationIntegrationTest {
 
 		MvcResult inflowResult = mockMvc.perform(post("/api/v1/finance/transactions")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(inflowPayload))
 				.andExpect(status().isOk())
@@ -121,17 +129,22 @@ class FinanceFoundationIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/finance/transactions")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(outflowPayload))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(get("/api/v1/finance/summary").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/finance/summary")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalInflow").value(inflowBefore + 5000.00))
 				.andExpect(jsonPath("$.data.totalOutflow").value(outflowBefore + 2000.00))
 				.andExpect(jsonPath("$.data.netBalance").value(inflowBefore - outflowBefore + 3000.00));
 
-		mockMvc.perform(get("/api/v1/finance/transactions").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/finance/transactions")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(2)));
 	}
