@@ -48,6 +48,7 @@ class PayrollIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/salary-structures")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(structurePayload))
 				.andExpect(status().isOk());
