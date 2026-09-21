@@ -1,0 +1,32 @@
+entity: attendance
+jpaEntity: com.gurukul.attendance.entity.AttendanceRecord
+description: >
+  Daily attendance status per student. Use for questions about student attendance counts or
+  percentages.
+filters:
+  status:
+    path: status
+    type: ENUM
+    enumClass: com.gurukul.attendance.entity.AttendanceStatus
+    values: [PRESENT, ABSENT, LATE, HALF_DAY]
+  classSectionId:
+    path: section.id
+    type: UUID
+  attendanceDate:
+    path: attendanceDate
+    type: DATE
+metrics:
+  count:
+    type: COUNT
+    description: >
+      Number of attendance records matching the given filters, e.g. status=ABSENT + attendanceDate for
+      "how many students were absent on <date>".
+  presentPercentage:
+    type: CUSTOM
+    resolver: studentAttendancePercentageResolver
+    description: >
+      Present-day percentage per student in a class, over an optional date range. Params (pass as
+      filters with op "="): className (required), section (optional), dateFrom (optional, ISO date),
+      dateTo (optional, ISO date), belowPercent (optional number - only return students below this
+      percentage, e.g. for "how many class 7 students have attendance below 70%"). Returns each
+      matching student's percentage plus a total match count.

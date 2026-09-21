@@ -1,0 +1,20 @@
+entity: enrollment
+jpaEntity: com.gurukul.students.entity.Student
+description: >
+  Student enrollment records. Use for questions about how many students are enrolled, by class or
+  status.
+filters:
+  className:
+    path: classSection.className
+    type: STRING
+  status:
+    path: status
+    type: ENUM
+    enumClass: com.gurukul.students.entity.StudentStatus
+    values: [ACTIVE, ALUMNI, WITHDRAWN]
+metrics:
+  count:
+    type: COUNT
+    description: >
+      Number of students matching the given filters, e.g. className="Grade 7" + status=ACTIVE for "how
+      many students are currently enrolled in class 7".
