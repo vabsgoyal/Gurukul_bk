@@ -1,0 +1,26 @@
+entity: payroll
+jpaEntity: com.gurukul.payroll.entity.PayrollLine
+description: >
+  One employee's pay for one payroll run. Use for questions about staff salary/payroll payment status,
+  e.g. "how many teachers' salary has not been paid".
+filters:
+  runStatus:
+    path: run.status
+    type: ENUM
+    enumClass: com.gurukul.payroll.entity.PayrollRunStatus
+    values: [DRAFT, PROCESSED, PAID]
+  month:
+    path: run.month
+    type: INTEGER
+  year:
+    path: run.year
+    type: INTEGER
+  employeeId:
+    path: employee.id
+    type: UUID
+metrics:
+  count:
+    type: COUNT
+    description: >
+      Number of payroll lines matching the given filters, e.g. filter runStatus != PAID for "how many
+      staff haven't been paid yet" (optionally narrow further with month/year).

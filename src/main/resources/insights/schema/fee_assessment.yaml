@@ -1,0 +1,29 @@
+entity: fee_assessment
+jpaEntity: com.gurukul.fees.entity.StudentFeeAssessment
+description: >
+  Per-student, per-academic-year fee assessment and payment status. Use for questions about how many
+  students have/haven't paid fees, or how much is outstanding.
+filters:
+  status:
+    path: status
+    type: ENUM
+    enumClass: com.gurukul.fees.entity.FeeAssessmentStatus
+    values: [UNPAID, PARTIAL, PAID, OVERDUE]
+  academicYear:
+    path: academicYear
+    type: STRING
+  classSectionId:
+    path: student.classSection.id
+    type: UUID
+metrics:
+  count:
+    type: COUNT
+    description: >
+      Number of fee assessments matching the given filters, e.g. filter status=UNPAID for "how many
+      students have not paid fees".
+  outstandingSum:
+    type: CUSTOM
+    resolver: outstandingFeesResolver
+    description: >
+      Total outstanding amount (sum of totalDue minus totalPaid) across matching assessments. Accepts
+      the same filters as count: status, academicYear, classSectionId (all optional).

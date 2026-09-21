@@ -1,0 +1,30 @@
+entity: staff_attendance
+jpaEntity: com.gurukul.attendance.entity.StaffAttendanceRecord
+description: >
+  Daily attendance status per staff member (teacher/employee). Use for questions about a specific
+  teacher's or employee's attendance.
+filters:
+  status:
+    path: status
+    type: ENUM
+    enumClass: com.gurukul.attendance.entity.AttendanceStatus
+    values: [PRESENT, ABSENT, LATE, HALF_DAY]
+  employeeId:
+    path: employee.id
+    type: UUID
+  attendanceDate:
+    path: attendanceDate
+    type: DATE
+metrics:
+  count:
+    type: COUNT
+    description: Number of staff attendance records matching the given filters.
+  presentPercentage:
+    type: CUSTOM
+    resolver: staffAttendancePercentageResolver
+    description: >
+      Present-day percentage for one staff member, identified by name (fuzzy match), over an optional
+      date range. Params (pass as filters with op "="): employeeName (required), dateFrom (optional,
+      ISO date), dateTo (optional, ISO date). If the name matches more than one employee, returns a
+      clarifying message listing the candidates instead of a percentage - ask the user which one they
+      mean rather than guessing.
