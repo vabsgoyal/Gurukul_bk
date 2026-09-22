@@ -13,8 +13,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -28,12 +31,48 @@ public class ClassSectionService {
 	public List<ClassSectionResponse> list() {
 		return classSectionRepository.findAllBySchoolIdOrderByClassNameAscSectionAsc(schoolContext.getSchoolId())
 				.stream()
+				.sorted(Comparator.comparingInt((ClassSection c) -> classNameSortKey(c.getClassName()))
+						.thenComparing(ClassSection::getClassName, String.CASE_INSENSITIVE_ORDER)
+						.thenComparing(ClassSection::getSection, String.CASE_INSENSITIVE_ORDER))
 				.map(ClassSectionResponse::from)
 				.toList();
 	}
 
 	public List<String> listClassNames() {
-		return classSectionRepository.findDistinctClassNamesBySchoolId(schoolContext.getSchoolId());
+		return classSectionRepository.findDistinctClassNamesBySchoolId(schoolContext.getSchoolId())
+				.stream()
+				.sorted(Comparator.comparingInt(ClassSectionService::classNameSortKey)
+						.thenComparing(Comparator.naturalOrder()))
+				.toList();
+	}
+
+	private static final Pattern GRADE_PATTERN = Pattern.compile("(?i)^grade\\s*(\\d+)$");
+
+	/**
+	 * className is free text (see ClassSectionRequest), so a plain alphabetical sort puts "Grade 10"
+	 * and "Grade 12" before "Grade 2" - this instead follows the actual academic progression (Nursery,
+	 * LKG, UKG, then Grade 1..N by number). Anything that doesn't match one of those - a school using
+	 * different naming - sorts after all of them, alphabetically among themselves as a fallback.
+	 */
+	private static int classNameSortKey(String className) {
+		if (className == null) {
+			return Integer.MAX_VALUE;
+		}
+		String trimmed = className.trim();
+		if (trimmed.equalsIgnoreCase("Nursery")) {
+			return 0;
+		}
+		if (trimmed.equalsIgnoreCase("LKG")) {
+			return 1;
+		}
+		if (trimmed.equalsIgnoreCase("UKG")) {
+			return 2;
+		}
+		Matcher m = GRADE_PATTERN.matcher(trimmed);
+		if (m.matches()) {
+			return 2 + Integer.parseInt(m.group(1));
+		}
+		return Integer.MAX_VALUE;
 	}
 
 	@Transactional(readOnly = true)
