@@ -59,4 +59,32 @@ public class StudentRequest {
 	)
 	private StudentStatus status;
 
+	// --- Optional RTE/regulatory fields - omit any/all if the school's register doesn't have them.
+	// aadhaarNumber and bankAccountNumber are encrypted before storage (see StudentService); they are
+	// plaintext only on this inbound request, never persisted or echoed back as plaintext.
+
+	@Schema(description = "State student-tracking ID (e.g. Madhya Pradesh SSSM/Samagra ID), if the school's register has one", example = "310755266")
+	private String sssmId;
+
+	@Schema(description = "Aadhaar number - encrypted before storage, admin-only on read", example = "349877211234")
+	private String aadhaarNumber;
+
+	@Schema(description = "Caste, as recorded for RTE quota tracking", example = "Patidar")
+	private String caste;
+
+	@Schema(description = "Category, as recorded for RTE quota tracking", example = "OBC")
+	private String category;
+
+	@Schema(description = "Annual family income in rupees, as recorded for RTE quota tracking", example = "100000")
+	private Long annualIncome;
+
+	@Schema(description = "Previous school name, if the student transferred in", example = "Noble Academy, Unhel")
+	private String previousSchoolName;
+
+	@Schema(description = "Bank account number used for RTE fee reimbursement - encrypted before storage, admin-only on read")
+	private String bankAccountNumber;
+
+	@Schema(description = "IFSC code for the bank account above", example = "BARB0UNHELX")
+	private String bankIfsc;
+
 }

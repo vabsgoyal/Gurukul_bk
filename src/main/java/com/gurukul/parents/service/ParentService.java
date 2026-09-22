@@ -28,7 +28,7 @@ public class ParentService {
 		return parentStudentLinkRepository.findAllByParentId(parentId).stream()
 				.map(link -> studentRepository.findById(link.getStudentId()).orElse(null))
 				.filter(Objects::nonNull)
-				.map(s -> StudentResponse.from(s, false))
+				.map(s -> StudentResponse.from(s, false, null))
 				.toList();
 	}
 
