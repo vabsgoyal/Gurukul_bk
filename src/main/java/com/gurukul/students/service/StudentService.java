@@ -95,6 +95,8 @@ public class StudentService {
 		boolean includeRegistrationNumber = isAdmin();
 		return studentRepository.findAllBySchoolIdAndClassSectionId(schoolContext.getSchoolId(), classSectionId)
 				.stream()
+				.sorted(Comparator.comparingInt(StudentService::rollNumberSortKey)
+						.thenComparing(Student::getName, String.CASE_INSENSITIVE_ORDER))
 				.map(s -> StudentResponse.from(s, includeRegistrationNumber, tokenCipher))
 				.toList();
 	}
@@ -200,6 +202,20 @@ public class StudentService {
 	private Student findScoped(UUID id) {
 		return studentRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
+	}
+
+	/**
+	 * rollNumber is a String (see Student.rollNumber), so a naive sort puts "10" before "2" - parse it
+	 * for the real numeric order. Non-ACTIVE students carry a permanent non-numeric placeholder
+	 * ("INACTIVE-<uuid>", see update()) instead of ever getting a real number back, so those sort
+	 * after every numbered student rather than erroring.
+	 */
+	private static int rollNumberSortKey(Student student) {
+		try {
+			return Integer.parseInt(student.getRollNumber());
+		} catch (NumberFormatException e) {
+			return Integer.MAX_VALUE;
+		}
 	}
 
 	private void applyRequest(Student student, StudentRequest request, ClassSection classSection) {
