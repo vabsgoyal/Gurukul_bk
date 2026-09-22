@@ -4,6 +4,7 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.common.crypto.TokenCipher;
 import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.PageResponse;
 import com.gurukul.common.SchoolContext;
@@ -36,6 +37,7 @@ public class StudentService {
 	private final ClassSectionService classSectionService;
 	private final FeeStructureService feeStructureService;
 	private final com.gurukul.documents.DocumentNumberGenerator documentNumberGenerator;
+	private final TokenCipher tokenCipher;
 
 	@Transactional(readOnly = true)
 	public PageResponse<StudentResponse> list(int page, int size) {
@@ -44,7 +46,7 @@ public class StudentService {
 		Slice<Student> result = studentRepository.findAllBySchoolIdOrderByNameAsc(schoolId, PageRequest.of(page, size));
 		Long totalElements = page == 0 ? studentRepository.countBySchoolId(schoolId) : null;
 		return new PageResponse<>(
-				result.getContent().stream().map(s -> StudentResponse.from(s, includeRegistrationNumber)).toList(),
+				result.getContent().stream().map(s -> StudentResponse.from(s, includeRegistrationNumber, tokenCipher)).toList(),
 				result.hasNext(),
 				totalElements);
 	}
@@ -58,7 +60,7 @@ public class StudentService {
 				.sorted(Comparator.comparingDouble(
 						(Student s) -> FuzzyMatcher.bestScore(query, s.getName(), s.getRollNumber())).reversed())
 				.limit(SEARCH_RESULT_LIMIT)
-				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber, tokenCipher))
 				.toList();
 	}
 
@@ -71,7 +73,7 @@ public class StudentService {
 				.sorted(Comparator.comparingDouble((Student s) -> FuzzyMatcher.bestScore(
 						query, s.getParentName(), s.getParentContact(), s.getName())).reversed())
 				.limit(SEARCH_RESULT_LIMIT)
-				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber, tokenCipher))
 				.toList();
 	}
 
@@ -93,13 +95,13 @@ public class StudentService {
 		boolean includeRegistrationNumber = isAdmin();
 		return studentRepository.findAllBySchoolIdAndClassSectionId(schoolContext.getSchoolId(), classSectionId)
 				.stream()
-				.map(s -> StudentResponse.from(s, includeRegistrationNumber))
+				.map(s -> StudentResponse.from(s, includeRegistrationNumber, tokenCipher))
 				.toList();
 	}
 
 	@Transactional(readOnly = true)
 	public StudentResponse getById(UUID id) {
-		return StudentResponse.from(findScoped(id), isAdmin());
+		return StudentResponse.from(findScoped(id), isAdmin(), tokenCipher);
 	}
 
 	public Student getScopedEntity(UUID id) {
@@ -111,7 +113,7 @@ public class StudentService {
 		// Whoever hits this endpoint just admitted the student and needs the registrationNumber
 		// immediately to share it - include it regardless of role, matching create's existing
 		// (pre-existing, unrelated) lack of a role check on this endpoint.
-		return StudentResponse.from(createEntity(request), true);
+		return StudentResponse.from(createEntity(request), true, tokenCipher);
 	}
 
 	private boolean isAdmin() {
@@ -157,7 +159,7 @@ public class StudentService {
 		if (!oldClassSectionId.equals(classSection.getId())) {
 			recomputeActiveRollNumbers(classSection.getId());
 		}
-		return StudentResponse.from(saved, isAdmin());
+		return StudentResponse.from(saved, isAdmin(), tokenCipher);
 	}
 
 	@Transactional
@@ -184,7 +186,7 @@ public class StudentService {
 		if (!oldClassSectionId.equals(classSection.getId())) {
 			recomputeActiveRollNumbers(classSection.getId());
 		}
-		return StudentResponse.from(saved, isAdmin());
+		return StudentResponse.from(saved, isAdmin(), tokenCipher);
 	}
 
 	@Transactional
@@ -209,6 +211,17 @@ public class StudentService {
 		student.setParentContact(request.getParentContact());
 		student.setClassSection(classSection);
 		student.setAdmissionDate(request.getAdmissionDate());
+
+		student.setSssmId(request.getSssmId());
+		student.setAadhaarNumberEncrypted(
+				request.getAadhaarNumber() != null ? tokenCipher.encrypt(request.getAadhaarNumber()) : null);
+		student.setCaste(request.getCaste());
+		student.setCategory(request.getCategory());
+		student.setAnnualIncome(request.getAnnualIncome());
+		student.setPreviousSchoolName(request.getPreviousSchoolName());
+		student.setBankAccountNumberEncrypted(
+				request.getBankAccountNumber() != null ? tokenCipher.encrypt(request.getBankAccountNumber()) : null);
+		student.setBankIfsc(request.getBankIfsc());
 	}
 
 	/**

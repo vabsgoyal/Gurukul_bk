@@ -7,9 +7,12 @@ import com.gurukul.common.ApiResponse;
 import com.gurukul.common.PageResponse;
 import com.gurukul.registration.dto.RegistrationDtos.StudentInviteResponse;
 import com.gurukul.registration.service.StudentInviteService;
+import com.gurukul.students.dto.StudentBulkImportRequest;
+import com.gurukul.students.dto.StudentBulkImportResponse;
 import com.gurukul.students.dto.StudentClassSectionUpdateRequest;
 import com.gurukul.students.dto.StudentRequest;
 import com.gurukul.students.dto.StudentResponse;
+import com.gurukul.students.service.StudentBulkImportService;
 import com.gurukul.students.service.StudentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +48,7 @@ public class StudentController {
 
 	private final StudentService studentService;
 	private final StudentInviteService studentInviteService;
+	private final StudentBulkImportService studentBulkImportService;
 
 	@GetMapping
 	@Operation(
@@ -166,6 +170,35 @@ public class StudentController {
 	public ApiResponse<StudentResponse> create(
 			@Valid @RequestBody StudentRequest request) {
 		return ApiResponse.success(studentService.create(request), "Student created");
+	}
+
+	@PostMapping("/bulk")
+	@Operation(
+			summary = "Bulk-enroll students",
+			description = """
+					Enrolls many students in one call, e.g. importing a school's existing paper register.
+					Each row is independent: a row that fails validation or a business rule (e.g. an
+					unknown classSectionId) is reported in that row's result and does not affect the
+					other rows. Admin only.
+					"""
+	)
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(
+					responseCode = "200",
+					description = "Batch processed - check per-row results for individual outcomes"
+			),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(
+					responseCode = "403",
+					description = "Caller is not an admin"
+			)
+	})
+	public ApiResponse<StudentBulkImportResponse> bulkCreate(
+			@Valid @RequestBody StudentBulkImportRequest request) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() != Role.ADMIN) {
+			throw new AccessDeniedException("Only an admin can do this");
+		}
+		return ApiResponse.success(studentBulkImportService.importAll(request.getStudents()), "Bulk import processed");
 	}
 
 	@PatchMapping("/{id}/class-section")

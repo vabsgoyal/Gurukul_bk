@@ -66,4 +66,30 @@ public class Student extends BaseEntity {
 	@Column(nullable = false)
 	private StudentStatus status;
 
+	// --- Optional RTE/regulatory fields, captured when a school's existing register has them.
+	// aadhaarNumberEncrypted and bankAccountNumberEncrypted are AES-GCM ciphertext (see TokenCipher),
+	// never plaintext - encrypt/decrypt happens in StudentService, not here.
+
+	@Column(name = "sssm_id")
+	private String sssmId;
+
+	@Column(name = "aadhaar_number_encrypted")
+	private String aadhaarNumberEncrypted;
+
+	private String caste;
+
+	private String category;
+
+	@Column(name = "annual_income")
+	private Long annualIncome;
+
+	@Column(name = "previous_school_name")
+	private String previousSchoolName;
+
+	@Column(name = "bank_account_number_encrypted")
+	private String bankAccountNumberEncrypted;
+
+	@Column(name = "bank_ifsc")
+	private String bankIfsc;
+
 }

@@ -1,5 +1,6 @@
 package com.gurukul.students.dto;
 
+import com.gurukul.common.crypto.TokenCipher;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.entity.StudentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -78,17 +79,43 @@ public class StudentResponse {
 	@Schema(description = "When the record was last updated")
 	private Instant updatedAt;
 
+	@Schema(description = "State student-tracking ID (e.g. MP SSSM/Samagra ID). Admin-only, null otherwise.")
+	private String sssmId;
+
+	@Schema(description = "Aadhaar number, decrypted. Admin-only, null otherwise.")
+	private String aadhaarNumber;
+
+	@Schema(description = "Caste, as recorded for RTE quota tracking. Admin-only, null otherwise.")
+	private String caste;
+
+	@Schema(description = "Category, as recorded for RTE quota tracking. Admin-only, null otherwise.")
+	private String category;
+
+	@Schema(description = "Annual family income in rupees. Admin-only, null otherwise.")
+	private Long annualIncome;
+
+	@Schema(description = "Previous school name, if transferred in. Admin-only, null otherwise.")
+	private String previousSchoolName;
+
+	@Schema(description = "Bank account number, decrypted, used for RTE fee reimbursement. Admin-only, null otherwise.")
+	private String bankAccountNumber;
+
+	@Schema(description = "IFSC code for the bank account above. Admin-only, null otherwise.")
+	private String bankIfsc;
+
 	/**
-	 * registrationNumber is a login-claim key (student self-registration auto-activates on it alone)
-	 * - only an admin, who can hand it to the student/parent directly, should ever see it. Everyone
-	 * else gets null, same as any other field they're not entitled to.
+	 * registrationNumber is a login-claim key (student self-registration auto-activates on it alone),
+	 * and the RTE/regulatory block (sssmId through bankIfsc) includes Aadhaar + bank account number -
+	 * both only an admin should ever see, and both stored encrypted so {@code cipher} decrypts them
+	 * here, on the way out, rather than anywhere upstream. Everyone else gets null for all of it, same
+	 * as any other field they're not entitled to. {@code cipher} may be null when isAdmin is false.
 	 */
-	public static StudentResponse from(Student student, boolean includeRegistrationNumber) {
+	public static StudentResponse from(Student student, boolean isAdmin, TokenCipher cipher) {
 		return new StudentResponse(
 				student.getId(),
 				student.getSchoolId(),
 				student.getRollNumber(),
-				includeRegistrationNumber ? student.getRegistrationNumber() : null,
+				isAdmin ? student.getRegistrationNumber() : null,
 				student.getName(),
 				student.getDob(),
 				student.getGender().name(),
@@ -105,7 +132,15 @@ public class StudentResponse {
 				student.getAdmissionDate(),
 				student.getStatus(),
 				student.getCreatedAt(),
-				student.getUpdatedAt()
+				student.getUpdatedAt(),
+				isAdmin ? student.getSssmId() : null,
+				isAdmin && student.getAadhaarNumberEncrypted() != null ? cipher.decrypt(student.getAadhaarNumberEncrypted()) : null,
+				isAdmin ? student.getCaste() : null,
+				isAdmin ? student.getCategory() : null,
+				isAdmin ? student.getAnnualIncome() : null,
+				isAdmin ? student.getPreviousSchoolName() : null,
+				isAdmin && student.getBankAccountNumberEncrypted() != null ? cipher.decrypt(student.getBankAccountNumberEncrypted()) : null,
+				isAdmin ? student.getBankIfsc() : null
 		);
 	}
 
