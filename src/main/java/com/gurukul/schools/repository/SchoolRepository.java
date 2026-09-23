@@ -8,8 +8,8 @@ import java.util.UUID;
 
 public interface SchoolRepository extends JpaRepository<School, UUID> {
 
-	List<School> findAllByOrderByNameAsc();
+	List<School> findAllByActiveTrueOrderByNameAsc();
 
-	List<School> findAllByNameContainingIgnoreCaseOrderByNameAsc(String name);
+	List<School> findAllByActiveTrueAndNameContainingIgnoreCaseOrderByNameAsc(String name);
 
 }
