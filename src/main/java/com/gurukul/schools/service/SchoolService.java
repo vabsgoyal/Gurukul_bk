@@ -41,10 +41,10 @@ public class SchoolService {
 	/**
 	 * requireExists() is called by SchoolContextFilter on every single authenticated request - over
 	 * the cross-region (Stockholm app / Seoul DB) link, that's a full extra round-trip tax on every
-	 * call. Schools are never deleted or deactivated anywhere in this codebase, so "exists" can only
-	 * ever go false->true, never true->false - caching a positive result can't go stale in a way that
-	 * matters. TTL is just a bound on how long a school stays "known" after its one confirming query,
-	 * not a correctness requirement.
+	 * call. Schools are never deleted, and are only deactivated by a Flyway migration (the `active`
+	 * flag has no API), which runs at startup before this cache holds anything - so a cached positive
+	 * result can't go stale in a way that matters. TTL is just a bound on how long a school stays
+	 * "known" after its one confirming query, not a correctness requirement.
 	 */
 	private static final Duration EXISTENCE_CACHE_TTL = Duration.ofMinutes(10);
 	private final Map<UUID, Instant> existenceCache = new ConcurrentHashMap<>();
@@ -121,8 +121,8 @@ public class SchoolService {
 
 	public List<SchoolSearchResponse> list(String name) {
 		List<School> schools = (name != null && !name.isBlank())
-				? schoolRepository.findAllByNameContainingIgnoreCaseOrderByNameAsc(name.trim())
-				: schoolRepository.findAllByOrderByNameAsc();
+				? schoolRepository.findAllByActiveTrueAndNameContainingIgnoreCaseOrderByNameAsc(name.trim())
+				: schoolRepository.findAllByActiveTrueOrderByNameAsc();
 		return schools.stream().map(SchoolSearchResponse::from).toList();
 	}
 
@@ -165,7 +165,9 @@ public class SchoolService {
 		if (cachedUntil != null && cachedUntil.isAfter(Instant.now())) {
 			return;
 		}
-		findSchool(id);
+		if (!findSchool(id).isActive()) {
+			throw new EntityNotFoundException("School not found");
+		}
 		existenceCache.put(id, Instant.now().plus(EXISTENCE_CACHE_TTL));
 	}
 

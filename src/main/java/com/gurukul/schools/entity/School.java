@@ -78,6 +78,10 @@ public class School {
 	@Column(name = "geofence_radius_meters", nullable = false)
 	private Integer geofenceRadiusMeters = 100;
 
+	/** False hides the school from the public directory and rejects all tenant-scoped requests for it. */
+	@Column(nullable = false)
+	private boolean active = true;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
