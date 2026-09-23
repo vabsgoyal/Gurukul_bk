@@ -33,6 +33,15 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 			@Param("schoolId") UUID schoolId, @Param("sectionId") UUID sectionId,
 			@Param("from") LocalDate from, @Param("to") LocalDate to);
 
+	/** For the spreadsheet export - every record in a date range, school-wide. */
+	@EntityGraph(attributePaths = {"student", "section", "markedByTeacher", "markedByDevice"})
+	List<AttendanceRecord> findAllBySchoolIdAndAttendanceDateBetween(UUID schoolId, LocalDate from, LocalDate to);
+
+	/** For the spreadsheet export - every record in a date range for one class-section. */
+	@EntityGraph(attributePaths = {"student", "section", "markedByTeacher", "markedByDevice"})
+	List<AttendanceRecord> findAllBySchoolIdAndSectionIdAndAttendanceDateBetween(
+			UUID schoolId, UUID sectionId, LocalDate from, LocalDate to);
+
 	@EntityGraph(attributePaths = {"student", "section", "markedByTeacher"})
 	List<AttendanceRecord> findAllBySchoolIdAndSectionIdAndAttendanceDate(UUID schoolId, UUID sectionId, LocalDate attendanceDate);
 

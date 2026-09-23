@@ -14,6 +14,10 @@ public interface StaffAttendanceRecordRepository extends JpaRepository<StaffAtte
 	@EntityGraph(attributePaths = {"employee", "markedByEmployee"})
 	List<StaffAttendanceRecord> findAllBySchoolIdAndAttendanceDate(UUID schoolId, LocalDate attendanceDate);
 
+	/** For the spreadsheet export - every staff record in a date range. */
+	@EntityGraph(attributePaths = {"employee", "markedByEmployee", "markedByDevice"})
+	List<StaffAttendanceRecord> findAllBySchoolIdAndAttendanceDateBetween(UUID schoolId, LocalDate from, LocalDate to);
+
 	Optional<StaffAttendanceRecord> findBySchoolIdAndEmployeeIdAndAttendanceDate(
 			UUID schoolId, UUID employeeId, LocalDate attendanceDate);
 
