@@ -68,6 +68,13 @@ public class GlobalExceptionHandler {
 				.body(ApiResponse.error(ex.getMessage(), com.gurukul.ai.service.AiUnavailableException.ERROR_CODE));
 	}
 
+	/** 503: the request was valid, the WhatsApp gateway just couldn't deliver the OTP right now. */
+	@ExceptionHandler(com.gurukul.auth.whatsapp.WhatsAppOtpDeliveryException.class)
+	public ResponseEntity<ApiResponse<Void>> handleWhatsAppOtpDelivery(
+			com.gurukul.auth.whatsapp.WhatsAppOtpDeliveryException ex) {
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponse.error(ex.getMessage()));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));

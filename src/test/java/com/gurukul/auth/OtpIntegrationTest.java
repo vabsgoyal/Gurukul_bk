@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -17,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CapturingOtpChannel.class)
 class OtpIntegrationTest {
 
 	private static final String SCHOOL_ID = "11111111-1111-1111-1111-111111111111";
@@ -24,6 +26,9 @@ class OtpIntegrationTest {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private CapturingOtpChannel otpChannel;
 
 	@Test
 	void unregisteredPhoneIsRejected() throws Exception {
@@ -39,10 +44,19 @@ class OtpIntegrationTest {
 		String phone = uniquePhone();
 		createEmployeeWithPhone(phone);
 
+		mockMvc.perform(post("/api/v1/auth/otp/request")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"phone\": \"" + phone + "\"}"))
+				.andExpect(status().isOk());
+
+		String wrongCode = "0".repeat(otpChannel.lastCodeFor(phone).length());
+		String otp = wrongCode.equals(otpChannel.lastCodeFor(phone)) ? "9".repeat(wrongCode.length()) : wrongCode;
+
 		mockMvc.perform(post("/api/v1/auth/otp/verify")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"phone\": \"" + phone + "\", \"otp\": \"9999\"}"))
+						.content("{\"phone\": \"" + phone + "\", \"otp\": \"" + otp + "\"}"))
 				.andExpect(status().isUnauthorized());
 	}
 
@@ -60,7 +74,7 @@ class OtpIntegrationTest {
 		mockMvc.perform(post("/api/v1/auth/otp/verify")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"phone\": \"" + phone + "\", \"otp\": \"1234\"}"))
+						.content("{\"phone\": \"" + phone + "\", \"otp\": \"" + otpChannel.lastCodeFor(phone) + "\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.role").value("TEACHER"))
 				.andExpect(jsonPath("$.data.ownerId").value(employeeId))
@@ -92,10 +106,16 @@ class OtpIntegrationTest {
 				.andReturn();
 		String studentId = JsonPath.read(studentResult.getResponse().getContentAsString(), "$.data.id");
 
+		mockMvc.perform(post("/api/v1/auth/otp/request")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"phone\": \"" + phone + "\"}"))
+				.andExpect(status().isOk());
+
 		mockMvc.perform(post("/api/v1/auth/otp/verify")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"phone\": \"" + phone + "\", \"otp\": \"1234\"}"))
+						.content("{\"phone\": \"" + phone + "\", \"otp\": \"" + otpChannel.lastCodeFor(phone) + "\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.role").value("STUDENT"))
 				.andExpect(jsonPath("$.data.ownerId").value(studentId));
@@ -106,18 +126,28 @@ class OtpIntegrationTest {
 		String phone = uniquePhone();
 		createEmployeeWithPhone(phone);
 
+		mockMvc.perform(post("/api/v1/auth/otp/request")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"phone\": \"" + phone + "\"}"))
+				.andExpect(status().isOk());
 		MvcResult first = mockMvc.perform(post("/api/v1/auth/otp/verify")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"phone\": \"" + phone + "\", \"otp\": \"1234\"}"))
+						.content("{\"phone\": \"" + phone + "\", \"otp\": \"" + otpChannel.lastCodeFor(phone) + "\"}"))
 				.andExpect(status().isOk())
 				.andReturn();
 		String firstOwnerId = JsonPath.read(first.getResponse().getContentAsString(), "$.data.ownerId");
 
+		mockMvc.perform(post("/api/v1/auth/otp/request")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"phone\": \"" + phone + "\"}"))
+				.andExpect(status().isOk());
 		MvcResult second = mockMvc.perform(post("/api/v1/auth/otp/verify")
 						.header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"phone\": \"" + phone + "\", \"otp\": \"1234\"}"))
+						.content("{\"phone\": \"" + phone + "\", \"otp\": \"" + otpChannel.lastCodeFor(phone) + "\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.role").value("TEACHER"))
 				.andReturn();

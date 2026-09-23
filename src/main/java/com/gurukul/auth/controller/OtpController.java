@@ -15,14 +15,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "OTP Login", description = "Phone + OTP login (dummy OTP for now). Requires X-School-Id header.")
+@Tag(name = "OTP Login", description = "Phone + OTP login, code delivered over WhatsApp. Requires X-School-Id header.")
 public class OtpController {
 
 	private final OtpService otpService;
 
 	@PostMapping("/api/v1/auth/otp/request")
 	@Operation(summary = "Request an OTP",
-			description = "Dummy for now - no real SMS is sent, the code is always 1234. Errors if the phone isn't on file.")
+			description = "Generates a random, single-use, time-limited code and sends it over WhatsApp. "
+					+ "Errors if the phone isn't on file.")
 	public ApiResponse<Void> requestOtp(@Valid @RequestBody OtpRequest request) {
 		otpService.requestOtp(request.getPhone());
 		return ApiResponse.success(null, "OTP sent");

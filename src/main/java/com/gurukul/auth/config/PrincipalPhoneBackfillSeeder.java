@@ -22,18 +22,18 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Runs in EVERY profile including prod - deliberately, per an explicit product decision to keep
- * OTP login live in production despite it still using a hardcoded dummy code ("1234", see
- * OtpService) rather than a real SMS-verified one. Backfills a shared, memorable Principal phone
- * number (9999999999) with an explicit ADMIN credential for any school that doesn't have one yet,
- * so every school - old or new - has a working way to log in as Principal via OTP.
+ * Runs in EVERY profile including prod - deliberately, per an explicit product decision. Backfills
+ * a shared, memorable Principal phone number (9999999999) with an explicit ADMIN credential for
+ * any school that doesn't have one yet, so every school - old or new - has a working way to log in
+ * as Principal via OTP. Since OtpService now issues a real, per-request, single-use code delivered
+ * over WhatsApp, logging in on this number requires receiving that WhatsApp message - it is no
+ * longer a fixed-code backdoor.
  *
  * Kept separate from DevAdminSeeder on purpose: that one seeds a fixed global password
  * (admin/admin123), a strictly more dangerous exposure than a phone number, and stays dev-only.
  *
- * Known accepted risk: this number is identical across every school and pairs with a dummy OTP
- * that accepts "1234" for ANY phone on file - not just this one. Re-evaluate this seeder (and
- * OtpService's dummy code) once a real SMS provider is integrated.
+ * Known accepted risk: this number is identical across every school, so whoever controls it can
+ * log in as ADMIN for any school that hasn't reassigned it to a real principal's phone.
  */
 @Component
 @RequiredArgsConstructor
@@ -85,8 +85,8 @@ public class PrincipalPhoneBackfillSeeder implements ApplicationRunner {
 		credential.setRole(Role.ADMIN);
 		credentialRepository.save(credential);
 
-		log.warn("Seeded Principal OTP login for school {}: phone={} otp=1234 - accepted-risk backdoor, "
-				+ "runs in every profile including prod until real SMS is integrated", schoolId, PRINCIPAL_PHONE);
+		log.warn("Seeded Principal OTP login for school {}: phone={} - accepted-risk shared admin number, "
+				+ "runs in every profile including prod", schoolId, PRINCIPAL_PHONE);
 	}
 
 }
