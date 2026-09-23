@@ -54,6 +54,10 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/staff-attendance").hasRole("ADMIN")
 						// School location (geofence center/radius for self-mark attendance): admin-only.
 						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*/location").hasRole("ADMIN")
+						// School profile, including the bank account/IFSC/UPI VPA that fee payments are routed
+						// to: admin-only. Was previously unauthenticated. SchoolController additionally checks
+						// the admin belongs to the school being edited.
+						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*").hasRole("ADMIN")
 						// Attendance devices (RFID/fingerprint/face) and identifier enrollment: admin-only to
 						// manage; reading an enrollment list is also open to a teacher. The device-event
 						// ingestion endpoint (/api/v1/attendance/device-events) is deliberately NOT listed

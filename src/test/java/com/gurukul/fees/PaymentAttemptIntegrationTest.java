@@ -41,6 +41,7 @@ class PaymentAttemptIntegrationTest {
 
 		mockMvc.perform(put("/api/v1/schools/" + SCHOOL_ID)
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"name": "Gurukul Demo School", "address": "123 Education Lane", "city": "Jaipur",
