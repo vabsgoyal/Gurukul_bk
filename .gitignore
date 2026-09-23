@@ -3,6 +3,7 @@ target/
 .env
 .env.*
 !deploy/aws/.env.example
+!whatsapp-gateway/.env.example
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
