@@ -1,5 +1,8 @@
 package com.gurukul.schools.controller;
 
+import com.gurukul.auth.entity.Role;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.schools.dto.SchoolLocationUpdateRequest;
 import com.gurukul.schools.dto.SchoolRegistrationRequest;
@@ -14,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -89,6 +93,7 @@ public class SchoolController {
 			@Parameter(description = "School UUID", required = true)
 			@PathVariable UUID id,
 			@Valid @RequestBody SchoolUpdateRequest request) {
+		requireAdminOf(id);
 		return ApiResponse.success(schoolService.update(id, request), "School updated");
 	}
 
@@ -109,7 +114,20 @@ public class SchoolController {
 			@Parameter(description = "School UUID", required = true)
 			@PathVariable UUID id,
 			@Valid @RequestBody SchoolLocationUpdateRequest request) {
+		requireAdminOf(id);
 		return ApiResponse.success(schoolService.updateLocation(id, request), "School location updated");
+	}
+
+	/**
+	 * SecurityConfig's hasRole("ADMIN") alone would let an admin of one school edit another school's
+	 * profile - including the bank account fee payments are routed to - just by putting a different
+	 * id in the path (their token only has to match the X-School-Id header, not the path).
+	 */
+	private static void requireAdminOf(UUID schoolId) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() != Role.ADMIN || !schoolId.equals(principal.getSchoolId())) {
+			throw new AccessDeniedException("Only this school's admin can edit it");
+		}
 	}
 
 	@GetMapping
