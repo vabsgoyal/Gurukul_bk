@@ -15,8 +15,9 @@ import org.springframework.web.client.RestClientResponseException;
  * reflected in the swagger path strings themselves. Re-verify against the deployed instance's own
  * /docs if WA-AKG's API changes, since this is a third-party project this codebase does not
  * control. Auth is the {@code X-API-Key} header WA-AKG documents for server-to-server calls.
- * sessionId here is WA-AKG's internal session id (shown in parens on its Sessions page, e.g.
- * "3wy8uq"), not the human-readable session name.
+ * The session is picked by its human-readable name via {@link WhatsAppSessionResolver}, so WA-AKG
+ * recreating it under a new internal id (shown in parens on its Sessions page, e.g. "3wy8uq") needs
+ * no config change.
  *
  * <p>Deliberately fails soft: a WA-AKG outage or a banned/disconnected session must not take down
  * OTP login as a 500 - OtpService logs the failure and tells the caller to retry, same as
@@ -29,6 +30,7 @@ public class WhatsAppOtpSender implements OtpChannel {
 
 	private final RestClient whatsAppOtpRestClient;
 	private final WhatsAppOtpProperties properties;
+	private final WhatsAppSessionResolver sessionResolver;
 
 	@Override
 	public boolean isConfigured() {
@@ -40,13 +42,16 @@ public class WhatsAppOtpSender implements OtpChannel {
 		String message = "Your Gurukul login code is " + otp + ". It expires in "
 				+ properties.expiryMinutes() + " minutes. Do not share this code.";
 
+		String sessionId = sessionResolver.resolveSessionId();
 		try {
 			whatsAppOtpRestClient.post()
-					.uri("/api/messages/{sessionId}/{jid}/send", properties.senderSession(), toWhatsAppNumber(phone))
+					.uri("/api/messages/{sessionId}/{jid}/send", sessionId, toWhatsAppNumber(phone))
 					.body(new SendMessageRequest(new TextMessage(message)))
 					.retrieve()
 					.toBodilessEntity();
 		} catch (RestClientResponseException ex) {
+			// The cached session may have been deleted/recreated - look it up again next time
+			sessionResolver.invalidate();
 			log.error("WA-AKG rejected OTP send for phone ending {} - status {} body {}",
 					lastFourDigits(phone), ex.getStatusCode().value(), ex.getResponseBodyAsString());
 			throw new WhatsAppOtpDeliveryException("Could not send the OTP - please try again shortly.");
