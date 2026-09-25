@@ -52,7 +52,7 @@ export class WhatsAppManager {
             const instance = new WhatsAppInstance(session.sessionId, session.userId, this.io);
             instance.onRemovedFromManager = () => this.removeInstance(session.sessionId);
             this.sessions.set(session.sessionId, instance);
-            await instance.init();
+            await instance.start();
             started++;
         }
         logger.success("Manager", `Loaded ${started} sessions (${sessions.length - started} idle skipped).`);
