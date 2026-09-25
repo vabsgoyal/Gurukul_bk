@@ -1,0 +1,24 @@
+# WA-AKG WhatsApp gateway (OTP delivery). Install on EC2:
+#   sudo cp deploy/aws/wa-akg.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now wa-akg
+[Unit]
+Description=WA-AKG WhatsApp Gateway (OTP delivery for Gurukul)
+Documentation=https://github.com/vabsgoyal/Gurukul_bk/tree/main/whatsapp-gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gurukul
+Group=gurukul
+WorkingDirectory=/opt/whatsapp-gateway
+EnvironmentFile=/opt/whatsapp-gateway/.env
+ExecStart=/usr/bin/npm run start
+# always, not on-failure: a clean exit (code 0) must also bring OTP delivery back
+Restart=always
+RestartSec=5
+MemoryMax=1536M
+MemoryHigh=1280M
+
+[Install]
+WantedBy=multi-user.target

@@ -17,7 +17,10 @@ import { bindPpGuard } from "./store/ppguard";
 import { antispam } from "./antispam";
 import { logger } from "@/lib/logger";
 
-const MAX_RECONNECT_ATTEMPTS = 3;
+// 0 = retry forever (default). Set WA_MAX_RECONNECT_ATTEMPTS to cap it.
+const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.WA_MAX_RECONNECT_ATTEMPTS || "0", 10);
+const RECONNECT_BASE_DELAY_MS = 2000;
+const RECONNECT_MAX_DELAY_MS = parseInt(process.env.WA_RECONNECT_MAX_DELAY_MS || "60000", 10);
 
 export class WhatsAppInstance {
     socket: WASocket | null = null;
@@ -33,6 +36,7 @@ export class WhatsAppInstance {
 
     isStopped: boolean = false;
     private reconnectCount: number = 0;
+    private reconnectTimer: NodeJS.Timeout | null = null;
     /** Called when instance auto-stops or logs out — lets manager remove it from Map */
     onRemovedFromManager: (() => void) | null = null;
 
@@ -57,7 +61,11 @@ export class WhatsAppInstance {
         const { state, saveCreds } = await usePrismaAuthState(this.sessionId);
         const { version } = await fetchLatestBaileysVersion();
 
-        this.socket = makeWASocket({
+        // Drop any previous socket so a stale one can't keep firing events
+        // or hold a second connection that makes WhatsApp kick us (440).
+        this.disposeSocket();
+
+        const sock = makeWASocket({
             version,
             logger: pino({ level: process.env.BAILEYS_LOG_LEVEL || "error" }) as any,
             printQRInTerminal: false,
@@ -67,8 +75,9 @@ export class WhatsAppInstance {
             },
             browser: ["Ubuntu", "Chrome", "20.0.04"],
             markOnlineOnConnect: botConfig?.alwaysOnline ?? true,
-            syncFullHistory: true,
+            syncFullHistory: process.env.WA_SYNC_FULL_HISTORY === "true",
         });
+        this.socket = sock;
 
         // Apply Anti-Spam Wrapper to sendMessage
         const originalSendMessage = this.socket.sendMessage.bind(this.socket);
@@ -87,8 +96,52 @@ export class WhatsAppInstance {
         this.socket.ev.on("creds.update", saveCreds);
 
         this.socket.ev.on("connection.update", async (update) => {
+            // Ignore events from a socket that has since been replaced
+            if (sock !== this.socket) return;
             await this.handleConnectionUpdate(update);
         });
+    }
+
+    /** init() for callers outside the reconnect loop: a failed start (DB/network down) is retried instead of leaving the session dead */
+    async start() {
+        try {
+            await this.init();
+        } catch (e) {
+            logger.error("Instance", `Session ${this.sessionId} failed to start, retrying:`, e);
+            this.reconnectCount++;
+            this.scheduleReconnect(this.backoffDelay());
+        }
+    }
+
+    private disposeSocket() {
+        if (!this.socket) return;
+        try {
+            this.socket.ev.removeAllListeners("connection.update");
+            this.socket.ev.removeAllListeners("creds.update");
+            this.socket.end(undefined);
+        } catch (e) { /* already closed */ }
+        this.socket = null;
+    }
+
+    private scheduleReconnect(delayMs: number) {
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(async () => {
+            this.reconnectTimer = null;
+            if (this.isStopped) return;
+            try {
+                await this.init();
+            } catch (e) {
+                // init itself failed (network/DB down) - keep trying
+                logger.error("Instance", `Session ${this.sessionId} reconnect init failed:`, e);
+                this.reconnectCount++;
+                this.scheduleReconnect(this.backoffDelay());
+            }
+        }, delayMs);
+    }
+
+    private backoffDelay() {
+        const exp = RECONNECT_BASE_DELAY_MS * 2 ** Math.min(this.reconnectCount, 10);
+        return Math.min(exp, RECONNECT_MAX_DELAY_MS);
     }
 
     async handleConnectionUpdate(update: Partial<ConnectionState>) {
@@ -159,11 +212,25 @@ export class WhatsAppInstance {
                     return;
                 }
 
-                // Unexpected disconnect: retry with limit
-                this.reconnectCount++;
-                const remaining = MAX_RECONNECT_ATTEMPTS - this.reconnectCount + 1;
+                // Baileys asks for an immediate restart after pairing / stream errors
+                if (code === DisconnectReason.restartRequired) {
+                    logger.info("Instance", `Session ${this.sessionId} restart required, reconnecting now...`);
+                    this.scheduleReconnect(500);
+                    return;
+                }
 
-                if (remaining > 0) {
+                if (code === DisconnectReason.connectionReplaced) {
+                    logger.warn("Instance",
+                        `Session ${this.sessionId} replaced by another connection (440). ` +
+                        `Make sure only ONE gateway instance uses these credentials.`
+                    );
+                }
+
+                // Unexpected disconnect: retry with exponential backoff
+                this.reconnectCount++;
+                const exhausted = MAX_RECONNECT_ATTEMPTS > 0 && this.reconnectCount > MAX_RECONNECT_ATTEMPTS;
+
+                if (!exhausted) {
                     this.status = "DISCONNECTED";
                     this.io?.to(this.sessionId).emit("connection.update", { status: "DISCONNECTED", qr: null });
                     await prisma.session.update({
@@ -171,12 +238,12 @@ export class WhatsAppInstance {
                         data: { status: "DISCONNECTED", qr: null }
                     }).catch(() => {});
 
+                    const delay = this.backoffDelay();
                     logger.warn("Instance",
-                        `Session ${this.sessionId} disconnected. Reconnecting (${this.reconnectCount}/${MAX_RECONNECT_ATTEMPTS})...`
+                        `Session ${this.sessionId} disconnected (code ${code}). ` +
+                        `Reconnect attempt ${this.reconnectCount}${MAX_RECONNECT_ATTEMPTS > 0 ? `/${MAX_RECONNECT_ATTEMPTS}` : ""} in ${delay}ms...`
                     );
-                    setTimeout(() => {
-                        if (!this.isStopped) this.init();
-                    }, 3000);
+                    this.scheduleReconnect(delay);
                 } else {
                     // Max retries exceeded — auto-stop
                     this.status = "STOPPED";
@@ -264,6 +331,8 @@ export class WhatsAppInstance {
     /** Clean shutdown without triggering reconnect */
     async shutdown() {
         this.isStopped = true;
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
         this.socket?.end(undefined);
         this.socket = null;
         this.reconnectCount = 0;
