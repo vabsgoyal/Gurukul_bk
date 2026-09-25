@@ -16,6 +16,7 @@ public record WhatsAppOtpProperties(
 		String baseUrl,
 		String token,
 		String senderSession,
+		String senderSessionName,
 		int timeoutSeconds,
 		int codeLength,
 		int expiryMinutes) {
