@@ -28,6 +28,9 @@ public class BattleRoomParticipant extends BaseEntity {
 	@Column(name = "correct_count", nullable = false)
 	private int correctCount;
 
+	@Column(nullable = false)
+	private int points;
+
 	@Column(name = "joined_at", nullable = false)
 	private Instant joinedAt;
 

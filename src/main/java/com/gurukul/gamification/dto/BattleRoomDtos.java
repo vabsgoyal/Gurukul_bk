@@ -44,7 +44,12 @@ public class BattleRoomDtos {
 	public static class BattleParticipantResponse {
 		private UUID studentId;
 		private String name;
+		@Schema(description = "Total score: each correct answer earns 1-10 by speed, wrong answers 0")
+		private int points;
 		private int correctCount;
+		@Schema(description = "Whether they've locked in an answer to currentQuestion - never whether it's "
+				+ "right, that's only revealed in lastResult once the question closes")
+		private boolean answeredCurrentQuestion;
 	}
 
 	@Getter @AllArgsConstructor
@@ -64,44 +69,47 @@ public class BattleRoomDtos {
 		private Instant joinWindowEndsAt;
 		private int questionCount;
 		private int currentQuestionIndex;
+		@Schema(description = "Ordered by points, highest first")
 		private List<BattleParticipantResponse> participants;
 		private ArenaDtos.PublicQuizQuestionResponse currentQuestion;
-		@Schema(description = "When buzzing opens for currentQuestion. In the future during the reveal pause "
-				+ "after the previous question - hide the question and count down to this instead; buzzes are "
+		@Schema(description = "When answering opens for currentQuestion. In the future during the reveal pause "
+				+ "after the previous question - hide the question and count down to this instead; answers are "
 				+ "rejected until then")
 		private Instant currentQuestionStartsAt;
-		private UUID currentBuzzWinnerStudentId;
-		@Deprecated
-		@Schema(deprecated = true, description = "Use lastResult.correct")
-		private Boolean lastAnswerCorrect;
-		@Schema(description = "Outcome of the most recently closed question, including its correct option - "
-				+ "null before the first question closes")
+		@Schema(description = "When answering closes for currentQuestion. The question closes earlier if every "
+				+ "participant answers")
+		private Instant currentQuestionEndsAt;
+		@Schema(description = "Every participant's result for the most recently closed question, plus its correct "
+				+ "option - null before the first question closes")
 		private BattleQuestionResultResponse lastResult;
 		private UUID winnerStudentId;
 		private String winnerName;
 	}
 
-	public enum BattleQuestionOutcome {
-		ANSWERED,
-		TIMED_OUT
-	}
-
 	@Getter @AllArgsConstructor
-	@Schema(name = "BattleQuestionResultResponse", description = "Revealed once a question closes, for every "
-			+ "participant - never sent for the question still in play")
+	@Schema(name = "BattleQuestionResultResponse", description = "Revealed once a question closes - never sent "
+			+ "for the question still in play")
 	public static class BattleQuestionResultResponse {
 		private int questionIndex;
 		private UUID questionId;
-		private BattleQuestionOutcome outcome;
-		@Schema(description = "Null when TIMED_OUT")
-		private UUID answeredByStudentId;
-		@Schema(description = "Null when TIMED_OUT")
-		private String answeredByName;
-		@Schema(description = "Null when TIMED_OUT")
-		private QuizOption selectedOption;
 		private QuizOption correctOption;
-		@Schema(description = "Null when TIMED_OUT")
-		private Boolean correct;
+		@Schema(description = "One row per participant, fastest correct answer first")
+		private List<BattlePlayerResultResponse> results;
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(name = "BattlePlayerResultResponse")
+	public static class BattlePlayerResultResponse {
+		private UUID studentId;
+		private String name;
+		private boolean answered;
+		@Schema(description = "Null when they didn't answer in time")
+		private QuizOption selectedOption;
+		private boolean correct;
+		@Schema(description = "Points earned on this question: 1-10 by speed if correct, else 0")
+		private int points;
+		@Schema(description = "Null when they didn't answer in time")
+		private Integer responseMs;
 	}
 
 	@Getter @AllArgsConstructor
@@ -118,15 +126,10 @@ public class BattleRoomDtos {
 	}
 
 	@Getter @AllArgsConstructor
-	@Schema(name = "BuzzResponse")
-	public static class BuzzResponse {
-		private boolean won;
-	}
-
-	@Getter @AllArgsConstructor
-	@Schema(name = "SubmitBattleAnswerResponse")
+	@Schema(name = "SubmitBattleAnswerResponse", description = "Only confirms the answer was locked in - whether "
+			+ "it's right is revealed to everyone in lastResult once the question closes")
 	public static class SubmitBattleAnswerResponse {
-		private boolean correct;
+		private int questionIndex;
 		private boolean roomCompleted;
 	}
 

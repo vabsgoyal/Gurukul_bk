@@ -7,17 +7,15 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.gamification.dto.ArenaDtos.PublicQuizQuestionResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleParticipantResponse;
-import com.gurukul.gamification.dto.BattleRoomDtos.BattleQuestionOutcome;
+import com.gurukul.gamification.dto.BattleRoomDtos.BattlePlayerResultResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleQuestionResultResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomSummaryResponse;
-import com.gurukul.gamification.dto.BattleRoomDtos.BuzzResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.CreateBattleRoomRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.MatchBattleRoomRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.SubmitBattleAnswerRequest;
 import com.gurukul.gamification.dto.BattleRoomDtos.SubmitBattleAnswerResponse;
 import com.gurukul.gamification.entity.BattleAnswer;
-import com.gurukul.gamification.entity.BattleBuzzWinner;
 import com.gurukul.gamification.entity.BattleRoom;
 import com.gurukul.gamification.entity.BattleRoomParticipant;
 import com.gurukul.gamification.entity.BattleRoomStatus;
@@ -25,7 +23,6 @@ import com.gurukul.gamification.entity.QuizOption;
 import com.gurukul.gamification.entity.QuizQuestion;
 import com.gurukul.gamification.entity.XpSource;
 import com.gurukul.gamification.repository.BattleAnswerRepository;
-import com.gurukul.gamification.repository.BattleBuzzWinnerRepository;
 import com.gurukul.gamification.repository.BattleRoomParticipantRepository;
 import com.gurukul.gamification.repository.BattleRoomRepository;
 import com.gurukul.gamification.repository.QuizQuestionRepository;
@@ -41,15 +38,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * Gamification Phase 4b: Battle Rooms - live, multiplayer (2-5 students) fastest-buzz-first quiz
- * battles, scoped to one class (any section) + one subject. Unlike Arena (Phase 4a, async 1v1),
+ * Gamification Phase 4b: Battle Rooms - live, multiplayer (2-5 students) quiz battles, scoped to
+ * one class (any section) + one subject. Every participant answers every question within the answer
+ * window; a correct answer scores 1-10 by how fast it arrived (server-measured), a wrong one 0. Unlike Arena (Phase 4a, async 1v1),
  * this needs real-time signaling, so state changes are both returned from REST/STOMP handlers and
  * broadcast to /topic/battle-rooms/{roomId} so every connected participant stays in sync.
  *
@@ -63,11 +66,12 @@ public class BattleRoomService {
 	// Excludes 0/O and 1/I to avoid read-aloud/typing ambiguity for students sharing a code.
 	private static final String ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 	private static final int ROOM_CODE_LENGTH = 6;
+	/** Points for a correct answer in the first second; one less per full second after, never below 1. */
+	private static final int MAX_POINTS = 10;
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	private final BattleRoomRepository battleRoomRepository;
 	private final BattleRoomParticipantRepository participantRepository;
-	private final BattleBuzzWinnerRepository buzzWinnerRepository;
 	private final BattleAnswerRepository battleAnswerRepository;
 	private final QuizQuestionRepository quizQuestionRepository;
 	private final SubjectRepository subjectRepository;
@@ -87,7 +91,8 @@ public class BattleRoomService {
 	@Value("${app.gamification.battle-room.question-count:10}")
 	private int defaultQuestionCount;
 
-	@Value("${app.gamification.battle-room.question-timeout-seconds:15}")
+	/** How long everyone has to answer each question - the room moves on sooner if all have answered. */
+	@Value("${app.gamification.battle-room.question-timeout-seconds:10}")
 	private int questionTimeoutSeconds;
 
 	@Value("${app.gamification.battle-room.win-xp:10}")
@@ -226,57 +231,44 @@ public class BattleRoomService {
 				.toList();
 	}
 
-	@Transactional
-	public BuzzResponse buzz(AuthPrincipal principal, UUID roomId) {
-		requireStudent(principal);
-		BattleRoom room = requireParticipant(principal, roomId);
-		if (room.getStatus() != BattleRoomStatus.ACTIVE) {
-			throw new IllegalStateException("This battle isn't live");
-		}
-		if (room.getQuestionStartedAt() != null && Instant.now().isBefore(room.getQuestionStartedAt())) {
-			throw new IllegalStateException("The next question hasn't started yet");
-		}
-
-		BattleBuzzWinner buzz = new BattleBuzzWinner();
-		buzz.setSchoolId(principal.getSchoolId());
-		buzz.setRoomId(roomId);
-		buzz.setQuestionIndex(room.getCurrentQuestionIndex());
-		buzz.setStudentId(principal.getOwnerId());
-		buzz.setBuzzedAt(Instant.now());
-		try {
-			// saveAndFlush forces the constraint check now, inside this request's own transaction -
-			// whichever concurrent buzz's INSERT commits first wins uq_battle_buzz_winner, the rest
-			// fail it and land in the catch below. No in-memory locking needed.
-			buzzWinnerRepository.saveAndFlush(buzz);
-		} catch (DataIntegrityViolationException ex) {
-			return new BuzzResponse(false);
-		}
-
-		broadcast(room);
-		return new BuzzResponse(true);
-	}
-
+	/**
+	 * Any participant may answer the current question once, between its start (after the reveal pause)
+	 * and its deadline. Only confirms the answer was locked in - correctness is revealed to everyone
+	 * in lastResult once the question closes, which happens as soon as the last participant answers.
+	 */
 	@Transactional
 	public SubmitBattleAnswerResponse submitAnswer(AuthPrincipal principal, UUID roomId, SubmitBattleAnswerRequest request) {
 		requireStudent(principal);
-		BattleRoom room = requireParticipant(principal, roomId);
+		// Lock before anything else reads the room, so every check below sees the committed row.
+		BattleRoom room = lockRoom(roomId);
+		if (!room.getSchoolId().equals(principal.getSchoolId())) {
+			throw new EntityNotFoundException("Battle room not found");
+		}
+		if (!participantRepository.existsByRoomIdAndStudentId(roomId, principal.getOwnerId())) {
+			throw new AccessDeniedException("You are not part of this battle room");
+		}
 		if (room.getStatus() != BattleRoomStatus.ACTIVE) {
 			throw new IllegalStateException("This battle isn't live");
 		}
-		int index = room.getCurrentQuestionIndex();
-		BattleBuzzWinner winner = buzzWinnerRepository.findByRoomIdAndQuestionIndex(roomId, index)
-				.orElseThrow(() -> new IllegalStateException("Nobody has buzzed in for this question yet"));
-		if (!winner.getStudentId().equals(principal.getOwnerId())) {
-			throw new AccessDeniedException("It's not your turn to answer");
+		Instant now = Instant.now();
+		Instant startsAt = room.getQuestionStartedAt();
+		if (now.isBefore(startsAt)) {
+			throw new IllegalStateException("The next question hasn't started yet");
 		}
-		if (battleAnswerRepository.existsByRoomIdAndQuestionIndex(roomId, index)) {
-			throw new IllegalStateException("This question has already been answered");
+		if (!now.isBefore(questionDeadline(room))) {
+			throw new IllegalStateException("Time's up for this question");
+		}
+		int index = room.getCurrentQuestionIndex();
+		if (battleAnswerRepository.existsByRoomIdAndQuestionIndexAndStudentId(roomId, index, principal.getOwnerId())) {
+			throw new IllegalStateException("You've already answered this question");
 		}
 
 		UUID questionId = room.questionIdList().get(index);
 		QuizQuestion question = quizQuestionRepository.findById(questionId)
 				.orElseThrow(() -> new EntityNotFoundException("Question not found"));
 		boolean correct = question.getCorrectOption() == request.getSelectedOption();
+		int responseMs = (int) Duration.between(startsAt, now).toMillis();
+		int points = correct ? pointsFor(responseMs) : 0;
 
 		BattleAnswer answer = new BattleAnswer();
 		answer.setSchoolId(principal.getSchoolId());
@@ -285,22 +277,26 @@ public class BattleRoomService {
 		answer.setStudentId(principal.getOwnerId());
 		answer.setSelectedOption(request.getSelectedOption());
 		answer.setCorrect(correct);
+		answer.setPoints(points);
+		answer.setResponseMs(responseMs);
 		battleAnswerRepository.save(answer);
 
-		if (correct) {
-			BattleRoomParticipant participant = participantRepository.findByRoomIdAndStudentId(roomId, principal.getOwnerId())
-					.orElseThrow(() -> new EntityNotFoundException("Participant not found"));
-			participant.setCorrectCount(participant.getCorrectCount() + 1);
-			participantRepository.save(participant);
+		if (battleAnswerRepository.countByRoomIdAndQuestionIndex(roomId, index) >= participantRepository.countByRoomId(roomId)) {
+			advanceOrComplete(room);
 		}
-
-		advanceOrComplete(room);
 		broadcast(room);
-		return new SubmitBattleAnswerResponse(correct, room.getStatus() == BattleRoomStatus.COMPLETED);
+		return new SubmitBattleAnswerResponse(index, room.getStatus() == BattleRoomStatus.COMPLETED);
 	}
 
-	/** Every 5s: start rooms whose join window elapsed, cancel lonely ones, and skip questions nobody answered in time. */
-	@Scheduled(fixedRate = 5000)
+	static int pointsFor(int responseMs) {
+		return Math.max(1, MAX_POINTS - responseMs / 1000);
+	}
+
+	/**
+	 * Every second: start rooms whose join window elapsed, cancel lonely ones, and close questions
+	 * whose answer window ran out. Every second, not every 5, since the answer window is only 10s.
+	 */
+	@Scheduled(fixedRateString = "${app.gamification.battle-room.sweep-interval-ms:1000}")
 	@Transactional
 	public void sweep() {
 		sweepWaitingRooms();
@@ -324,18 +320,26 @@ public class BattleRoomService {
 	}
 
 	private void sweepActiveRoomTimeouts() {
-		Instant now = Instant.now();
-		for (BattleRoom room : battleRoomRepository.findAllByStatus(BattleRoomStatus.ACTIVE)) {
-			if (room.getQuestionStartedAt() == null
-					|| now.isBefore(room.getQuestionStartedAt().plusSeconds(questionTimeoutSeconds))) {
-				continue;
-			}
-			if (battleAnswerRepository.existsByRoomIdAndQuestionIndex(room.getId(), room.getCurrentQuestionIndex())) {
+		// Ids, then a fresh locked read per room - checking a room loaded before the lock could act on a
+		// question the last answer already closed in the meantime.
+		for (UUID roomId : battleRoomRepository.findIdsByStatus(BattleRoomStatus.ACTIVE)) {
+			BattleRoom room = lockRoom(roomId);
+			if (room.getStatus() != BattleRoomStatus.ACTIVE || room.getQuestionStartedAt() == null
+					|| Instant.now().isBefore(questionDeadline(room))) {
 				continue;
 			}
 			advanceOrComplete(room);
 			broadcast(room);
 		}
+	}
+
+	private Instant questionDeadline(BattleRoom room) {
+		return room.getQuestionStartedAt().plusSeconds(questionTimeoutSeconds);
+	}
+
+	private BattleRoom lockRoom(UUID roomId) {
+		return battleRoomRepository.findByIdForUpdate(roomId)
+				.orElseThrow(() -> new EntityNotFoundException("Battle room not found"));
 	}
 
 	private void activateRoom(BattleRoom room) {
@@ -363,10 +367,11 @@ public class BattleRoomService {
 	/**
 	 * Advances to the next question, or completes the room if the current one was the last. The next
 	 * question starts revealSeconds from now, not immediately - that pause is when clients show the
-	 * just-closed question's lastResult (who answered, the correct option). buzz() rejects until then,
-	 * and the sweep's timeout clock runs from that start too.
+	 * just-closed question's lastResult (everyone's answers, the correct option). submitAnswer()
+	 * rejects until then, and the answer window runs from that start too.
 	 */
 	private void advanceOrComplete(BattleRoom room) {
+		tallyCurrentQuestion(room);
 		int nextIndex = room.getCurrentQuestionIndex() + 1;
 		if (nextIndex >= room.getQuestionCount()) {
 			completeRoom(room);
@@ -378,15 +383,35 @@ public class BattleRoomService {
 	}
 
 	/**
-	 * Winner is whoever answered the most questions correctly. Ties go to whoever joined first -
-	 * a provisional rule, not yet a settled business decision (difficulty-weighted scoring is a
-	 * documented future phase per the gamification execution plan).
+	 * Adds the closing question's points to each participant's total. Only done at close, never as
+	 * answers come in - totals are visible to everyone, so a jump mid-question would give away who
+	 * got it right before the reveal.
+	 */
+	private void tallyCurrentQuestion(BattleRoom room) {
+		for (BattleAnswer answer : battleAnswerRepository.findAllByRoomIdAndQuestionIndex(room.getId(), room.getCurrentQuestionIndex())) {
+			BattleRoomParticipant participant = participantRepository.findByRoomIdAndStudentId(room.getId(), answer.getStudentId())
+					.orElseThrow(() -> new EntityNotFoundException("Participant not found"));
+			participant.setPoints(participant.getPoints() + answer.getPoints());
+			if (answer.isCorrect()) {
+				participant.setCorrectCount(participant.getCorrectCount() + 1);
+			}
+			participantRepository.save(participant);
+		}
+	}
+
+	/**
+	 * Winner is whoever scored the most points. Ties go to more correct answers, then to whoever
+	 * joined first - a provisional rule, not yet a settled business decision.
 	 */
 	private void completeRoom(BattleRoom room) {
 		List<BattleRoomParticipant> participants = participantRepository.findAllByRoomIdOrderByJoinedAtAsc(room.getId());
-		BattleRoomParticipant winner = participants.stream()
-				.max((a, b) -> Integer.compare(a.getCorrectCount(), b.getCorrectCount()))
-				.orElse(null);
+		BattleRoomParticipant winner = null;
+		for (BattleRoomParticipant p : participants) {
+			if (winner == null || p.getPoints() > winner.getPoints()
+					|| (p.getPoints() == winner.getPoints() && p.getCorrectCount() > winner.getCorrectCount())) {
+				winner = p;
+			}
+		}
 
 		room.setStatus(BattleRoomStatus.COMPLETED);
 		if (winner != null) {
@@ -427,48 +452,52 @@ public class BattleRoomService {
 	}
 
 	private BattleRoomResponse buildResponse(BattleRoom room) {
-		List<BattleParticipantResponse> participants = participantRepository
-				.findAllByRoomIdOrderByJoinedAtAsc(room.getId()).stream()
-				.map(p -> new BattleParticipantResponse(p.getStudentId(), studentName(room.getSchoolId(), p.getStudentId()), p.getCorrectCount()))
-				.toList();
+		List<BattleRoomParticipant> roster = participantRepository.findAllByRoomIdOrderByJoinedAtAsc(room.getId());
+		Map<UUID, String> names = roster.stream()
+				.collect(Collectors.toMap(BattleRoomParticipant::getStudentId, p -> studentName(room.getSchoolId(), p.getStudentId())));
 
 		PublicQuizQuestionResponse currentQuestion = null;
-		UUID currentBuzzWinnerStudentId = null;
+		Instant currentQuestionStartsAt = null;
+		Instant currentQuestionEndsAt = null;
+		List<UUID> answeredCurrent = List.of();
 		if (room.getStatus() == BattleRoomStatus.ACTIVE) {
 			List<UUID> questionIds = room.questionIdList();
 			if (room.getCurrentQuestionIndex() < questionIds.size()) {
 				currentQuestion = quizQuestionRepository.findById(questionIds.get(room.getCurrentQuestionIndex()))
 						.map(PublicQuizQuestionResponse::from).orElse(null);
 			}
-			currentBuzzWinnerStudentId = buzzWinnerRepository
-					.findByRoomIdAndQuestionIndex(room.getId(), room.getCurrentQuestionIndex())
-					.map(BattleBuzzWinner::getStudentId).orElse(null);
+			currentQuestionStartsAt = room.getQuestionStartedAt();
+			currentQuestionEndsAt = questionDeadline(room);
+			answeredCurrent = battleAnswerRepository
+					.findAllByRoomIdAndQuestionIndex(room.getId(), room.getCurrentQuestionIndex()).stream()
+					.map(BattleAnswer::getStudentId).toList();
 		}
 
-		BattleQuestionResultResponse lastResult = buildLastResult(room);
-		Boolean lastAnswerCorrect = lastResult != null ? lastResult.getCorrect() : null;
+		List<UUID> answered = answeredCurrent;
+		List<BattleParticipantResponse> participants = roster.stream()
+				.sorted(Comparator.comparingInt(BattleRoomParticipant::getPoints).reversed())
+				.map(p -> new BattleParticipantResponse(p.getStudentId(), names.get(p.getStudentId()), p.getPoints(),
+						p.getCorrectCount(), answered.contains(p.getStudentId())))
+				.toList();
 
-		String winnerName = room.getWinnerStudentId() != null
-				? studentName(room.getSchoolId(), room.getWinnerStudentId())
-				: null;
-
+		String winnerName = room.getWinnerStudentId() != null ? names.get(room.getWinnerStudentId()) : null;
 		Instant joinWindowEndsAt = room.getCreatedAt().plusSeconds(room.getJoinWindowSeconds());
 
 		return new BattleRoomResponse(
 				room.getId(), room.getRoomCode(), room.getClassName(), room.getSubject().getName(), room.getStatus(),
 				room.getMinPlayers(), room.getMaxPlayers(), room.getJoinWindowSeconds(), joinWindowEndsAt,
 				room.getQuestionCount(), room.getCurrentQuestionIndex(), participants, currentQuestion,
-				room.getStatus() == BattleRoomStatus.ACTIVE ? room.getQuestionStartedAt() : null,
-				currentBuzzWinnerStudentId, lastAnswerCorrect, lastResult, room.getWinnerStudentId(), winnerName);
+				currentQuestionStartsAt, currentQuestionEndsAt, buildLastResult(room, roster, names),
+				room.getWinnerStudentId(), winnerName);
 	}
 
 	/**
 	 * The most recently closed question: the one before the current while ACTIVE, or the final one
 	 * once COMPLETED (completeRoom() leaves currentQuestionIndex on the last question). Revealing its
-	 * correctOption is safe - it's no longer in play. No BattleAnswer row means nobody answered in
-	 * time (sweepActiveRoomTimeouts skipped it).
+	 * correctOption and everyone's answers is safe - it's no longer in play. Participants with no
+	 * BattleAnswer row didn't answer in time.
 	 */
-	private BattleQuestionResultResponse buildLastResult(BattleRoom room) {
+	private BattleQuestionResultResponse buildLastResult(BattleRoom room, List<BattleRoomParticipant> roster, Map<UUID, String> names) {
 		int closedIndex;
 		if (room.getStatus() == BattleRoomStatus.ACTIVE) {
 			closedIndex = room.getCurrentQuestionIndex() - 1;
@@ -485,13 +514,22 @@ public class BattleRoomService {
 		UUID questionId = questionIds.get(closedIndex);
 		QuizOption correctOption = quizQuestionRepository.findById(questionId)
 				.map(QuizQuestion::getCorrectOption).orElse(null);
+		Map<UUID, BattleAnswer> answers = battleAnswerRepository.findAllByRoomIdAndQuestionIndex(room.getId(), closedIndex)
+				.stream().collect(Collectors.toMap(BattleAnswer::getStudentId, Function.identity()));
 
-		return battleAnswerRepository.findByRoomIdAndQuestionIndex(room.getId(), closedIndex)
-				.map(answer -> new BattleQuestionResultResponse(closedIndex, questionId, BattleQuestionOutcome.ANSWERED,
-						answer.getStudentId(), studentName(room.getSchoolId(), answer.getStudentId()),
-						answer.getSelectedOption(), correctOption, answer.isCorrect()))
-				.orElseGet(() -> new BattleQuestionResultResponse(closedIndex, questionId, BattleQuestionOutcome.TIMED_OUT,
-						null, null, null, correctOption, null));
+		List<BattlePlayerResultResponse> results = roster.stream()
+				.map(p -> {
+					BattleAnswer a = answers.get(p.getStudentId());
+					return a == null
+							? new BattlePlayerResultResponse(p.getStudentId(), names.get(p.getStudentId()), false, null, false, 0, null)
+							: new BattlePlayerResultResponse(p.getStudentId(), names.get(p.getStudentId()), true,
+									a.getSelectedOption(), a.isCorrect(), a.getPoints(), a.getResponseMs());
+				})
+				.sorted(Comparator.comparingInt(BattlePlayerResultResponse::getPoints).reversed()
+						.thenComparing(r -> r.getResponseMs() == null ? Integer.MAX_VALUE : r.getResponseMs()))
+				.toList();
+
+		return new BattleQuestionResultResponse(closedIndex, questionId, correctOption, results);
 	}
 
 	private String studentName(UUID schoolId, UUID studentId) {
