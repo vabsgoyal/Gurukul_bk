@@ -22,9 +22,10 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@Tag(name = "Battle Rooms", description = "Live, multiplayer (2-5 students) fastest-buzz-first quiz battles, "
-		+ "scoped to one class (any section) + one subject (Gamification Phase 4b). Buzzing and answering happen "
-		+ "over STOMP (/app/battle-rooms/{roomId}/buzz, /app/battle-rooms/{roomId}/answer); these REST endpoints "
+@Tag(name = "Battle Rooms", description = "Live, multiplayer (2-5 students) quiz battles, "
+		+ "scoped to one class (any section) + one subject (Gamification Phase 4b). Everyone answers every question; "
+		+ "a correct answer scores 1-10 by speed. Answering happens over STOMP (/app/battle-rooms/{roomId}/answer); "
+		+ "these REST endpoints "
 		+ "cover room creation/matching/lobby state. Requires X-School-Id and Authorization headers.")
 public class BattleRoomController {
 

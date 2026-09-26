@@ -12,12 +12,12 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/** Only the current question's buzz winner ever gets to answer, so one row per (room, question). */
+/** Every participant answers each question once, so one row per (room, question, student). */
 @Getter
 @Setter
 @Entity
 @Table(name = "battle_answer", uniqueConstraints = {
-		@UniqueConstraint(columnNames = {"room_id", "question_index"})
+		@UniqueConstraint(columnNames = {"room_id", "question_index", "student_id"})
 })
 public class BattleAnswer extends BaseEntity {
 
@@ -36,5 +36,13 @@ public class BattleAnswer extends BaseEntity {
 
 	@Column(nullable = false)
 	private boolean correct;
+
+	/** 1-10 for a correct answer by speed, 0 for a wrong one. */
+	@Column(nullable = false)
+	private int points;
+
+	/** Server-measured: question start to this answer's arrival. */
+	@Column(name = "response_ms", nullable = false)
+	private int responseMs;
 
 }

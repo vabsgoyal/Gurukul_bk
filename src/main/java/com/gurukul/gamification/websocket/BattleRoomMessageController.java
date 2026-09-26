@@ -15,8 +15,8 @@ import org.springframework.stereotype.Controller;
 import java.util.UUID;
 
 /**
- * Buzz and answer are the only latency-sensitive Battle Room actions, so they go over STOMP
- * (not REST) for the lowest possible round-trip - everything else (create/join/match/lobby state)
+ * Answering is the only latency-sensitive Battle Room action (it's scored by speed), so it goes
+ * over STOMP (not REST) for the lowest possible round-trip - everything else (create/join/match/lobby state)
  * is plain REST via BattleRoomController. Result is broadcast to /topic/battle-rooms/{roomId} by
  * BattleRoomService itself, not returned here, same as ChatMessageController's pattern.
  */
@@ -25,11 +25,6 @@ import java.util.UUID;
 public class BattleRoomMessageController {
 
 	private final BattleRoomService battleRoomService;
-
-	@MessageMapping("/battle-rooms/{roomId}/buzz")
-	public void buzz(@DestinationVariable UUID roomId, SimpMessageHeaderAccessor accessor) {
-		battleRoomService.buzz(requirePrincipal(accessor), roomId);
-	}
 
 	@MessageMapping("/battle-rooms/{roomId}/answer")
 	public void answer(
