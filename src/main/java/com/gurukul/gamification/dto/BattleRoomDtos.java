@@ -66,10 +66,42 @@ public class BattleRoomDtos {
 		private int currentQuestionIndex;
 		private List<BattleParticipantResponse> participants;
 		private ArenaDtos.PublicQuizQuestionResponse currentQuestion;
+		@Schema(description = "When buzzing opens for currentQuestion. In the future during the reveal pause "
+				+ "after the previous question - hide the question and count down to this instead; buzzes are "
+				+ "rejected until then")
+		private Instant currentQuestionStartsAt;
 		private UUID currentBuzzWinnerStudentId;
+		@Deprecated
+		@Schema(deprecated = true, description = "Use lastResult.correct")
 		private Boolean lastAnswerCorrect;
+		@Schema(description = "Outcome of the most recently closed question, including its correct option - "
+				+ "null before the first question closes")
+		private BattleQuestionResultResponse lastResult;
 		private UUID winnerStudentId;
 		private String winnerName;
+	}
+
+	public enum BattleQuestionOutcome {
+		ANSWERED,
+		TIMED_OUT
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(name = "BattleQuestionResultResponse", description = "Revealed once a question closes, for every "
+			+ "participant - never sent for the question still in play")
+	public static class BattleQuestionResultResponse {
+		private int questionIndex;
+		private UUID questionId;
+		private BattleQuestionOutcome outcome;
+		@Schema(description = "Null when TIMED_OUT")
+		private UUID answeredByStudentId;
+		@Schema(description = "Null when TIMED_OUT")
+		private String answeredByName;
+		@Schema(description = "Null when TIMED_OUT")
+		private QuizOption selectedOption;
+		private QuizOption correctOption;
+		@Schema(description = "Null when TIMED_OUT")
+		private Boolean correct;
 	}
 
 	@Getter @AllArgsConstructor
