@@ -7,6 +7,8 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.gamification.dto.ArenaDtos.PublicQuizQuestionResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleParticipantResponse;
+import com.gurukul.gamification.dto.BattleRoomDtos.BattleQuestionOutcome;
+import com.gurukul.gamification.dto.BattleRoomDtos.BattleQuestionResultResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BattleRoomSummaryResponse;
 import com.gurukul.gamification.dto.BattleRoomDtos.BuzzResponse;
@@ -19,6 +21,7 @@ import com.gurukul.gamification.entity.BattleBuzzWinner;
 import com.gurukul.gamification.entity.BattleRoom;
 import com.gurukul.gamification.entity.BattleRoomParticipant;
 import com.gurukul.gamification.entity.BattleRoomStatus;
+import com.gurukul.gamification.entity.QuizOption;
 import com.gurukul.gamification.entity.QuizQuestion;
 import com.gurukul.gamification.entity.XpSource;
 import com.gurukul.gamification.repository.BattleAnswerRepository;
@@ -89,6 +92,9 @@ public class BattleRoomService {
 
 	@Value("${app.gamification.battle-room.win-xp:10}")
 	private int winXp;
+
+	@Value("${app.gamification.battle-room.reveal-seconds:3}")
+	private int revealSeconds;
 
 	@Transactional
 	public BattleRoomResponse createRoom(AuthPrincipal principal, CreateBattleRoomRequest request) {
@@ -227,6 +233,9 @@ public class BattleRoomService {
 		if (room.getStatus() != BattleRoomStatus.ACTIVE) {
 			throw new IllegalStateException("This battle isn't live");
 		}
+		if (room.getQuestionStartedAt() != null && Instant.now().isBefore(room.getQuestionStartedAt())) {
+			throw new IllegalStateException("The next question hasn't started yet");
+		}
 
 		BattleBuzzWinner buzz = new BattleBuzzWinner();
 		buzz.setSchoolId(principal.getSchoolId());
@@ -351,14 +360,19 @@ public class BattleRoomService {
 		broadcast(room);
 	}
 
-	/** Advances to the next question, or completes the room if the current one was the last. */
+	/**
+	 * Advances to the next question, or completes the room if the current one was the last. The next
+	 * question starts revealSeconds from now, not immediately - that pause is when clients show the
+	 * just-closed question's lastResult (who answered, the correct option). buzz() rejects until then,
+	 * and the sweep's timeout clock runs from that start too.
+	 */
 	private void advanceOrComplete(BattleRoom room) {
 		int nextIndex = room.getCurrentQuestionIndex() + 1;
 		if (nextIndex >= room.getQuestionCount()) {
 			completeRoom(room);
 		} else {
 			room.setCurrentQuestionIndex(nextIndex);
-			room.setQuestionStartedAt(Instant.now());
+			room.setQuestionStartedAt(Instant.now().plusSeconds(revealSeconds));
 			battleRoomRepository.save(room);
 		}
 	}
@@ -431,12 +445,8 @@ public class BattleRoomService {
 					.map(BattleBuzzWinner::getStudentId).orElse(null);
 		}
 
-		Boolean lastAnswerCorrect = null;
-		int previousIndex = room.getCurrentQuestionIndex() - 1;
-		if (previousIndex >= 0) {
-			lastAnswerCorrect = battleAnswerRepository.findByRoomIdAndQuestionIndex(room.getId(), previousIndex)
-					.map(BattleAnswer::isCorrect).orElse(null);
-		}
+		BattleQuestionResultResponse lastResult = buildLastResult(room);
+		Boolean lastAnswerCorrect = lastResult != null ? lastResult.getCorrect() : null;
 
 		String winnerName = room.getWinnerStudentId() != null
 				? studentName(room.getSchoolId(), room.getWinnerStudentId())
@@ -448,7 +458,40 @@ public class BattleRoomService {
 				room.getId(), room.getRoomCode(), room.getClassName(), room.getSubject().getName(), room.getStatus(),
 				room.getMinPlayers(), room.getMaxPlayers(), room.getJoinWindowSeconds(), joinWindowEndsAt,
 				room.getQuestionCount(), room.getCurrentQuestionIndex(), participants, currentQuestion,
-				currentBuzzWinnerStudentId, lastAnswerCorrect, room.getWinnerStudentId(), winnerName);
+				room.getStatus() == BattleRoomStatus.ACTIVE ? room.getQuestionStartedAt() : null,
+				currentBuzzWinnerStudentId, lastAnswerCorrect, lastResult, room.getWinnerStudentId(), winnerName);
+	}
+
+	/**
+	 * The most recently closed question: the one before the current while ACTIVE, or the final one
+	 * once COMPLETED (completeRoom() leaves currentQuestionIndex on the last question). Revealing its
+	 * correctOption is safe - it's no longer in play. No BattleAnswer row means nobody answered in
+	 * time (sweepActiveRoomTimeouts skipped it).
+	 */
+	private BattleQuestionResultResponse buildLastResult(BattleRoom room) {
+		int closedIndex;
+		if (room.getStatus() == BattleRoomStatus.ACTIVE) {
+			closedIndex = room.getCurrentQuestionIndex() - 1;
+		} else if (room.getStatus() == BattleRoomStatus.COMPLETED) {
+			closedIndex = room.getCurrentQuestionIndex();
+		} else {
+			return null;
+		}
+		List<UUID> questionIds = room.questionIdList();
+		if (closedIndex < 0 || closedIndex >= questionIds.size()) {
+			return null;
+		}
+
+		UUID questionId = questionIds.get(closedIndex);
+		QuizOption correctOption = quizQuestionRepository.findById(questionId)
+				.map(QuizQuestion::getCorrectOption).orElse(null);
+
+		return battleAnswerRepository.findByRoomIdAndQuestionIndex(room.getId(), closedIndex)
+				.map(answer -> new BattleQuestionResultResponse(closedIndex, questionId, BattleQuestionOutcome.ANSWERED,
+						answer.getStudentId(), studentName(room.getSchoolId(), answer.getStudentId()),
+						answer.getSelectedOption(), correctOption, answer.isCorrect()))
+				.orElseGet(() -> new BattleQuestionResultResponse(closedIndex, questionId, BattleQuestionOutcome.TIMED_OUT,
+						null, null, null, correctOption, null));
 	}
 
 	private String studentName(UUID schoolId, UUID studentId) {
