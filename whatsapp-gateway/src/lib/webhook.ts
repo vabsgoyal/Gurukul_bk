@@ -369,8 +369,15 @@ export async function testWebhook(webhookId: string, url: string, secret?: strin
 
 /**
  * Helper to download and save media
+ *
+ * Off unless WA_DOWNLOAD_MEDIA=true: every photo/video/document sent to or from the session
+ * (including all of its group chats) would otherwise be saved under data/media. For OTP-only use
+ * that's pure disk growth - on the 8 GB prod box it hit ~600 MB/day and filled the disk.
  */
 export async function downloadAndSaveMedia(message: WAMessage, sessionId: string): Promise<string | null> {
+    if (process.env.WA_DOWNLOAD_MEDIA !== "true") {
+        return null;
+    }
     try {
         const messageContent = normalizeMessageContent(message.message);
         if (!messageContent) {
