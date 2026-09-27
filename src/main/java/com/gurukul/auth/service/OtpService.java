@@ -83,8 +83,8 @@ public class OtpService {
 
 	/**
 	 * One profile on the phone: logs straight in, as before. Several (siblings sharing a parent's
-	 * number, or a teacher who is also a parent): returns the list plus a selection token instead,
-	 * and the client finishes with {@link #selectProfile}.
+	 * number, or a teacher who is also a parent): also returns the list plus a selection token, and
+	 * the client finishes with {@link #selectProfile}.
 	 */
 	@Transactional
 	public OtpVerifyResponse verifyOtp(String phone, String otp) {
@@ -100,10 +100,12 @@ public class OtpService {
 		otpCode.setConsumedAt(Instant.now());
 
 		List<PhoneProfile> profiles = profilesFor(schoolId, phone);
+		// Always log in as the first profile too, so app versions without the picker still work.
+		LoginResponse login = login(schoolId, profiles.getFirst(), phone);
 		if (profiles.size() == 1) {
-			return OtpVerifyResponse.loggedIn(login(schoolId, profiles.getFirst(), phone), List.of());
+			return OtpVerifyResponse.of(login, null, List.of());
 		}
-		return OtpVerifyResponse.selectionRequired(schoolId,
+		return OtpVerifyResponse.of(login,
 				jwtService.generateProfileSelectionToken(schoolId, phone), toLoginProfiles(profiles, null));
 	}
 

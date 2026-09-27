@@ -43,7 +43,9 @@ class SharedPhoneOtpIntegrationTest {
 		MvcResult verified = verify(phone)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.profileSelectionRequired").value(true))
-				.andExpect(jsonPath("$.data.token").doesNotExist())
+				// Old app versions without the picker still get a login, for the first profile.
+				.andExpect(jsonPath("$.data.ownerId").value(aarav))
+				.andExpect(jsonPath("$.data.token").exists())
 				.andExpect(jsonPath("$.data.profiles.length()").value(2))
 				// Sorted by name, so the picker order is stable.
 				.andExpect(jsonPath("$.data.profiles[0].ownerId").value(aarav))

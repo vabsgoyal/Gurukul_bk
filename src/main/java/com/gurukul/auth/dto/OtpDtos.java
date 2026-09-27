@@ -29,10 +29,11 @@ public class OtpDtos {
 	}
 
 	@Getter @AllArgsConstructor
-	@Schema(description = "OTP verify result. If the phone belongs to one profile, the login fields are set exactly as "
-			+ "before and profileSelectionRequired is false. If it belongs to several (e.g. siblings sharing a "
-			+ "parent's number), token is null, profileSelectionRequired is true, and the client shows `profiles` "
-			+ "and calls POST /api/v1/auth/otp/select-profile with the selectionToken and the chosen profile.")
+	@Schema(description = "OTP verify result. The login fields are always set, as before. If the phone belongs to "
+			+ "several profiles (e.g. siblings sharing a parent's number), profileSelectionRequired is true: the "
+			+ "client should show `profiles` and call POST /api/v1/auth/otp/select-profile with the selectionToken "
+			+ "and the chosen profile. The login fields are then for the first profile, only so app versions "
+			+ "without the picker keep working.")
 	public static class OtpVerifyResponse {
 		private String token;
 		private String tokenType;
@@ -46,13 +47,10 @@ public class OtpDtos {
 		private String selectionToken;
 		private List<LoginProfile> profiles;
 
-		public static OtpVerifyResponse loggedIn(LoginResponse login, List<LoginProfile> profiles) {
+		public static OtpVerifyResponse of(LoginResponse login, String selectionToken, List<LoginProfile> profiles) {
 			return new OtpVerifyResponse(login.getToken(), login.getTokenType(), login.getOwnerType(), login.getOwnerId(),
-					login.getRole(), login.getSchoolId(), login.getUsername(), false, null, profiles);
-		}
-
-		public static OtpVerifyResponse selectionRequired(UUID schoolId, String selectionToken, List<LoginProfile> profiles) {
-			return new OtpVerifyResponse(null, null, null, null, null, schoolId, null, true, selectionToken, profiles);
+					login.getRole(), login.getSchoolId(), login.getUsername(), selectionToken != null, selectionToken,
+					profiles);
 		}
 	}
 
