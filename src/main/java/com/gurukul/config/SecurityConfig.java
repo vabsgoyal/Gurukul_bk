@@ -88,6 +88,8 @@ public class SecurityConfig {
 						// Push notification device registration: any authenticated session registers its
 						// own device, regardless of role.
 						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/device-token").authenticated()
+						// Profile picker: list/switch between the profiles that share the caller's phone.
+						.requestMatchers("/api/v1/auth/profiles", "/api/v1/auth/profiles/**").authenticated()
 						// Assessments: teachers/admins author them; students may only ever read (GETs stay
 						// on the general permitAll() below, matching every other read-only listing today).
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/assessments").hasAnyRole("TEACHER", "ADMIN")
