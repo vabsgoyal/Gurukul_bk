@@ -34,6 +34,11 @@ public class JwtService {
 		this.expirationMillis = expirationMinutes * 60_000L;
 	}
 
+	/** When a token generated now would expire - reported to clients alongside the token. */
+	public Instant accessTokenExpiresAt(Instant issuedAt) {
+		return issuedAt.plusMillis(expirationMillis);
+	}
+
 	public String generateToken(Credential credential) {
 		Instant now = Instant.now();
 		return Jwts.builder()

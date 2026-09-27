@@ -56,6 +56,7 @@ public class OtpService {
 	private final OtpCodeRepository otpCodeRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
+	private final SessionTokenService sessionTokenService;
 	private final SchoolContext schoolContext;
 	private final OtpChannel otpChannel;
 	private final WhatsAppOtpProperties whatsAppOtpProperties;
@@ -131,10 +132,13 @@ public class OtpService {
 		return toLoginProfiles(switchableFor(principal), principal);
 	}
 
+	/** Pass the current refresh token to end the old profile's session along with the switch. */
 	@Transactional
-	public LoginResponse switchProfile(AuthPrincipal principal, OwnerType ownerType, UUID ownerId) {
+	public LoginResponse switchProfile(AuthPrincipal principal, OwnerType ownerType, UUID ownerId, String refreshToken) {
 		String phone = phoneOf(principal);
-		return login(principal.getSchoolId(), findProfile(switchableFor(principal), ownerType, ownerId), phone);
+		LoginResponse login = login(principal.getSchoolId(), findProfile(switchableFor(principal), ownerType, ownerId), phone);
+		sessionTokenService.revoke(refreshToken);
+		return login;
 	}
 
 	private List<PhoneProfile> switchableFor(AuthPrincipal principal) {
@@ -171,10 +175,7 @@ public class OtpService {
 	private LoginResponse login(UUID schoolId, PhoneProfile profile, String phone) {
 		Credential credential = credentialRepository.findByOwnerTypeAndOwnerId(profile.ownerType(), profile.ownerId())
 				.orElseGet(() -> createCredentialFor(schoolId, profile, phone));
-		String token = jwtService.generateToken(credential);
-		return new LoginResponse(
-				token, "Bearer", credential.getOwnerType(), credential.getOwnerId(),
-				credential.getRole(), credential.getSchoolId(), credential.getUsername());
+		return sessionTokenService.issue(credential);
 	}
 
 	private List<LoginProfile> toLoginProfiles(List<PhoneProfile> profiles, AuthPrincipal principal) {

@@ -5,7 +5,7 @@ import com.gurukul.auth.entity.Credential;
 import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.repository.CredentialRepository;
-import com.gurukul.auth.security.JwtService;
+import com.gurukul.auth.service.SessionTokenService;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.employees.entity.Employee;
 import com.gurukul.employees.entity.EmployeeStatus;
@@ -55,7 +55,7 @@ public class SchoolService {
 	private final EmployeeRepository employeeRepository;
 	private final CredentialRepository credentialRepository;
 	private final PasswordEncoder passwordEncoder;
-	private final JwtService jwtService;
+	private final SessionTokenService sessionTokenService;
 
 	@Transactional
 	public SchoolRegistrationResponse register(SchoolRegistrationRequest request) {
@@ -110,9 +110,7 @@ public class SchoolService {
 		credential.setRole(Role.ADMIN);
 		credential = credentialRepository.save(credential);
 
-		String token = jwtService.generateToken(credential);
-		return new LoginResponse(token, "Bearer", credential.getOwnerType(), credential.getOwnerId(),
-				credential.getRole(), credential.getSchoolId(), credential.getUsername());
+		return sessionTokenService.issue(credential);
 	}
 
 	public SchoolResponse getById(UUID id) {
