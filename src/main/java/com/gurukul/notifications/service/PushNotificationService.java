@@ -4,6 +4,7 @@ import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.notifications.entity.DeviceToken;
 import com.gurukul.notifications.repository.DeviceTokenRepository;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,16 +28,24 @@ import java.util.UUID;
  * no registered device for the recipient) is caught/absorbed and never propagated - a push is a
  * best-effort convenience for a backgrounded app, not something that should ever block or fail
  * the action that triggered it (sending a message, starting a call, posting an announcement).
+ *
+ * <p>Expo answers 200 even when individual messages fail - each message gets its own ticket with
+ * status "error" (e.g. DeviceNotRegistered for an uninstalled app, InvalidCredentials when the
+ * Android FCM key isn't uploaded to EAS). Those are logged, and DeviceNotRegistered tokens are
+ * deleted so dead devices stop being targeted. Only send-time tickets are checked; delivery
+ * receipts (Expo's getReceipts, fetched later) are not.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PushNotificationService {
 
-	private static final String EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+	static final String EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+	/** Expo rejects requests with more messages than this. */
+	static final int EXPO_MAX_BATCH = 100;
 
 	private final DeviceTokenRepository deviceTokenRepository;
-	private final RestClient restClient = RestClient.create();
+	private final RestClient expoPushRestClient;
 
 	public record Recipient(OwnerType ownerType, UUID ownerId) {
 	}
@@ -77,6 +87,12 @@ public class PushNotificationService {
 		if (tokens.isEmpty()) {
 			return;
 		}
+		for (int from = 0; from < tokens.size(); from += EXPO_MAX_BATCH) {
+			sendBatch(tokens.subList(from, Math.min(from + EXPO_MAX_BATCH, tokens.size())), title, body, data);
+		}
+	}
+
+	private void sendBatch(List<String> tokens, String title, String body, Map<String, Object> data) {
 		try {
 			List<Map<String, Object>> messages = tokens.stream()
 					.map(token -> Map.<String, Object>of(
@@ -86,15 +102,68 @@ public class PushNotificationService {
 							"data", data,
 							"sound", "default"))
 					.toList();
-			restClient.post()
+			ExpoPushResponse response = expoPushRestClient.post()
 					.uri(EXPO_PUSH_URL)
 					.contentType(MediaType.APPLICATION_JSON)
 					.body(messages)
 					.retrieve()
-					.toBodilessEntity();
+					.body(ExpoPushResponse.class);
+			handleTickets(tokens, response);
 		} catch (Exception e) {
 			log.warn("Push notification send failed for {} token(s) - proceeding without it", tokens.size(), e);
 		}
+	}
+
+	/** Tickets come back in the same order as the messages sent. */
+	private void handleTickets(List<String> tokens, ExpoPushResponse response) {
+		if (response == null) {
+			return;
+		}
+		if (response.errors() != null && !response.errors().isEmpty()) {
+			log.warn("Expo rejected a push request for {} token(s): {}", tokens.size(), response.errors());
+		}
+		if (response.data() == null) {
+			return;
+		}
+		List<String> unregistered = new ArrayList<>();
+		for (int i = 0; i < Math.min(tokens.size(), response.data().size()); i++) {
+			ExpoTicket ticket = response.data().get(i);
+			if (!"error".equals(ticket.status())) {
+				continue;
+			}
+			String error = ticket.details() != null ? ticket.details().error() : null;
+			log.warn("Expo push failed for token {}: {} ({})", redact(tokens.get(i)), error, ticket.message());
+			if ("DeviceNotRegistered".equals(error)) {
+				unregistered.add(tokens.get(i));
+			}
+		}
+		removeTokens(unregistered);
+	}
+
+	private void removeTokens(Collection<String> expoPushTokens) {
+		for (String token : expoPushTokens) {
+			deviceTokenRepository.findByExpoPushToken(token).ifPresent(deviceTokenRepository::delete);
+		}
+		if (!expoPushTokens.isEmpty()) {
+			log.info("Removed {} push token(s) Expo reported as no longer registered", expoPushTokens.size());
+		}
+	}
+
+	/** Push tokens are credentials for messaging that device - never log them whole. */
+	private static String redact(String token) {
+		return token.length() <= 24 ? token : token.substring(0, 24) + "...]";
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ExpoPushResponse(List<ExpoTicket> data, List<Map<String, Object>> errors) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ExpoTicket(String status, String id, String message, ExpoTicketDetails details) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ExpoTicketDetails(String error) {
 	}
 
 }
