@@ -40,6 +40,18 @@ public class AuthDtos {
 		private Role role;
 		private UUID schoolId;
 		private String username;
+		@Schema(description = "Exchange at POST /api/v1/auth/refresh for a new token pair before or after the access "
+				+ "token expires. Single use - always store the new one. Keep it in secure storage.")
+		private String refreshToken;
+		private Instant accessTokenExpiresAt;
+		@Schema(description = "Slides forward on every refresh; the user is only logged out after this long unused")
+		private Instant refreshTokenExpiresAt;
+	}
+
+	@Getter @Setter
+	@Schema(description = "Refresh token from the last login or refresh")
+	public static class RefreshTokenRequest {
+		@NotBlank private String refreshToken;
 	}
 
 	@Getter @Setter

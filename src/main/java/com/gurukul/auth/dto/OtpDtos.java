@@ -87,6 +87,8 @@ public class OtpDtos {
 	public static class SwitchProfileRequest {
 		@NotNull private OwnerType ownerType;
 		@NotNull private UUID ownerId;
+		@Schema(description = "Optional: the current refresh token, so the old profile's session is ended")
+		private String refreshToken;
 	}
 
 }

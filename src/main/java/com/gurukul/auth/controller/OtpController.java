@@ -68,7 +68,8 @@ public class OtpController {
 			description = "Returns a new token for the chosen profile, with no new OTP. Replace the stored token with it.")
 	public ApiResponse<LoginResponse> switchProfile(@Valid @RequestBody SwitchProfileRequest request) {
 		return ApiResponse.success(otpService.switchProfile(
-				AuthContext.current(), request.getOwnerType(), request.getOwnerId()), "Switched profile");
+				AuthContext.current(), request.getOwnerType(), request.getOwnerId(), request.getRefreshToken()),
+				"Switched profile");
 	}
 
 }

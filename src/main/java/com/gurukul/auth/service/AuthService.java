@@ -7,7 +7,6 @@ import com.gurukul.auth.entity.Credential;
 import com.gurukul.auth.google.GoogleTokenVerifier;
 import com.gurukul.auth.google.GoogleTokenVerifier.GoogleIdentity;
 import com.gurukul.auth.repository.CredentialRepository;
-import com.gurukul.auth.security.JwtService;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.registration.service.RegistrationService;
 import com.gurukul.workflow.entity.ApprovalStatus;
@@ -22,7 +21,7 @@ public class AuthService {
 
 	private final CredentialRepository credentialRepository;
 	private final PasswordEncoder passwordEncoder;
-	private final JwtService jwtService;
+	private final SessionTokenService sessionTokenService;
 	private final SchoolContext schoolContext;
 	private final GoogleTokenVerifier googleTokenVerifier;
 	private final RegistrationService registrationService;
@@ -69,16 +68,7 @@ public class AuthService {
 	}
 
 	private LoginResponse toResponse(Credential credential) {
-		String token = jwtService.generateToken(credential);
-		return new LoginResponse(
-				token,
-				"Bearer",
-				credential.getOwnerType(),
-				credential.getOwnerId(),
-				credential.getRole(),
-				credential.getSchoolId(),
-				credential.getUsername()
-		);
+		return sessionTokenService.issue(credential);
 	}
 
 }

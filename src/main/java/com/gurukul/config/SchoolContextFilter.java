@@ -72,6 +72,10 @@ public class SchoolContextFilter extends OncePerRequestFilter {
 		if ("GET".equals(method) && "/api/v1/schools".equals(uri)) {
 			return true;
 		}
+		// The refresh token itself identifies the login (and so the school).
+		if ("POST".equals(method) && ("/api/v1/auth/refresh".equals(uri) || "/api/v1/auth/logout".equals(uri))) {
+			return true;
+		}
 		// Marketing-site demo requests come from prospects with no school in the system yet.
 		if ("/api/v1/leads".equals(uri)) {
 			return true;
