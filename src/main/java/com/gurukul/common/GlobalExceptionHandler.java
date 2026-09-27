@@ -75,6 +75,11 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponse.error(ex.getMessage()));
 	}
 
+	@ExceptionHandler(com.gurukul.leads.service.LeadRateLimitedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleLeadRateLimited(com.gurukul.leads.service.LeadRateLimitedException ex) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(ApiResponse.error(ex.getMessage(), "RATE_LIMITED"));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
