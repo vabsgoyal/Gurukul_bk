@@ -76,6 +76,19 @@ public class SessionTokenService {
 	}
 
 	/**
+	 * An access token with no refresh token or session row behind it. Used for the placeholder login
+	 * OTP verify returns alongside the profile picker (kept for app versions without the picker), so
+	 * picking a different profile doesn't leave an unused 7-day session behind.
+	 */
+	public LoginResponse issueAccessOnly(Credential credential) {
+		Instant now = Instant.now();
+		return new LoginResponse(
+				jwtService.generateToken(credential), "Bearer", credential.getOwnerType(), credential.getOwnerId(),
+				credential.getRole(), credential.getSchoolId(), credential.getUsername(),
+				null, jwtService.accessTokenExpiresAt(now), null);
+	}
+
+	/**
 	 * Trades a refresh token for a new pair. Deliberately needs no access token or X-School-Id -
 	 * the access token is usually the thing that just expired.
 	 */
