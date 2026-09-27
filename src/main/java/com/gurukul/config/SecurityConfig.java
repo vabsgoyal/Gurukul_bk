@@ -4,6 +4,7 @@ import com.gurukul.auth.security.JwtAuthenticationFilter;
 import com.gurukul.auth.security.JwtService;
 import com.gurukul.auth.security.RestAccessDeniedHandler;
 import com.gurukul.auth.security.RestAuthenticationEntryPoint;
+import com.gurukul.fees.controller.RazorpayWebhookController;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -54,6 +55,19 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
 						.permitAll()
+						// Razorpay's webhook is a server-to-server POST carrying no JWT - it cannot
+						// authenticate the way a client does. Its authenticity is established instead by
+						// an HMAC-SHA256 signature over the raw body, checked in RazorpayPaymentService
+						// before a single field is read. Stated explicitly rather than relying on the
+						// blanket permitAll() at the bottom, so it survives that being tightened.
+						.requestMatchers(HttpMethod.POST, RazorpayWebhookController.WEBHOOK_PATH).permitAll()
+						// Paying a fee is a student/parent action; staff record payments through
+						// /api/v1/fee-payments instead. Ownership ("only your own fee") is enforced in
+						// the service layer, which is the only place it can be expressed.
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-assessments/*/razorpay-order")
+						.hasAnyRole("ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/razorpay/verify")
+						.hasAnyRole("ADMIN", "STUDENT", "PARENT")
 						// Attendance: teacher/admin mark & view a section's roster; students, teachers and
 						// admins may view a student's own history (self-check enforced in the service layer).
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/attendance").hasAnyRole("TEACHER", "ADMIN")

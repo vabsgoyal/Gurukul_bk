@@ -8,8 +8,12 @@ import com.gurukul.fees.dto.FeePaymentRequestResponse;
 import com.gurukul.fees.dto.FeePaymentResponse;
 import com.gurukul.fees.dto.PaymentAttemptResponse;
 import com.gurukul.fees.dto.PaymentAttemptResultRequest;
+import com.gurukul.fees.dto.PaymentGatewayStatusResponse;
+import com.gurukul.fees.dto.RazorpayOrderResponse;
+import com.gurukul.fees.dto.RazorpayVerifyRequest;
 import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.service.FeePaymentService;
+import com.gurukul.fees.service.RazorpayPaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,6 +35,7 @@ import java.util.UUID;
 public class FeePaymentController {
 
 	private final FeePaymentService feePaymentService;
+	private final RazorpayPaymentService razorpayPaymentService;
 
 	@GetMapping("/api/v1/fee-assessments")
 	@Operation(summary = "List fee assessments, paginated, optionally filtered by status and/or class-section",
@@ -87,6 +92,32 @@ public class FeePaymentController {
 	@Operation(summary = "List all payment attempts for a fee assessment, most recent first")
 	public ApiResponse<List<PaymentAttemptResponse>> listAttempts(@PathVariable UUID id) {
 		return ApiResponse.success(feePaymentService.listAttemptsForAssessment(id));
+	}
+
+	@GetMapping("/api/v1/fee-payments/gateway")
+	@Operation(summary = "Which payment route this deployment can offer",
+			description = "RAZORPAY when merchant credentials are configured, otherwise the unverified "
+					+ "UPI_INTENT fallback. Clients call this before showing a Pay button rather than "
+					+ "discovering mid-payment that the gateway isn't set up.")
+	public ApiResponse<PaymentGatewayStatusResponse> gatewayStatus() {
+		return ApiResponse.success(razorpayPaymentService.gatewayStatus());
+	}
+
+	@PostMapping("/api/v1/fee-assessments/{id}/razorpay-order")
+	@Operation(summary = "Create a Razorpay order for a student's full remaining due",
+			description = "Returns everything Razorpay Checkout needs. The amount is fixed server-side "
+					+ "from the assessment and cannot be influenced by the client.")
+	public ApiResponse<RazorpayOrderResponse> createRazorpayOrder(@PathVariable UUID id) {
+		return ApiResponse.success(razorpayPaymentService.createOrder(id));
+	}
+
+	@PostMapping("/api/v1/razorpay/verify")
+	@Operation(summary = "Verify the result Razorpay Checkout handed back to the client",
+			description = "The signature is re-derived server-side from the key secret, then the payment "
+					+ "is re-fetched from Razorpay. Only a captured payment for the exact amount due marks "
+					+ "the fee paid. Safe to call more than once - the webhook may have already confirmed it.")
+	public ApiResponse<PaymentAttemptResponse> verifyRazorpayPayment(@Valid @RequestBody RazorpayVerifyRequest request) {
+		return ApiResponse.success(razorpayPaymentService.confirmFromCheckout(request), "Payment verified");
 	}
 
 	@PostMapping("/api/v1/payment-attempts/{transactionRef}/result")

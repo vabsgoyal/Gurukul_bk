@@ -80,6 +80,20 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(ApiResponse.error(ex.getMessage(), "RATE_LIMITED"));
 	}
 
+	/**
+	 * 503, not 500: the request was fine, the payment gateway just couldn't answer. The errorCode
+	 * lets the app offer "try again" rather than a generic failure, and - importantly - tell this
+	 * apart from a declined payment, which is a 200 with a FAILED attempt.
+	 */
+	@ExceptionHandler(com.gurukul.fees.gateway.PaymentGatewayException.class)
+	public ResponseEntity<ApiResponse<Void>> handlePaymentGatewayUnavailable(
+			com.gurukul.fees.gateway.PaymentGatewayException ex) {
+		log.error("Payment gateway call failed", ex);
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+				.body(ApiResponse.error(ex.getMessage(),
+						com.gurukul.fees.gateway.PaymentGatewayException.ERROR_CODE));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));

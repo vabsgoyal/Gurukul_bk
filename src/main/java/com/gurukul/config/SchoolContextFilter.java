@@ -1,6 +1,7 @@
 package com.gurukul.config;
 
 import com.gurukul.common.SchoolContext;
+import com.gurukul.fees.controller.RazorpayWebhookController;
 import com.gurukul.schools.service.SchoolService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -87,6 +88,12 @@ public class SchoolContextFilter extends OncePerRequestFilter {
 		// X-School-Id header. The teacher's school is resolved from their employeeId (decoded from
 		// the signed state param), not from this header.
 		if ("GET".equals(method) && "/api/v1/calls/google/callback".equals(uri)) {
+			return true;
+		}
+		// Razorpay's webhook is a server-to-server POST from outside - it has no way to know or send
+		// our X-School-Id header. The school is resolved from the payment attempt the order id points
+		// at, and authenticity comes from the HMAC signature over the raw body, not from this header.
+		if ("POST".equals(method) && RazorpayWebhookController.WEBHOOK_PATH.equals(uri)) {
 			return true;
 		}
 		return "GET".equals(method) && SCHOOL_BY_ID_PATH.matcher(uri).matches();

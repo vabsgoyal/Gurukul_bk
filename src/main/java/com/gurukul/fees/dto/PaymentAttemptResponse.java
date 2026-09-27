@@ -2,6 +2,7 @@ package com.gurukul.fees.dto;
 
 import com.gurukul.fees.entity.PaymentAttempt;
 import com.gurukul.fees.entity.PaymentAttemptStatus;
+import com.gurukul.fees.entity.PaymentProvider;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,7 +13,7 @@ import java.util.UUID;
 
 @Getter
 @AllArgsConstructor
-@Schema(description = "One attempt to pay a fee assessment via a UPI app")
+@Schema(description = "One attempt to pay a fee assessment, via the payment gateway or the UPI-intent fallback")
 public class PaymentAttemptResponse {
 
 	private UUID id;
@@ -27,6 +28,18 @@ public class PaymentAttemptResponse {
 	private Instant createdAt;
 	private Instant updatedAt;
 
+	@Schema(description = "Which route this attempt used. Only RAZORPAY attempts can ever reach VERIFIED.")
+	private PaymentProvider provider;
+
+	@Schema(description = "Gateway payment id, searchable in the Razorpay dashboard; null for UPI_INTENT")
+	private String razorpayPaymentId;
+
+	@Schema(description = "Instrument actually used (upi/card/netbanking/wallet), as reported by the gateway")
+	private String paymentMethod;
+
+	@Schema(description = "Why the payment failed, when the gateway said; safe to show to the payer")
+	private String failureReason;
+
 	public static PaymentAttemptResponse from(PaymentAttempt attempt) {
 		return new PaymentAttemptResponse(
 				attempt.getId(),
@@ -39,7 +52,11 @@ public class PaymentAttemptResponse {
 				attempt.getApprovalRefNo(),
 				attempt.getResponseCode(),
 				attempt.getCreatedAt(),
-				attempt.getUpdatedAt()
+				attempt.getUpdatedAt(),
+				attempt.getProvider(),
+				attempt.getRazorpayPaymentId(),
+				attempt.getPaymentMethod(),
+				attempt.getFailureReason()
 		);
 	}
 

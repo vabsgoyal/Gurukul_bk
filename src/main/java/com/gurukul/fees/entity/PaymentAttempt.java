@@ -15,10 +15,10 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * Records one attempt to pay a fee assessment via a UPI app, created BEFORE the UPI app is
- * opened so every attempt (including ones the user never completes) is traceable. See
- * PaymentAttemptStatus for why this is deliberately kept separate from FeePayment/FeeAssessment's
- * PAID status.
+ * Records one attempt to pay a fee assessment, created BEFORE the payer is handed off (to a UPI app
+ * or to Razorpay Checkout) so every attempt - including ones the user never completes - is
+ * traceable. See PaymentAttemptStatus for why this is deliberately kept separate from
+ * FeePayment/FeeAssessment's PAID status, and PaymentProvider for what the two routes mean.
  */
 @Getter
 @Setter
@@ -54,5 +54,31 @@ public class PaymentAttempt extends BaseEntity {
 
 	@Column(name = "raw_response", length = 2000)
 	private String rawResponse;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 20)
+	private PaymentProvider provider = PaymentProvider.UPI_INTENT;
+
+	/**
+	 * Razorpay's order id ("order_XXXX"). Globally unique (not per-school) because the webhook
+	 * carries no X-School-Id header - this is the only handle available to resolve the attempt, and
+	 * through it the school. Null for UPI_INTENT attempts.
+	 */
+	@Column(name = "razorpay_order_id", length = 64)
+	private String razorpayOrderId;
+
+	@Column(name = "razorpay_payment_id", length = 64)
+	private String razorpayPaymentId;
+
+	/** The checkout signature we verified. Kept for audit - never re-trusted after verification. */
+	@Column(name = "razorpay_signature")
+	private String razorpaySignature;
+
+	/** Instrument actually used (upi/card/netbanking/wallet), as reported by Razorpay. */
+	@Column(name = "payment_method", length = 30)
+	private String paymentMethod;
+
+	@Column(name = "failure_reason", length = 500)
+	private String failureReason;
 
 }

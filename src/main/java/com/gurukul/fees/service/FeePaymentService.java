@@ -17,6 +17,7 @@ import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.entity.FeePayment;
 import com.gurukul.fees.entity.PaymentAttempt;
 import com.gurukul.fees.entity.PaymentAttemptStatus;
+import com.gurukul.fees.entity.PaymentProvider;
 import com.gurukul.fees.entity.StudentFeeAssessment;
 import com.gurukul.fees.repository.FeePaymentRepository;
 import com.gurukul.fees.repository.PaymentAttemptRepository;
@@ -228,7 +229,7 @@ public class FeePaymentService {
 					"Your school has not set up a fee payment account yet. Ask your school admin to set it up in Fee Payment Settings.");
 		}
 
-		String referenceId = "FEE" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+		String referenceId = newPaymentReference();
 		String payeeName = school.getBankAccountHolderName() != null && !school.getBankAccountHolderName().isBlank()
 				? school.getBankAccountHolderName()
 				: school.getName();
@@ -272,6 +273,15 @@ public class FeePaymentService {
 		return URLEncoder.encode(value, StandardCharsets.UTF_8);
 	}
 
+	/**
+	 * Our own reference for one payment attempt, unique across both payment routes (it is the
+	 * payment_attempt.transaction_ref unique key, and doubles as the Razorpay order receipt - which
+	 * caps at 40 characters, so this must stay short).
+	 */
+	static String newPaymentReference() {
+		return "FEE" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+	}
+
 	/** Lets the client warn "you already have a payment in flight for this fee" before starting another. */
 	@Transactional(readOnly = true)
 	public Optional<PaymentAttemptResponse> findPendingAttempt(UUID assessmentId) {
@@ -312,6 +322,16 @@ public class FeePaymentService {
 				.orElseThrow(() -> new EntityNotFoundException("Payment attempt not found"));
 		assertCanPayOrRecord(attempt.getAssessment());
 
+		// Self-reporting is meaningful only for the UPI-intent path, where there is genuinely no
+		// other source of truth. A Razorpay attempt has one - the gateway - and accepting a client's
+		// word here would otherwise be a way to mark any fee PAID without paying: call this endpoint
+		// with RESPONSE_SUCCESS for an order you never completed. Its outcome comes from
+		// RazorpayPaymentService (signature-verified callback or webhook) and nowhere else.
+		if (attempt.getProvider() == PaymentProvider.RAZORPAY) {
+			throw new IllegalStateException(
+					"This payment is confirmed automatically by the payment gateway and cannot be self-reported");
+		}
+
 		PaymentAttemptStatus previousStatus = attempt.getStatus();
 		attempt.setStatus(request.getStatus());
 		attempt.setUpiTransactionId(request.getUpiTransactionId());
@@ -342,8 +362,13 @@ public class FeePaymentService {
 	 * A STUDENT may only pay/record for their own assessment; a PARENT must be linked to the
 	 * assessment's student (mirrors listByStudent's existing check). Any other caller (EMPLOYEE, or
 	 * no principal at all in tests) passes through unchanged - same pre-existing gap noted above.
+	 *
+	 * <p>Package-private rather than private so RazorpayPaymentService applies the identical check
+	 * on the gateway path. The "no principal" early return is also what lets the Razorpay webhook -
+	 * which has no authenticated caller at all - reach recordPayment; its authenticity is
+	 * established by HMAC signature instead.
 	 */
-	private void assertCanPayOrRecord(StudentFeeAssessment assessment) {
+	void assertCanPayOrRecord(StudentFeeAssessment assessment) {
 		AuthPrincipal principal = AuthContext.currentOrNull();
 		if (principal == null) {
 			return;
