@@ -72,6 +72,10 @@ public class SchoolContextFilter extends OncePerRequestFilter {
 		if ("GET".equals(method) && "/api/v1/schools".equals(uri)) {
 			return true;
 		}
+		// Marketing-site demo requests come from prospects with no school in the system yet.
+		if ("/api/v1/leads".equals(uri)) {
+			return true;
+		}
 		if ("POST".equals(method) && "/api/v1/ops/admin-backfill".equals(uri)) {
 			return true;
 		}
