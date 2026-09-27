@@ -47,6 +47,18 @@ public final class AuthTestSupport {
 		return JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
 	}
 
+	public static String createEmployeeWithPhone(MockMvc mockMvc, String schoolId, String name, String phone) throws Exception {
+		MvcResult result = mockMvc.perform(post("/api/v1/employees")
+						.header("X-School-Id", schoolId)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name": "%s", "designation": "Teacher", "joinDate": "2024-04-01", "contactPhone": "%s"}
+								""".formatted(name, phone)))
+				.andExpect(status().isOk())
+				.andReturn();
+		return JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
+	}
+
 	public static String createStudent(MockMvc mockMvc, String schoolId, String classSectionId, String name) throws Exception {
 		String rollNumber = "T-" + UUID.randomUUID().toString().substring(0, 8);
 		MvcResult result = mockMvc.perform(post("/api/v1/students")

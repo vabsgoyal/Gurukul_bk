@@ -49,6 +49,7 @@ import java.util.UUID;
 public class OtpService {
 
 	private static final SecureRandom RANDOM = new SecureRandom();
+	private static final String ACCOUNT_DISABLED = "This account has been disabled - please contact your school";
 
 	private final EmployeeRepository employeeRepository;
 	private final StudentRepository studentRepository;
@@ -101,11 +102,12 @@ public class OtpService {
 		otpCode.setConsumedAt(Instant.now());
 
 		List<PhoneProfile> profiles = profilesFor(schoolId, phone);
-		// Always log in as the first profile too, so app versions without the picker still work.
-		LoginResponse login = login(schoolId, profiles.getFirst(), phone);
 		if (profiles.size() == 1) {
-			return OtpVerifyResponse.of(login, null, List.of());
+			return OtpVerifyResponse.of(login(schoolId, profiles.getFirst(), phone), null, List.of());
 		}
+		// Also log in as the first profile, so app versions without the picker still work - but with an
+		// access token only: the profile actually picked gets its full session from select-profile.
+		LoginResponse login = sessionTokenService.issueAccessOnly(credentialFor(schoolId, profiles.getFirst(), phone));
 		return OtpVerifyResponse.of(login,
 				jwtService.generateProfileSelectionToken(schoolId, phone), toLoginProfiles(profiles, null));
 	}
@@ -173,9 +175,22 @@ public class OtpService {
 	}
 
 	private LoginResponse login(UUID schoolId, PhoneProfile profile, String phone) {
+		return sessionTokenService.issue(credentialFor(schoolId, profile, phone));
+	}
+
+	/** Password and Google login refuse a disabled credential; OTP must too. */
+	private Credential credentialFor(UUID schoolId, PhoneProfile profile, String phone) {
 		Credential credential = credentialRepository.findByOwnerTypeAndOwnerId(profile.ownerType(), profile.ownerId())
 				.orElseGet(() -> createCredentialFor(schoolId, profile, phone));
-		return sessionTokenService.issue(credential);
+		if (!credential.isEnabled()) {
+			throw new BadCredentialsException(ACCOUNT_DISABLED);
+		}
+		return credential;
+	}
+
+	private boolean isDisabled(OwnerType ownerType, UUID ownerId) {
+		return credentialRepository.findByOwnerTypeAndOwnerId(ownerType, ownerId)
+				.map(credential -> !credential.isEnabled()).orElse(false);
 	}
 
 	private List<LoginProfile> toLoginProfiles(List<PhoneProfile> profiles, AuthPrincipal principal) {
@@ -222,7 +237,10 @@ public class OtpService {
 		return credentialRepository.save(credential);
 	}
 
-	/** Staff first, then students by name - a stable order, so the picker never reshuffles. */
+	/**
+	 * Staff first, then students by name - a stable order, so the picker never reshuffles. Profiles
+	 * whose login has been disabled are left out, so they can't be picked or switched to.
+	 */
 	private List<PhoneProfile> profilesFor(UUID schoolId, String phone) {
 		List<PhoneProfile> profiles = new ArrayList<>();
 		employeeRepository.findAllBySchoolIdAndContactPhone(schoolId, phone).stream()
@@ -234,7 +252,11 @@ public class OtpService {
 		if (profiles.isEmpty()) {
 			throw new EntityNotFoundException("Phone number not registered");
 		}
-		return profiles;
+		List<PhoneProfile> enabled = profiles.stream().filter(p -> !isDisabled(p.ownerType(), p.ownerId())).toList();
+		if (enabled.isEmpty()) {
+			throw new BadCredentialsException(ACCOUNT_DISABLED);
+		}
+		return enabled;
 	}
 
 	private record PhoneProfile(OwnerType ownerType, UUID ownerId, Employee employee, Student student) {

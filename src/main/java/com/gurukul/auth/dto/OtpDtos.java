@@ -10,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,6 +43,11 @@ public class OtpDtos {
 		private Role role;
 		private UUID schoolId;
 		private String username;
+		@Schema(description = "Set when a single profile logged straight in (profileSelectionRequired false). Null when a "
+				+ "profile must be picked: the chosen profile's select-profile response carries its refresh token.")
+		private String refreshToken;
+		private Instant accessTokenExpiresAt;
+		private Instant refreshTokenExpiresAt;
 		private boolean profileSelectionRequired;
 		@Schema(description = "Valid for 10 minutes; only accepted by select-profile, never as a Bearer token")
 		private String selectionToken;
@@ -49,8 +55,9 @@ public class OtpDtos {
 
 		public static OtpVerifyResponse of(LoginResponse login, String selectionToken, List<LoginProfile> profiles) {
 			return new OtpVerifyResponse(login.getToken(), login.getTokenType(), login.getOwnerType(), login.getOwnerId(),
-					login.getRole(), login.getSchoolId(), login.getUsername(), selectionToken != null, selectionToken,
-					profiles);
+					login.getRole(), login.getSchoolId(), login.getUsername(), login.getRefreshToken(),
+					login.getAccessTokenExpiresAt(), login.getRefreshTokenExpiresAt(), selectionToken != null,
+					selectionToken, profiles);
 		}
 	}
 
