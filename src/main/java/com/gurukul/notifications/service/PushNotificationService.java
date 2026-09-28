@@ -14,15 +14,20 @@ import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Sends push notifications via Expo's push service (https://exp.host) rather than talking to
  * Firebase/APNs directly - this app is an Expo managed-workflow build, so Expo's own (free) push
- * service is the natural fit: no separate Firebase project, credentials, or native config needed,
- * it brokers delivery to FCM/APNs behind the scenes using each device's Expo push token.
+ * service is the natural fit: it brokers delivery to FCM/APNs using each device's Expo push token.
+ * The Firebase project (google-services.json in the app) and its FCM V1 key live on the app/EAS
+ * side; this backend holds no Firebase credentials.
  *
  * <p>Fails open, same philosophy as JitsiBotService: any error talking to Expo (or simply having
  * no registered device for the recipient) is caught/absorbed and never propagated - a push is a
@@ -60,48 +65,74 @@ public class PushNotificationService {
 		deviceTokenRepository.save(token);
 	}
 
-	public void sendToOwner(UUID schoolId, OwnerType ownerType, UUID ownerId, String title, String body, Map<String, Object> data) {
-		sendToRecipients(schoolId, List.of(new Recipient(ownerType, ownerId)), title, body, data);
+	public void sendToOwner(UUID schoolId, OwnerType ownerType, UUID ownerId, PushChannel channel,
+			String title, String body, Map<String, Object> data) {
+		sendToRecipients(schoolId, List.of(new Recipient(ownerType, ownerId)), channel, title, body, data);
 	}
 
-	public void sendToRecipients(UUID schoolId, List<Recipient> recipients, String title, String body, Map<String, Object> data) {
+	public void sendToRecipients(UUID schoolId, List<Recipient> recipients, PushChannel channel,
+			String title, String body, Map<String, Object> data) {
+		sendEach(schoolId, channel, List.of(new Notification(recipients, title, body, data)));
+	}
+
+	/** One notification's content and who it goes to - see {@link #sendEach}. */
+	public record Notification(List<Recipient> recipients, String title, String body, Map<String, Object> data) {
+	}
+
+	/**
+	 * Several differently-worded notifications (one per child's parents, say) in as few Expo
+	 * requests as possible - Expo takes a mix of messages in one batch, so this costs one HTTP call
+	 * per 100 devices rather than one per notification.
+	 *
+	 * <p>Every owner type (employee, student, parent) is looked up. Within one notification tokens
+	 * are de-duplicated, so someone listed twice - a parent of two children in the same
+	 * announcement's scope - gets it once, not twice.
+	 */
+	public void sendEach(UUID schoolId, PushChannel channel, List<Notification> notifications) {
+		List<Map<String, Object>> messages = new ArrayList<>();
+		for (Notification notification : notifications) {
+			for (String token : tokensFor(schoolId, notification.recipients())) {
+				messages.add(message(token, channel, notification));
+			}
+		}
+		for (int from = 0; from < messages.size(); from += EXPO_MAX_BATCH) {
+			sendBatch(messages.subList(from, Math.min(from + EXPO_MAX_BATCH, messages.size())));
+		}
+	}
+
+	private Set<String> tokensFor(UUID schoolId, List<Recipient> recipients) {
+		Set<String> tokens = new LinkedHashSet<>();
 		if (recipients.isEmpty()) {
-			return;
+			return tokens;
 		}
-		List<UUID> employeeIds = recipients.stream().filter(r -> r.ownerType() == OwnerType.EMPLOYEE).map(Recipient::ownerId).toList();
-		List<UUID> studentIds = recipients.stream().filter(r -> r.ownerType() == OwnerType.STUDENT).map(Recipient::ownerId).toList();
-
-		List<String> tokens = new ArrayList<>();
-		if (!employeeIds.isEmpty()) {
-			tokens.addAll(deviceTokenRepository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(schoolId, OwnerType.EMPLOYEE, employeeIds)
-					.stream().map(DeviceToken::getExpoPushToken).toList());
-		}
-		if (!studentIds.isEmpty()) {
-			tokens.addAll(deviceTokenRepository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(schoolId, OwnerType.STUDENT, studentIds)
-					.stream().map(DeviceToken::getExpoPushToken).toList());
-		}
-		send(tokens, title, body, data);
+		Map<OwnerType, List<UUID>> idsByType = recipients.stream().collect(Collectors.groupingBy(
+				Recipient::ownerType, () -> new EnumMap<>(OwnerType.class),
+				Collectors.mapping(Recipient::ownerId, Collectors.collectingAndThen(Collectors.toSet(), List::copyOf))));
+		idsByType.forEach((ownerType, ownerIds) -> deviceTokenRepository
+				.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(schoolId, ownerType, ownerIds)
+				.forEach(token -> tokens.add(token.getExpoPushToken())));
+		return tokens;
 	}
 
-	private void send(List<String> tokens, String title, String body, Map<String, Object> data) {
-		if (tokens.isEmpty()) {
-			return;
-		}
-		for (int from = 0; from < tokens.size(); from += EXPO_MAX_BATCH) {
-			sendBatch(tokens.subList(from, Math.min(from + EXPO_MAX_BATCH, tokens.size())), title, body, data);
-		}
+	/**
+	 * priority "high" lets Android show the notification straight away even when the phone is
+	 * dozing; Expo's default can hold it back until the device next wakes. channelId picks the
+	 * Android channel - and with it the channel's sound, importance and the user's mute setting.
+	 */
+	private static Map<String, Object> message(String token, PushChannel channel, Notification notification) {
+		return Map.of(
+				"to", token,
+				"title", notification.title(),
+				"body", notification.body(),
+				"data", notification.data(),
+				"sound", "default",
+				"channelId", channel.androidChannelId(),
+				"priority", "high");
 	}
 
-	private void sendBatch(List<String> tokens, String title, String body, Map<String, Object> data) {
+	private void sendBatch(List<Map<String, Object>> messages) {
+		List<String> tokens = messages.stream().map(m -> (String) m.get("to")).toList();
 		try {
-			List<Map<String, Object>> messages = tokens.stream()
-					.map(token -> Map.<String, Object>of(
-							"to", token,
-							"title", title,
-							"body", body,
-							"data", data,
-							"sound", "default"))
-					.toList();
 			ExpoPushResponse response = expoPushRestClient.post()
 					.uri(EXPO_PUSH_URL)
 					.contentType(MediaType.APPLICATION_JSON)

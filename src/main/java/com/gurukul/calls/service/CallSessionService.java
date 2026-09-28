@@ -118,6 +118,7 @@ public class CallSessionService {
 		CallLog callLog = requireRinging(principal, callLogId, /* asCallee= */ false);
 		finish(callLog, CallOutcome.CANCELLED);
 		notifyOther(callLog, principal.getOwnerType(), principal.getOwnerId(), CallEvent.Type.CALL_CANCELLED);
+		eventPublisher.pushMissedCall(callLog);
 		return callLog;
 	}
 
@@ -152,6 +153,7 @@ public class CallSessionService {
 		}
 		finish(callLog, CallOutcome.MISSED);
 		notifyOther(callLog, callLog.getCalleeOwnerType(), callLog.getCalleeOwnerId(), CallEvent.Type.CALL_MISSED);
+		eventPublisher.pushMissedCall(callLog);
 	}
 
 	private CallLog requireRinging(AuthPrincipal principal, UUID callLogId, boolean asCallee) {
