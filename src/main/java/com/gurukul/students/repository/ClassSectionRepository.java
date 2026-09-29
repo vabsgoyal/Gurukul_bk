@@ -1,6 +1,7 @@
 package com.gurukul.students.repository;
 
 import com.gurukul.students.entity.ClassSection;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,8 +13,12 @@ import java.util.UUID;
 
 public interface ClassSectionRepository extends JpaRepository<ClassSection, UUID> {
 
+	/** Class teacher fetched in the same query - every list response includes the teacher's name. */
+	@EntityGraph(attributePaths = "classTeacher")
 	List<ClassSection> findAllBySchoolIdOrderByClassNameAscSectionAsc(UUID schoolId);
 
+	/** Class teacher fetched in the same query - every list response includes the teacher's name. */
+	@EntityGraph(attributePaths = "classTeacher")
 	List<ClassSection> findAllBySchoolIdAndClassNameOrderBySectionAsc(UUID schoolId, String className);
 
 	@Query("SELECT DISTINCT c.className FROM ClassSection c WHERE c.schoolId = :schoolId ORDER BY c.className ASC")
@@ -32,6 +37,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, UUID
 	boolean existsBySchoolIdAndClassTeacherIdAndAcademicYearAndIdNot(
 			UUID schoolId, UUID teacherId, String academicYear, UUID id);
 
+	/** Class teacher fetched in the same query - every list response includes the teacher's name. */
+	@EntityGraph(attributePaths = "classTeacher")
 	List<ClassSection> findAllBySchoolIdAndClassTeacherIdOrderByAcademicYearDesc(UUID schoolId, UUID classTeacherId);
 
 	long countBySchoolId(UUID schoolId);
