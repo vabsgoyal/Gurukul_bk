@@ -21,6 +21,7 @@ import com.gurukul.gamification.entity.BattleRoomParticipant;
 import com.gurukul.gamification.entity.BattleRoomStatus;
 import com.gurukul.gamification.entity.QuizOption;
 import com.gurukul.gamification.entity.QuizQuestion;
+import com.gurukul.gamification.entity.QuizQuestionType;
 import com.gurukul.gamification.entity.XpSource;
 import com.gurukul.gamification.repository.BattleAnswerRepository;
 import com.gurukul.gamification.repository.BattleRoomParticipantRepository;
@@ -266,7 +267,7 @@ public class BattleRoomService {
 		UUID questionId = room.questionIdList().get(index);
 		QuizQuestion question = quizQuestionRepository.findById(questionId)
 				.orElseThrow(() -> new EntityNotFoundException("Question not found"));
-		boolean correct = question.getCorrectOption() == request.getSelectedOption();
+		boolean correct = QuizAnswerChecker.isCorrectOption(question, request.getSelectedOption());
 		int responseMs = (int) Duration.between(startsAt, now).toMillis();
 		int points = correct ? pointsFor(responseMs) : 0;
 
@@ -344,7 +345,8 @@ public class BattleRoomService {
 
 	private void activateRoom(BattleRoom room) {
 		List<QuizQuestion> pool = new ArrayList<>(
-				quizQuestionRepository.findAllBySchoolIdAndSubjectId(room.getSchoolId(), room.getSubject().getId()));
+				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndQuestionType(
+						room.getSchoolId(), room.getSubject().getId(), QuizQuestionType.MCQ));
 		if (pool.isEmpty()) {
 			room.setStatus(BattleRoomStatus.CANCELLED);
 			battleRoomRepository.save(room);

@@ -3,9 +3,13 @@ package com.gurukul.gamification.dto;
 import com.gurukul.gamification.entity.ChallengeStatus;
 import com.gurukul.gamification.entity.QuizOption;
 import com.gurukul.gamification.entity.QuizQuestion;
+import com.gurukul.gamification.entity.QuizQuestionType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,6 +35,39 @@ public class ArenaDtos {
 		@NotNull private QuizOption correctOption;
 	}
 
+	/**
+	 * Saves several reviewed questions (typically from the AI quiz generator) for one subject + grade
+	 * in a single all-or-nothing transaction. Per-type field rules are checked in ArenaService, not
+	 * here, because which fields are required depends on questionType.
+	 */
+	@Getter @Setter
+	@Schema(name = "BulkCreateQuizQuestionsRequest")
+	public static class BulkCreateQuizQuestionsRequest {
+		@NotNull private UUID subjectId;
+		@NotBlank
+		@Size(max = 255)
+		@Schema(description = "Grade the questions are scoped to, e.g. \"Grade 8\"", example = "Grade 8")
+		private String className;
+		@NotEmpty
+		@Size(max = 50, message = "must contain at most 50 questions")
+		@Valid
+		private List<BankQuestionInput> questions;
+	}
+
+	@Getter @Setter
+	@Schema(name = "BankQuestionInput", description = "MCQ needs optionA-D + correctOption; NUMERIC needs a "
+			+ "number in answerText; SHORT_WORD needs a one- or two-word answerText")
+	public static class BankQuestionInput {
+		@NotNull private QuizQuestionType questionType;
+		@NotBlank @Size(max = 500) private String questionText;
+		@Size(max = 255) private String optionA;
+		@Size(max = 255) private String optionB;
+		@Size(max = 255) private String optionC;
+		@Size(max = 255) private String optionD;
+		private QuizOption correctOption;
+		@Size(max = 255) private String answerText;
+	}
+
 	@Getter @AllArgsConstructor
 	@Schema(name = "QuizQuestionResponse", description = "Teacher/admin view - includes the correct answer")
 	public static class QuizQuestionResponse {
@@ -44,11 +81,15 @@ public class ArenaDtos {
 		private QuizOption correctOption;
 		private UUID createdByEmployeeId;
 		private String createdByEmployeeName;
+		@Schema(description = "MCQ (options A-D + correctOption), NUMERIC or SHORT_WORD (answerText)")
+		private QuizQuestionType questionType;
+		@Schema(description = "Expected answer for NUMERIC / SHORT_WORD questions; null for MCQ")
+		private String answerText;
 
 		public static QuizQuestionResponse from(QuizQuestion q) {
 			return new QuizQuestionResponse(
 					q.getId(), q.getClassName(), q.getQuestionText(), q.getOptionA(), q.getOptionB(), q.getOptionC(), q.getOptionD(), q.getCorrectOption(),
-					q.getCreatedByTeacher().getId(), q.getCreatedByTeacher().getName());
+					q.getCreatedByTeacher().getId(), q.getCreatedByTeacher().getName(), q.getQuestionType(), q.getAnswerText());
 		}
 	}
 
