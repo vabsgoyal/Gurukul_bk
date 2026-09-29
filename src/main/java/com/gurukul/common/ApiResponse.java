@@ -55,6 +55,13 @@ public class ApiResponse<T> {
 		return response;
 	}
 
+	/** An error that also carries structured details the client can show (e.g. timetable clashes). */
+	public static <T> ApiResponse<T> error(String message, String errorCode, T data) {
+		ApiResponse<T> response = new ApiResponse<>(false, data, message);
+		response.errorCode = errorCode;
+		return response;
+	}
+
 	/**
 	 * Backward-compatible pagination shape: {@code data} stays the literal array of this page's rows
 	 * (exactly what pre-pagination clients already expect and parse - they'll just silently only see

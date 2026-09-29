@@ -132,6 +132,14 @@ public class SecurityConfig {
 						// Class-section fee status: admin, or that section's own class teacher (checked in
 						// the service layer) - a class-fees overview tile for a class teacher.
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/fee-status").hasAnyRole("TEACHER", "ADMIN")
+						// Timetable: only an admin edits the bell schedule or a section's timetable. Any
+						// logged-in role reads; which section a teacher/student/parent may read is checked
+						// in TimetableService.
+						.requestMatchers(HttpMethod.PUT, "/api/v1/periods").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/periods").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/class-sections/*/timetable").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/timetable").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/timetable/me").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// ID cards: the fine-grained "whose card" rules (self / linked parent / admin view, and
 						// self-or-linked-parent-only edits) live in IdCardService; these matchers add the
 						// authentication and coarse role gate. Sheets are admin-only, verify is staff-only.

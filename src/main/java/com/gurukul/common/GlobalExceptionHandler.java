@@ -80,6 +80,27 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(ApiResponse.error(ex.getMessage(), "RATE_LIMITED"));
 	}
 
+	/** 409 with the list of clashing slots in data, so the editor can highlight each one. */
+	@ExceptionHandler(com.gurukul.timetable.service.TimetableClashException.class)
+	public ResponseEntity<ApiResponse<java.util.List<com.gurukul.timetable.dto.TimetableDtos.ClashResponse>>> handleTimetableClash(
+			com.gurukul.timetable.service.TimetableClashException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage(),
+				com.gurukul.timetable.service.TimetableClashException.ERROR_CODE, ex.getClashes()));
+	}
+
+	@ExceptionHandler(com.gurukul.timetable.service.TimetableConflictException.class)
+	public ResponseEntity<ApiResponse<Void>> handleTimetableConflict(com.gurukul.timetable.service.TimetableConflictException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage(),
+				com.gurukul.timetable.service.TimetableConflictException.ERROR_CODE));
+	}
+
+	/** Malformed JSON / unparseable values (e.g. a time of "8.30") are a client error, not a 500. */
+	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+	public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(
+			org.springframework.http.converter.HttpMessageNotReadableException ex) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error("Malformed request body"));
+	}
+
 	/** 409: enrolling looks like it would create a second record for an existing student - the app asks to confirm. */
 	@ExceptionHandler(com.gurukul.admissions.service.AdmissionDuplicateException.class)
 	public ResponseEntity<ApiResponse<Void>> handleAdmissionDuplicate(
