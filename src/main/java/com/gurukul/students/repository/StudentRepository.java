@@ -6,6 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -37,6 +39,12 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 	Optional<Student> findByIdAndSchoolId(UUID id, UUID schoolId);
 
 	List<Student> findAllBySchoolIdAndParentContact(UUID schoolId, String parentContact);
+
+	/** Every student in a class across all its sections - who a battle room for that class is open to. */
+	@Query("select s.id from Student s where s.schoolId = :schoolId and s.classSection.className = :className "
+			+ "and s.classSection.academicYear = :academicYear and s.status = :status")
+	List<UUID> findIdsInClass(@Param("schoolId") UUID schoolId, @Param("className") String className,
+			@Param("academicYear") String academicYear, @Param("status") StudentStatus status);
 
 	Optional<Student> findBySchoolIdAndRegistrationNumber(UUID schoolId, String registrationNumber);
 

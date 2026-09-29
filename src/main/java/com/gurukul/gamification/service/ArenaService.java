@@ -1,5 +1,7 @@
 package com.gurukul.gamification.service;
 
+import com.gurukul.gamification.event.QuizChallengeCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import com.gurukul.academics.entity.Subject;
 import com.gurukul.academics.repository.SectionSubjectTeacherRepository;
 import com.gurukul.academics.repository.SubjectRepository;
@@ -71,6 +73,7 @@ public class ArenaService {
 	private final EmployeeRepository employeeRepository;
 	private final SectionSubjectTeacherRepository sectionSubjectTeacherRepository;
 	private final GamificationService gamificationService;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Transactional
 	public QuizQuestionResponse createQuestion(AuthPrincipal principal, CreateQuizQuestionRequest request) {
@@ -236,6 +239,8 @@ public class ArenaService {
 		challenge.setStatus(ChallengeStatus.ACTIVE);
 		challenge.setQuestionIds(QuizChallenge.joinQuestionIds(picked.stream().map(QuizQuestion::getId).toList()));
 		challenge = quizChallengeRepository.save(challenge);
+		eventPublisher.publishEvent(new QuizChallengeCreatedEvent(
+				schoolId, challenge.getId(), opponent.getId(), challenger.getName(), subject.getName()));
 
 		return toSummary(challenge, principal);
 	}
