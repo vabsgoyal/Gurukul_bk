@@ -14,6 +14,7 @@ import com.gurukul.gamification.entity.PracticeAnswer;
 import com.gurukul.gamification.entity.PracticeSession;
 import com.gurukul.gamification.entity.PracticeSessionStatus;
 import com.gurukul.gamification.entity.QuizQuestion;
+import com.gurukul.gamification.entity.QuizQuestionType;
 import com.gurukul.gamification.repository.PracticeAnswerRepository;
 import com.gurukul.gamification.repository.PracticeSessionRepository;
 import com.gurukul.gamification.repository.QuizQuestionRepository;
@@ -61,7 +62,8 @@ public class PracticeService {
 		String className = student.getClassSection().getClassName();
 
 		List<QuizQuestion> pool = new ArrayList<>(
-				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(schoolId, subject.getId(), className));
+				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassNameAndQuestionType(
+						schoolId, subject.getId(), className, QuizQuestionType.MCQ));
 		if (pool.isEmpty()) {
 			throw new IllegalStateException("No " + className + " " + subject.getName() + " questions available yet");
 		}
@@ -101,7 +103,7 @@ public class PracticeService {
 
 		QuizQuestion question = quizQuestionRepository.findById(request.getQuestionId())
 				.orElseThrow(() -> new EntityNotFoundException("Question not found"));
-		boolean correct = question.getCorrectOption() == request.getSelectedOption();
+		boolean correct = QuizAnswerChecker.isCorrectOption(question, request.getSelectedOption());
 
 		PracticeAnswer answer = new PracticeAnswer();
 		answer.setSchoolId(principal.getSchoolId());

@@ -135,6 +135,12 @@ public class SecurityConfig {
 						// hourly cost cap is applied there too.
 						.requestMatchers(HttpMethod.POST, "/api/v1/ai/chat")
 						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						// AI quiz generator: staff only. That a TEACHER may only generate for themselves and
+						// for a section + subject they teach is checked in QuizGeneratorService.
+						.requestMatchers(HttpMethod.POST, "/api/v1/teachers/*/ai/quiz-generator").hasAnyRole("ADMIN", "TEACHER")
+						// Bulk question-bank save (reviewed AI quiz questions): staff only; the "subject +
+						// grade you teach" check for a TEACHER is in ArenaService.bulkCreateQuestions.
+						.requestMatchers(HttpMethod.POST, "/api/v1/gamification/arena/questions/bulk").hasAnyRole("ADMIN", "TEACHER")
 						// Announcements: creation role-gated here; the fine-grained "which section" check
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")

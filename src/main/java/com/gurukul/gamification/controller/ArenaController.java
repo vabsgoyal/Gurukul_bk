@@ -3,6 +3,7 @@ package com.gurukul.gamification.controller;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
+import com.gurukul.gamification.dto.ArenaDtos.BulkCreateQuizQuestionsRequest;
 import com.gurukul.gamification.dto.ArenaDtos.ChallengeDetailResponse;
 import com.gurukul.gamification.dto.ArenaDtos.ChallengeSummaryResponse;
 import com.gurukul.gamification.dto.ArenaDtos.CreateChallengeRequest;
@@ -39,6 +40,15 @@ public class ArenaController {
 	@Operation(summary = "Author a quiz question (teacher or admin only)")
 	public ApiResponse<QuizQuestionResponse> createQuestion(@Valid @RequestBody CreateQuizQuestionRequest request) {
 		return ApiResponse.success(arenaService.createQuestion(AuthContext.current(), request), "Question added");
+	}
+
+	@PostMapping("/api/v1/gamification/arena/questions/bulk")
+	@Operation(summary = "Save several reviewed questions at once (teacher or admin only)",
+			description = "All-or-nothing. MCQ, NUMERIC and SHORT_WORD questions; a teacher may only save "
+					+ "into a subject + grade they teach. Arena games only ever use the MCQ ones.")
+	public ApiResponse<List<QuizQuestionResponse>> bulkCreateQuestions(@Valid @RequestBody BulkCreateQuizQuestionsRequest request) {
+		List<QuizQuestionResponse> saved = arenaService.bulkCreateQuestions(AuthContext.current(), request);
+		return ApiResponse.success(saved, saved.size() + " questions added");
 	}
 
 	@GetMapping("/api/v1/gamification/arena/questions")

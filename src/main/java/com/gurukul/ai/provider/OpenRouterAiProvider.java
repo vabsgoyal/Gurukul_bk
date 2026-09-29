@@ -52,12 +52,17 @@ public class OpenRouterAiProvider implements AiProvider {
 
 	@Override
 	public String complete(String systemPrompt, List<ChatTurn> history) {
+		return complete(systemPrompt, history, properties.maxOutputTokens());
+	}
+
+	@Override
+	public String complete(String systemPrompt, List<ChatTurn> history, int maxOutputTokens) {
 		List<ChatTurn> messages = new ArrayList<>(history.size() + 1);
 		messages.add(new ChatTurn("system", systemPrompt));
 		messages.addAll(history);
 
 		CompletionRequest request = new CompletionRequest(
-				properties.model(), messages, properties.maxOutputTokens(), properties.temperature());
+				properties.model(), messages, maxOutputTokens, properties.temperature());
 
 		CompletionResponse response;
 		try {

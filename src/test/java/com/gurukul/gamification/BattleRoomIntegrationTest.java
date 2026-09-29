@@ -16,6 +16,7 @@ import com.gurukul.gamification.entity.BattleRoom;
 import com.gurukul.gamification.entity.BattleRoomStatus;
 import com.gurukul.gamification.entity.QuizOption;
 import com.gurukul.gamification.entity.QuizQuestion;
+import com.gurukul.gamification.entity.QuizQuestionType;
 import com.gurukul.gamification.repository.BattleRoomRepository;
 import com.gurukul.gamification.repository.QuizQuestionRepository;
 import com.gurukul.gamification.service.BattleRoomService;
@@ -209,6 +210,31 @@ class BattleRoomIntegrationTest {
 		assertThat(finished.getCurrentQuestionStartsAt()).isNull();
 		assertThat(finished.getLastResult().getQuestionIndex()).isEqualTo(1);
 		assertThat(finished.getLastResult().getQuestionId()).isEqualTo(q2);
+	}
+
+	/**
+	 * Battle rooms are tap-one-of-four: a NUMERIC / SHORT_WORD question in the same subject's bank
+	 * must never be drawn into one.
+	 */
+	@Test
+	void onlyMcqQuestionsAreDrawnIntoABattle() {
+		UUID teacherId = quizQuestionRepository.findById(answerKey.keySet().iterator().next()).orElseThrow()
+				.getCreatedByTeacher().getId();
+		QuizQuestion numeric = new QuizQuestion();
+		numeric.setSchoolId(SCHOOL_ID);
+		numeric.setSubject(subjectRepository.getReferenceById(subjectId));
+		numeric.setQuestionText("How many legs does a spider have?");
+		numeric.setQuestionType(QuizQuestionType.NUMERIC);
+		numeric.setAnswerText("8");
+		numeric.setCreatedByTeacher(employeeRepository.getReferenceById(teacherId));
+		UUID numericId = quizQuestionRepository.save(numeric).getId();
+
+		BattleRoomResponse room = startBattle();
+
+		BattleRoom stored = battleRoomRepository.findById(room.getId()).orElseThrow();
+		assertThat(stored.questionIdList()).hasSize(2).doesNotContain(numericId)
+				.allMatch(answerKey::containsKey);
+		assertThat(room.getCurrentQuestion().getOptionA()).isNotBlank();
 	}
 
 	private BattleRoomResponse startBattle() {
