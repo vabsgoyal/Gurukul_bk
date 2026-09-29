@@ -1,12 +1,17 @@
 package com.gurukul.gamification.service;
 
 import com.gurukul.academics.entity.Subject;
+import com.gurukul.academics.repository.SectionSubjectTeacherRepository;
 import com.gurukul.academics.repository.SubjectRepository;
 import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
+import com.gurukul.employees.entity.Employee;
+import com.gurukul.employees.repository.EmployeeRepository;
 import com.gurukul.employees.service.EmployeeService;
+import com.gurukul.gamification.dto.ArenaDtos.BankQuestionInput;
+import com.gurukul.gamification.dto.ArenaDtos.BulkCreateQuizQuestionsRequest;
 import com.gurukul.gamification.dto.ArenaDtos.ChallengeDetailResponse;
 import com.gurukul.gamification.dto.ArenaDtos.ChallengeSummaryResponse;
 import com.gurukul.gamification.dto.ArenaDtos.CreateChallengeRequest;
@@ -19,6 +24,7 @@ import com.gurukul.gamification.entity.ChallengeStatus;
 import com.gurukul.gamification.entity.QuizAnswer;
 import com.gurukul.gamification.entity.QuizChallenge;
 import com.gurukul.gamification.entity.QuizQuestion;
+import com.gurukul.gamification.entity.QuizQuestionType;
 import com.gurukul.gamification.entity.XpSource;
 import com.gurukul.gamification.repository.QuizAnswerRepository;
 import com.gurukul.gamification.repository.QuizChallengeRepository;
@@ -40,6 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Gurukul Arena, Phase 4a (specs/gamification/execution-plan.md): async 1v1 quiz challenges
@@ -61,6 +68,8 @@ public class ArenaService {
 	private final SubjectRepository subjectRepository;
 	private final StudentRepository studentRepository;
 	private final EmployeeService employeeService;
+	private final EmployeeRepository employeeRepository;
+	private final SectionSubjectTeacherRepository sectionSubjectTeacherRepository;
 	private final GamificationService gamificationService;
 
 	@Transactional
@@ -84,6 +93,92 @@ public class ArenaService {
 		question.setCorrectOption(request.getCorrectOption());
 		question.setCreatedByTeacher(employeeService.getScopedEntity(principal.getOwnerId()));
 		return QuizQuestionResponse.from(quizQuestionRepository.save(question));
+	}
+
+	/**
+	 * Saves a reviewed batch (normally the AI quiz generator's output after the teacher has edited
+	 * it) for one subject + grade. All-or-nothing: every question is validated before any is saved,
+	 * and a failure names the offending question's 1-based position so the app can point at it.
+	 *
+	 * <p>A TEACHER may only save into a subject + grade they actually teach (some section of that
+	 * grade has them assigned to that subject); an ADMIN may save into any subject of their school.
+	 */
+	@Transactional
+	public List<QuizQuestionResponse> bulkCreateQuestions(AuthPrincipal principal, BulkCreateQuizQuestionsRequest request) {
+		if (principal.getRole() != Role.ADMIN && principal.getRole() != Role.TEACHER) {
+			throw new AccessDeniedException("Only a teacher or admin can author quiz questions");
+		}
+		UUID schoolId = principal.getSchoolId();
+		Subject subject = subjectRepository.findByIdAndSchoolId(request.getSubjectId(), schoolId)
+				.orElseThrow(() -> new EntityNotFoundException("Subject not found"));
+		String className = request.getClassName().trim();
+		if (principal.getRole() == Role.TEACHER) {
+			boolean teaches = sectionSubjectTeacherRepository.findAllByTeacherId(principal.getOwnerId()).stream()
+					.anyMatch(a -> a.getSubject().getId().equals(subject.getId())
+							&& schoolId.equals(a.getSection().getSchoolId())
+							&& className.equals(a.getSection().getClassName()));
+			if (!teaches) {
+				throw new AccessDeniedException("You can only add questions for a subject and class you teach");
+			}
+		}
+		Employee author = employeeRepository.findByIdAndSchoolId(principal.getOwnerId(), schoolId)
+				.orElseThrow(() -> new EntityNotFoundException("Employee not found"));
+
+		List<QuizQuestion> toSave = new ArrayList<>(request.getQuestions().size());
+		for (int i = 0; i < request.getQuestions().size(); i++) {
+			BankQuestionInput input = request.getQuestions().get(i);
+			QuizQuestion question = toBankQuestion(input, "Question " + (i + 1) + ": ");
+			question.setSchoolId(schoolId);
+			question.setSubject(subject);
+			question.setClassName(className);
+			question.setCreatedByTeacher(author);
+			toSave.add(question);
+		}
+		return quizQuestionRepository.saveAll(toSave).stream()
+				.map(QuizQuestionResponse::from)
+				.toList();
+	}
+
+	/** Validates one bank question against its type's rules and maps it; throws IllegalArgumentException. */
+	private static QuizQuestion toBankQuestion(BankQuestionInput input, String prefix) {
+		QuizQuestion question = new QuizQuestion();
+		question.setQuestionType(input.getQuestionType());
+		question.setQuestionText(input.getQuestionText().trim());
+		switch (input.getQuestionType()) {
+			case MCQ -> {
+				List<String> options = Stream.of(
+						input.getOptionA(), input.getOptionB(), input.getOptionC(), input.getOptionD())
+						.map(o -> o == null ? "" : o.trim())
+						.toList();
+				if (options.stream().anyMatch(String::isEmpty)) {
+					throw new IllegalArgumentException(prefix + "a multiple-choice question needs all four options");
+				}
+				if (options.stream().map(QuizAnswerChecker::normalizeWords).distinct().count() < 4) {
+					throw new IllegalArgumentException(prefix + "the four options must all be different");
+				}
+				if (input.getCorrectOption() == null) {
+					throw new IllegalArgumentException(prefix + "choose the correct option");
+				}
+				question.setOptionA(options.get(0));
+				question.setOptionB(options.get(1));
+				question.setOptionC(options.get(2));
+				question.setOptionD(options.get(3));
+				question.setCorrectOption(input.getCorrectOption());
+			}
+			case NUMERIC -> {
+				if (!QuizAnswerChecker.isValidNumericAnswer(input.getAnswerText())) {
+					throw new IllegalArgumentException(prefix + "a number question needs a plain number as its answer");
+				}
+				question.setAnswerText(input.getAnswerText().trim());
+			}
+			case SHORT_WORD -> {
+				if (!QuizAnswerChecker.isValidShortWordAnswer(input.getAnswerText())) {
+					throw new IllegalArgumentException(prefix + "a short-word question needs a one- or two-word answer");
+				}
+				question.setAnswerText(input.getAnswerText().trim().replaceAll("\\s+", " "));
+			}
+		}
+		return question;
 	}
 
 	@Transactional(readOnly = true)
@@ -124,7 +219,8 @@ public class ArenaService {
 		// a student could spoof an easier grade's question bank.
 		String className = challenger.getClassSection().getClassName();
 		List<QuizQuestion> pool = new ArrayList<>(
-				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassName(schoolId, subject.getId(), className));
+				quizQuestionRepository.findAllBySchoolIdAndSubjectIdAndClassNameAndQuestionType(
+						schoolId, subject.getId(), className, QuizQuestionType.MCQ));
 		if (pool.size() < QUESTIONS_PER_CHALLENGE) {
 			throw new IllegalStateException(
 					"Not enough " + className + " " + subject.getName() + " questions yet (need at least " + QUESTIONS_PER_CHALLENGE + ")");
@@ -188,7 +284,7 @@ public class ArenaService {
 
 		QuizQuestion question = quizQuestionRepository.findById(request.getQuestionId())
 				.orElseThrow(() -> new EntityNotFoundException("Question not found"));
-		boolean correct = question.getCorrectOption() == request.getSelectedOption();
+		boolean correct = QuizAnswerChecker.isCorrectOption(question, request.getSelectedOption());
 
 		QuizAnswer answer = new QuizAnswer();
 		answer.setSchoolId(principal.getSchoolId());

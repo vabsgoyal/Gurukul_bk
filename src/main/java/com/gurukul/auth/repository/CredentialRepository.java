@@ -25,4 +25,6 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
 
 	List<Credential> findAllBySchoolIdAndOwnerType(UUID schoolId, OwnerType ownerType);
 
+	List<Credential> findAllBySchoolIdAndOwnerTypeAndRole(UUID schoolId, OwnerType ownerType, Role role);
+
 }

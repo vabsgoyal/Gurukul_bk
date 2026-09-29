@@ -9,8 +9,10 @@ import com.gurukul.chat.entity.AnnouncementScope;
 import com.gurukul.chat.repository.AnnouncementRepository;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.employees.repository.EmployeeRepository;
+import com.gurukul.notifications.service.PushChannel;
 import com.gurukul.notifications.service.PushNotificationService;
 import com.gurukul.notifications.service.PushNotificationService.Recipient;
+import com.gurukul.parents.repository.ParentStudentLinkRepository;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.ClassSectionRepository;
@@ -44,6 +46,7 @@ public class AnnouncementService {
 	private final EmployeeRepository employeeRepository;
 	private final SimpMessagingTemplate messagingTemplate;
 	private final PushNotificationService pushNotificationService;
+	private final ParentStudentLinkRepository parentStudentLinkRepository;
 
 	public AnnouncementService(
 			AnnouncementRepository announcementRepository,
@@ -51,13 +54,15 @@ public class AnnouncementService {
 			StudentRepository studentRepository,
 			EmployeeRepository employeeRepository,
 			@Lazy SimpMessagingTemplate messagingTemplate,
-			PushNotificationService pushNotificationService) {
+			PushNotificationService pushNotificationService,
+			ParentStudentLinkRepository parentStudentLinkRepository) {
 		this.announcementRepository = announcementRepository;
 		this.classSectionRepository = classSectionRepository;
 		this.studentRepository = studentRepository;
 		this.employeeRepository = employeeRepository;
 		this.messagingTemplate = messagingTemplate;
 		this.pushNotificationService = pushNotificationService;
+		this.parentStudentLinkRepository = parentStudentLinkRepository;
 	}
 
 	@Transactional
@@ -136,8 +141,8 @@ public class AnnouncementService {
 
 	/**
 	 * School-wide announcements are visible to any authenticated member of the school, by design -
-	 * announcements are for the whole community. Class-level: ADMIN, any TEACHER, or a STUDENT
-	 * enrolled in that section.
+	 * announcements are for the whole community. Class-level: ADMIN, any TEACHER, a STUDENT enrolled
+	 * in that section, or a PARENT with a linked child enrolled in it.
 	 */
 	@Transactional(readOnly = true)
 	public boolean isSectionVisibleTo(AuthPrincipal principal, UUID sectionId) {
@@ -148,9 +153,20 @@ public class AnnouncementService {
 		if (principal.getRole() == Role.ADMIN || principal.getRole() == Role.TEACHER) {
 			return true;
 		}
+		if (principal.getRole() == Role.PARENT) {
+			return linkedChildren(principal).stream().anyMatch(c -> c.getClassSection().getId().equals(sectionId));
+		}
 		Student student = studentRepository.findByIdAndSchoolId(principal.getOwnerId(), schoolId)
 				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
 		return student.getClassSection().getId().equals(sectionId);
+	}
+
+	/** The parent's linked children at their own school (links are per school already; the school filter is belt-and-braces). */
+	private List<Student> linkedChildren(AuthPrincipal parent) {
+		List<UUID> childIds = parentStudentLinkRepository.findAllByParentId(parent.getOwnerId()).stream()
+				.map(link -> link.getStudentId())
+				.toList();
+		return childIds.isEmpty() ? List.of() : studentRepository.findAllBySchoolIdAndIdIn(parent.getSchoolId(), childIds);
 	}
 
 	public boolean isSchoolVisibleTo(AuthPrincipal principal, UUID schoolId) {
@@ -158,14 +174,18 @@ public class AnnouncementService {
 	}
 
 	/**
-	 * Grade-level: ADMIN, any TEACHER, or a STUDENT currently enrolled in any section of that
-	 * className. Doesn't distinguish academic year - Student only tracks one current enrollment,
-	 * so "which grade am I in right now" is all that matters for this live-visibility check.
+	 * Grade-level: ADMIN, any TEACHER, a STUDENT currently enrolled in any section of that className,
+	 * or a PARENT with a linked child who is. Doesn't distinguish academic year - Student only tracks
+	 * one current enrollment, so "which grade am I in right now" is all that matters for this
+	 * live-visibility check.
 	 */
 	@Transactional(readOnly = true)
 	public boolean isGradeVisibleTo(AuthPrincipal principal, String className) {
 		if (principal.getRole() == Role.ADMIN || principal.getRole() == Role.TEACHER) {
 			return true;
+		}
+		if (principal.getRole() == Role.PARENT) {
+			return linkedChildren(principal).stream().anyMatch(c -> c.getClassSection().getClassName().equals(className));
 		}
 		Student student = studentRepository.findByIdAndSchoolId(principal.getOwnerId(), principal.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
@@ -191,7 +211,9 @@ public class AnnouncementService {
 
 	/**
 	 * Every employee (any ADMIN/TEACHER can see any announcement - see isSectionVisibleTo/
-	 * isGradeVisibleTo above) plus whichever students the scope actually covers.
+	 * isGradeVisibleTo above), whichever students the scope actually covers, and those students'
+	 * parents. The push carries the announcement's own text, so it reads in full even from the
+	 * notification shade; parents can also re-read it on the app's Announcements screen.
 	 */
 	private void notify(Announcement announcement) {
 		UUID schoolId = announcement.getSchoolId();
@@ -206,9 +228,29 @@ public class AnnouncementService {
 			case GRADE -> studentRepository.findAllBySchoolIdAndClassSection_ClassName(schoolId, announcement.getClassName());
 		};
 		students.forEach(s -> recipients.add(new Recipient(OwnerType.STUDENT, s.getId())));
+		if (!students.isEmpty()) {
+			parentStudentLinkRepository.findAllBySchoolIdAndStudentIdIn(schoolId, students.stream().map(Student::getId).toList())
+					.forEach(link -> recipients.add(new Recipient(OwnerType.PARENT, link.getParentId())));
+		}
 
-		pushNotificationService.sendToRecipients(schoolId, recipients, "New announcement", announcement.getTitle(),
+		pushNotificationService.sendToRecipients(schoolId, recipients, PushChannel.ANNOUNCEMENTS,
+				announcement.getTitle(), pushBody(announcement.getBody()),
 				Map.of("type", "ANNOUNCEMENT", "announcementId", String.valueOf(announcement.getId())));
+	}
+
+	static final int PUSH_BODY_MAX = 150;
+
+	/** Android shows about two lines collapsed; a long notice is cut at a word, not mid-word. */
+	static String pushBody(String body) {
+		if (body == null || body.isBlank()) {
+			return "Tap to open Smart Gurukul.";
+		}
+		String text = body.strip().replaceAll("\\s+", " ");
+		if (text.length() <= PUSH_BODY_MAX) {
+			return text;
+		}
+		int cut = text.lastIndexOf(' ', PUSH_BODY_MAX - 1);
+		return text.substring(0, cut > PUSH_BODY_MAX / 2 ? cut : PUSH_BODY_MAX - 1).stripTrailing() + "…";
 	}
 
 	private void broadcast(Announcement announcement) {

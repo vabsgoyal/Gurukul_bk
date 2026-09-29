@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,5 +23,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 	List<Employee> findAllBySchoolIdAndContactPhone(UUID schoolId, String contactPhone);
 
 	long countBySchoolId(UUID schoolId);
+
+	List<Employee> findAllBySchoolIdAndIdIn(UUID schoolId, Collection<UUID> ids);
 
 }

@@ -19,4 +19,10 @@ public interface AssessmentResultRepository extends JpaRepository<AssessmentResu
 	List<AssessmentResult> findAllBySchoolIdAndStudentIdAndAssessment_Section_IdAndAssessment_Term(
 			UUID schoolId, UUID studentId, UUID sectionId, String term);
 
+	/** Every student's results for one section/term in a single query - the section-wide report cards
+	 * (grid + class PDF) group these in memory instead of querying once per student. */
+	@EntityGraph(attributePaths = {"assessment", "assessment.subject"})
+	List<AssessmentResult> findAllBySchoolIdAndAssessment_Section_IdAndAssessment_Term(
+			UUID schoolId, UUID sectionId, String term);
+
 }

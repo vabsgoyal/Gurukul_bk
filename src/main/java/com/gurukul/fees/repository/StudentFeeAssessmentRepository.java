@@ -7,6 +7,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,5 +61,9 @@ public interface StudentFeeAssessmentRepository extends JpaRepository<StudentFee
 
 	Optional<StudentFeeAssessment> findBySchoolIdAndStudentIdAndAcademicYear(
 			UUID schoolId, UUID studentId, String academicYear);
+
+	/** Every school's still-open assessments due on or before the horizon - the fee-due alert job's input. */
+	@EntityGraph(attributePaths = "student")
+	List<StudentFeeAssessment> findAllByDueDateLessThanEqualAndStatusNot(LocalDate horizon, FeeAssessmentStatus status);
 
 }

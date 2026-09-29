@@ -71,6 +71,11 @@ public class SecurityConfig {
 						// to: admin-only. Was previously unauthenticated. SchoolController additionally checks
 						// the admin belongs to the school being edited.
 						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*").hasRole("ADMIN")
+						// School logo (shown on report-card PDFs): admin-only; SchoolController additionally checks
+						// the admin belongs to the school in the path.
+						.requestMatchers(HttpMethod.POST, "/api/v1/schools/*/logo/presign").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*/logo").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/schools/*/logo").hasRole("ADMIN")
 						// Attendance devices (RFID/fingerprint/face) and identifier enrollment: admin-only to
 						// manage; reading an enrollment list is also open to a teacher. The device-event
 						// ingestion endpoint (/api/v1/attendance/device-events) is deliberately NOT listed
@@ -88,6 +93,10 @@ public class SecurityConfig {
 						// Push notification device registration: any authenticated session registers its
 						// own device, regardless of role.
 						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/device-token").authenticated()
+						// Notification inbox: any signed-in role reads/marks its own rows only - the owner
+						// always comes from the token (NotificationInboxService), never the request.
+						.requestMatchers(HttpMethod.GET, "/api/v1/notifications", "/api/v1/notifications/unread-count").authenticated()
+						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/*/read", "/api/v1/notifications/read-all").authenticated()
 						// Profile picker: list/switch between the profiles that share the caller's phone.
 						.requestMatchers("/api/v1/auth/profiles", "/api/v1/auth/profiles/**").authenticated()
 						// Assessments: teachers/admins author them; students may only ever read (GETs stay
@@ -108,9 +117,14 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card/published-terms").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// Report-card PDF: same roles as the JSON view above, and the same service-layer checks
+						// (it calls ReportCardService.getReportCard). A distinct path, so it needs its own matcher -
+						// an unmatched path would fall through to permitAll() below.
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card.pdf").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Section-wide report-card grid: admin, or that section's class teacher (checked in
 						// the service layer) - same authority pattern as publish/fee-status above.
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/report-cards").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/report-cards.pdf").hasAnyRole("TEACHER", "ADMIN")
 						// Term picker + backfill: same admin-or-class-teacher authority as publish, checked
 						// in the service layer (AssessmentService.requireCanManageTerms).
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/terms").hasAnyRole("TEACHER", "ADMIN")
@@ -126,15 +140,42 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/v1/class-sections/*/timetable").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/timetable").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/timetable/me").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// ID cards: the fine-grained "whose card" rules (self / linked parent / admin view, and
+						// self-or-linked-parent-only edits) live in IdCardService; these matchers add the
+						// authentication and coarse role gate. Sheets are admin-only, verify is staff-only.
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/class-sections/*/sheet.pdf", "/api/v1/id-cards/staff/sheet.pdf")
+						.hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/verify").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/me", "/api/v1/id-cards/students/*", "/api/v1/id-cards/students/*/card.pdf")
+						.hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/id-cards/students/*/profile", "/api/v1/id-cards/students/*/photo")
+						.hasAnyRole("STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/id-cards/students/*/photo/presign").hasAnyRole("STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/id-cards/students/*/photo").hasAnyRole("STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/employees/*", "/api/v1/id-cards/employees/*/card.pdf")
+						.hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/id-cards/employees/*/profile", "/api/v1/id-cards/employees/*/photo")
+						.hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/id-cards/employees/*/photo/presign").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/id-cards/employees/*/photo").hasAnyRole("TEACHER", "ADMIN")
+						// Anything else under /id-cards (e.g. a typo'd path) is never left open.
+						.requestMatchers("/api/v1/id-cards/**").denyAll()
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")
 						// Chat: conversations/messages/bot need to know the sender's identity, so all require
-						// auth. Student-vs-student pairing is rejected in the service layer (depends on
-						// resolving both parties' owner types, which method+path matching can't express).
-						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
-						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
-						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// auth. Who may pair with whom (no student-to-student; a parent only with their
+						// child's teachers and the school's admins, a teacher only with their students'
+						// parents) is decided in the service layer (ConversationService/ChatContactService),
+						// since it depends on resolving both parties, which method+path matching can't express.
+						// Reading/sending is gated on being a participant (requireParticipant), the same check
+						// the STOMP subscribe/send path uses.
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations/*/attachments/presign")
+						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/contacts").hasAnyRole("ADMIN", "TEACHER", "PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/bot/conversation").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						// Academic Helper: any authenticated in-app role may ask. Which system prompt is
 						// used (a student is taught the method, a teacher gets the answer key) is decided
@@ -143,10 +184,16 @@ public class SecurityConfig {
 						// hourly cost cap is applied there too.
 						.requestMatchers(HttpMethod.POST, "/api/v1/ai/chat")
 						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						// AI quiz generator: staff only. That a TEACHER may only generate for themselves and
+						// for a section + subject they teach is checked in QuizGeneratorService.
+						.requestMatchers(HttpMethod.POST, "/api/v1/teachers/*/ai/quiz-generator").hasAnyRole("ADMIN", "TEACHER")
+						// Bulk question-bank save (reviewed AI quiz questions): staff only; the "subject +
+						// grade you teach" check for a TEACHER is in ArenaService.bulkCreateQuestions.
+						.requestMatchers(HttpMethod.POST, "/api/v1/gamification/arena/questions/bulk").hasAnyRole("ADMIN", "TEACHER")
 						// Announcements: creation role-gated here; the fine-grained "which section" check
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")
-						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
 						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
 						// Fee categories/structures: creation and per-structure assessment generation are
@@ -192,6 +239,9 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/payroll/runs/*/lines").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/salary-history").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/payroll/lines/*/payslip").hasAnyRole("TEACHER", "ADMIN")
+						// Admissions (applications, documents, enrolment): admin-only, every method. AdmissionService
+						// re-checks the role, and scopes every lookup to the caller's school.
+						.requestMatchers("/api/v1/admissions", "/api/v1/admissions/**").hasRole("ADMIN")
 						// Marketing-site demo form: public by design (prospects have no account). The GET listing
 						// is gated in LeadService by a static LEADS_ADMIN_TOKEN, not user roles.
 						.requestMatchers(HttpMethod.POST, "/api/v1/leads").permitAll()

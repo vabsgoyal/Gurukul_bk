@@ -1,6 +1,9 @@
 package com.gurukul.exams.service;
 
 import com.gurukul.attendance.dto.AttendanceDtos.StudentAttendanceHistoryResponse;
+import com.gurukul.attendance.entity.AttendanceStatus;
+import com.gurukul.attendance.repository.AttendanceRecordRepository;
+import com.gurukul.attendance.repository.AttendanceRecordRepository.StudentStatusView;
 import com.gurukul.attendance.service.AttendanceService;
 import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
@@ -18,8 +21,12 @@ import com.gurukul.exams.entity.ReportCardPublication;
 import com.gurukul.exams.repository.AssessmentResultRepository;
 import com.gurukul.exams.repository.ReportCardPublicationRepository;
 import com.gurukul.academics.entity.Subject;
+import com.gurukul.notifications.service.PushChannel;
 import com.gurukul.notifications.service.PushNotificationService;
+import com.gurukul.notifications.service.PushNotificationService.Notification;
 import com.gurukul.notifications.service.PushNotificationService.Recipient;
+import com.gurukul.parents.entity.ParentStudentLink;
+import com.gurukul.parents.repository.ParentStudentLinkRepository;
 import com.gurukul.parents.service.ParentService;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
@@ -33,11 +40,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,9 +60,11 @@ public class ReportCardService {
 	private final EmployeeService employeeService;
 	private final GradingScaleService gradingScaleService;
 	private final AttendanceService attendanceService;
+	private final AttendanceRecordRepository attendanceRecordRepository;
 	private final SchoolContext schoolContext;
 	private final PushNotificationService pushNotificationService;
 	private final ParentService parentService;
+	private final ParentStudentLinkRepository parentStudentLinkRepository;
 
 	@Transactional
 	public PublicationResponse publish(UUID sectionId, String term) {
@@ -74,19 +85,46 @@ public class ReportCardService {
 		publication.setPublishedAt(Instant.now());
 		publication.setPublishedByEmployee(employeeService.getScopedEntity(principal.getOwnerId()));
 		ReportCardPublication saved = reportCardPublicationRepository.save(publication);
-		notifyStudents(saved);
+		notifyStudentsAndParents(saved);
 		return new PublicationResponse(
 				saved.getClassSection().getId(), saved.getTerm(), saved.getPublishedAt(), saved.getPublishedByEmployee().getName());
 	}
 
-	private void notifyStudents(ReportCardPublication publication) {
+	/**
+	 * One notification for the whole section's students, plus one per child for that child's
+	 * parents - a parent's copy names the child and carries studentId, so tapping it opens the
+	 * right report card even for a parent with more than one child. All sent in shared batches.
+	 */
+	private void notifyStudentsAndParents(ReportCardPublication publication) {
+		UUID schoolId = publication.getSchoolId();
 		UUID sectionId = publication.getClassSection().getId();
-		List<Recipient> recipients = studentRepository.findAllBySchoolIdAndClassSectionId(publication.getSchoolId(), sectionId).stream()
-				.map(s -> new Recipient(OwnerType.STUDENT, s.getId()))
-				.toList();
-		pushNotificationService.sendToRecipients(publication.getSchoolId(), recipients, "Report card published",
-				"Your " + publication.getTerm() + " report card is now available",
-				Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", publication.getTerm()));
+		String term = publication.getTerm();
+		List<Student> students = studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, sectionId);
+		if (students.isEmpty()) {
+			return;
+		}
+		List<Notification> notifications = new ArrayList<>();
+		notifications.add(new Notification(
+				students.stream().map(s -> new Recipient(OwnerType.STUDENT, s.getId())).toList(),
+				"Your report card is ready",
+				"Your " + term + " report card is now available. Tap to see it.",
+				Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", term)));
+
+		Map<UUID, List<Recipient>> parentsByStudent = parentStudentLinkRepository
+				.findAllBySchoolIdAndStudentIdIn(schoolId, students.stream().map(Student::getId).toList()).stream()
+				.collect(Collectors.groupingBy(ParentStudentLink::getStudentId,
+						Collectors.mapping(link -> new Recipient(OwnerType.PARENT, link.getParentId()), Collectors.toList())));
+		for (Student student : students) {
+			List<Recipient> parents = parentsByStudent.getOrDefault(student.getId(), List.of());
+			if (!parents.isEmpty()) {
+				notifications.add(new Notification(parents,
+						student.getName() + "'s report card is ready",
+						"The " + term + " report card is now available. Tap to see it.",
+						Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", term,
+								"studentId", String.valueOf(student.getId()))));
+			}
+		}
+		pushNotificationService.sendEach(schoolId, PushChannel.ACADEMICS, notifications);
 	}
 
 	/**
@@ -116,8 +154,14 @@ public class ReportCardService {
 			throw new IllegalStateException("The report card for " + term + " has not been published yet");
 		}
 
+		List<AssessmentResult> results = assessmentResultRepository
+				.findAllBySchoolIdAndStudentIdAndAssessment_Section_IdAndAssessment_Term(
+						schoolId, student.getId(), section.getId(), term);
+		StudentAttendanceHistoryResponse attendance = attendanceService.getStudentHistory(student.getId(), null, null);
 		return computeReportCard(student, section, term, publication.isPresent(),
-				publication.map(ReportCardPublication::getPublishedAt).orElse(null));
+				publication.map(ReportCardPublication::getPublishedAt).orElse(null),
+				results, attendancePercentage(attendance.getPresentCount(), attendance.getTotalRecords()),
+				gradingScaleService.gradeResolver());
 	}
 
 	/**
@@ -166,36 +210,51 @@ public class ReportCardService {
 		boolean published = publication.isPresent();
 		Instant publishedAt = publication.map(ReportCardPublication::getPublishedAt).orElse(null);
 
-		List<Student> roster = studentRepository.findAllBySchoolIdAndClassSectionId(schoolContext.getSchoolId(), sectionId);
+		UUID schoolId = schoolContext.getSchoolId();
+		List<Student> roster = studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, sectionId);
+		if (roster.isEmpty()) {
+			return List.of();
+		}
+
+		// Two queries for the whole section instead of two per student - the class PDF is generated
+		// for 60+ students in one request, so the per-student path below would be an N+1.
+		Map<UUID, List<AssessmentResult>> resultsByStudent = assessmentResultRepository
+				.findAllBySchoolIdAndAssessment_Section_IdAndAssessment_Term(schoolId, sectionId, term).stream()
+				.collect(Collectors.groupingBy(r -> r.getStudent().getId()));
+		Map<UUID, List<AttendanceStatus>> attendanceByStudent = attendanceRecordRepository
+				.findStudentStatusesBySchoolIdAndStudentIdIn(schoolId, roster.stream().map(Student::getId).toList()).stream()
+				.collect(Collectors.groupingBy(StudentStatusView::getStudentId,
+						Collectors.mapping(StudentStatusView::getStatus, Collectors.toList())));
+
+		Function<BigDecimal, String> grades = gradingScaleService.gradeResolver();
 		return roster.stream()
 				.sorted(Comparator.comparing(Student::getRollNumber, Comparator.nullsLast(Comparator.naturalOrder())))
-				.map(student -> computeReportCard(student, section, term, published, publishedAt))
+				.map(student -> {
+					List<AttendanceStatus> statuses = attendanceByStudent.getOrDefault(student.getId(), List.of());
+					long present = statuses.stream().filter(st -> st == AttendanceStatus.PRESENT).count();
+					return computeReportCard(student, section, term, published, publishedAt,
+							resultsByStudent.getOrDefault(student.getId(), List.of()),
+							attendancePercentage(present, statuses.size()), grades);
+				})
 				.toList();
 	}
 
-	private ReportCardResponse computeReportCard(Student student, ClassSection section, String term, boolean published, Instant publishedAt) {
-		List<AssessmentResult> results = assessmentResultRepository
-				.findAllBySchoolIdAndStudentIdAndAssessment_Section_IdAndAssessment_Term(
-						schoolContext.getSchoolId(), student.getId(), section.getId(), term);
-
+	private ReportCardResponse computeReportCard(Student student, ClassSection section, String term, boolean published,
+			Instant publishedAt, List<AssessmentResult> results, BigDecimal attendancePercentage,
+			Function<BigDecimal, String> grades) {
 		Map<UUID, List<AssessmentResult>> bySubject = results.stream()
 				.filter(r -> r.getAssessment().getSubject() != null)
 				.collect(Collectors.groupingBy(r -> r.getAssessment().getSubject().getId()));
 
 		List<SubjectResultResponse> subjectRows = bySubject.values().stream()
-				.map(this::toSubjectRow)
+				.map(subjectResults -> toSubjectRow(subjectResults, grades))
 				.sorted(Comparator.comparing(SubjectResultResponse::getSubjectName))
 				.toList();
 
 		BigDecimal totalMax = subjectRows.stream().map(SubjectResultResponse::getMaxMarks).reduce(BigDecimal.ZERO, BigDecimal::add);
 		BigDecimal totalObtained = subjectRows.stream().map(SubjectResultResponse::getMarksObtained).reduce(BigDecimal.ZERO, BigDecimal::add);
 		BigDecimal overallPercentage = percentageOf(totalObtained, totalMax);
-		String overallGrade = gradingScaleService.resolveGrade(overallPercentage);
-
-		StudentAttendanceHistoryResponse attendance = attendanceService.getStudentHistory(student.getId(), null, null);
-		BigDecimal attendancePercentage = attendance.getTotalRecords() > 0
-				? percentageOf(BigDecimal.valueOf(attendance.getPresentCount()), BigDecimal.valueOf(attendance.getTotalRecords()))
-				: null;
+		String overallGrade = grades.apply(overallPercentage);
 
 		return new ReportCardResponse(
 				student.getId(), student.getName(), student.getRollNumber(),
@@ -205,7 +264,7 @@ public class ReportCardService {
 		);
 	}
 
-	private SubjectResultResponse toSubjectRow(List<AssessmentResult> resultsForSubject) {
+	private SubjectResultResponse toSubjectRow(List<AssessmentResult> resultsForSubject, Function<BigDecimal, String> grades) {
 		Subject subject = resultsForSubject.get(0).getAssessment().getSubject();
 		BigDecimal maxMarks = resultsForSubject.stream()
 				.map(r -> r.getAssessment().getMaxMarks()).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -215,7 +274,14 @@ public class ReportCardService {
 		BigDecimal percentage = percentageOf(marksObtained, maxMarks);
 		return new SubjectResultResponse(
 				subject.getId(), subject.getName(), subject.getCode(), maxMarks, marksObtained, percentage,
-				gradingScaleService.resolveGrade(percentage));
+				grades.apply(percentage));
+	}
+
+	/** Null if the student has no attendance records at all yet. */
+	private BigDecimal attendancePercentage(long presentCount, long totalRecords) {
+		return totalRecords > 0
+				? percentageOf(BigDecimal.valueOf(presentCount), BigDecimal.valueOf(totalRecords))
+				: null;
 	}
 
 	private BigDecimal percentageOf(BigDecimal obtained, BigDecimal max) {

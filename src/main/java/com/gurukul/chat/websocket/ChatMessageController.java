@@ -12,6 +12,8 @@ import com.gurukul.chat.repository.ConversationParticipantRepository;
 import com.gurukul.chat.service.AttachmentService;
 import com.gurukul.chat.service.ConversationService;
 import com.gurukul.chat.service.MessageService;
+import com.gurukul.notifications.service.OwnerNameResolver;
+import com.gurukul.notifications.service.PushChannel;
 import com.gurukul.notifications.service.PushNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -44,6 +46,7 @@ public class ChatMessageController {
 	private final BotReplyService botReplyService;
 	private final ConversationParticipantRepository conversationParticipantRepository;
 	private final PushNotificationService pushNotificationService;
+	private final OwnerNameResolver ownerNameResolver;
 
 	@MessageMapping("/conversations/{conversationId}/messages")
 	public void send(
@@ -71,8 +74,13 @@ public class ChatMessageController {
 				.filter(p -> !(p.getOwnerType() == sender.getOwnerType() && p.getOwnerId().equals(sender.getOwnerId())))
 				.map(p -> new PushNotificationService.Recipient(p.getOwnerType(), p.getOwnerId()))
 				.toList();
-		String preview = saved.getContent() != null ? saved.getContent() : "Sent an attachment";
-		pushNotificationService.sendToRecipients(conversation.getSchoolId(), recipients, "New message", preview,
+		if (recipients.isEmpty()) {
+			return;
+		}
+		String title = ownerNameResolver.nameOf(conversation.getSchoolId(), sender.getOwnerType(), sender.getOwnerId())
+				.orElse("New message");
+		String preview = saved.getContent() != null && !saved.getContent().isBlank() ? saved.getContent() : "Sent an attachment";
+		pushNotificationService.sendToRecipients(conversation.getSchoolId(), recipients, PushChannel.MESSAGES, title, preview,
 				Map.of("type", "NEW_MESSAGE", "conversationId", String.valueOf(conversation.getId())));
 	}
 

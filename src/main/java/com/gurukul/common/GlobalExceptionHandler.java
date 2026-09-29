@@ -101,6 +101,14 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error("Malformed request body"));
 	}
 
+	/** 409: enrolling looks like it would create a second record for an existing student - the app asks to confirm. */
+	@ExceptionHandler(com.gurukul.admissions.service.AdmissionDuplicateException.class)
+	public ResponseEntity<ApiResponse<Void>> handleAdmissionDuplicate(
+			com.gurukul.admissions.service.AdmissionDuplicateException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(ApiResponse.error(ex.getMessage(), com.gurukul.admissions.service.AdmissionDuplicateException.ERROR_CODE));
+	}
+
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));

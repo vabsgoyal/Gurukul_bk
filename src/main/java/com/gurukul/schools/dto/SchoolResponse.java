@@ -65,6 +65,10 @@ public class SchoolResponse {
 	@Schema(description = "Radius in meters within which a teacher may self-mark attendance")
 	private Integer geofenceRadiusMeters;
 
+	@Schema(description = "Short-lived presigned URL of the school's logo, null if none was uploaded "
+			+ "(or file storage isn't configured on this server)")
+	private String logoUrl;
+
 	@Schema(description = "Live count of enrolled students (computed, not stored)")
 	private long studentCount;
 
@@ -80,7 +84,7 @@ public class SchoolResponse {
 	@Schema(description = "When the school record was last updated")
 	private Instant updatedAt;
 
-	public static SchoolResponse from(School school, long studentCount, long classSectionCount, long teacherCount) {
+	public static SchoolResponse from(School school, String logoUrl, long studentCount, long classSectionCount, long teacherCount) {
 		return new SchoolResponse(
 				school.getId(),
 				school.getName(),
@@ -99,6 +103,7 @@ public class SchoolResponse {
 				school.getLatitude(),
 				school.getLongitude(),
 				school.getGeofenceRadiusMeters(),
+				logoUrl,
 				studentCount,
 				classSectionCount,
 				teacherCount,

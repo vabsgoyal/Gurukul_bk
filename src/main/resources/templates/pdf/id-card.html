@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<title>ID card</title>
+<!-- Single card: the page IS the card (CR80, 85.6 x 54 mm). -->
+<style th:unless="${sheet}">
+  @page { size: 85.6mm 54mm; margin: 0; }
+  .card { border: none; }
+</style>
+<!-- Sheet: A4, 2 x 5 cards with 6 mm / 3 mm gutters, centred; dashed cut lines round each card. -->
+<style th:if="${sheet}">
+  @page { size: A4; margin: 7.5mm 0 0 16.4mm; }
+  .card { border: 0.25mm dashed #b8b8c8; }
+</style>
+<style>
+  body { font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif; color: #1f1f2e; margin: 0; }
+  .page { page-break-after: always; }
+  .page.last { page-break-after: auto; }
+  table { border-collapse: collapse; }
+  td { padding: 0; }
+
+  table.sheet td.cell { width: 85.6mm; height: 54mm; vertical-align: top; }
+  table.sheet td.gap { width: 6mm; }
+  table.sheet tr.spacer td { height: 3mm; }
+
+  .card { width: 85.6mm; height: 54mm; box-sizing: border-box; overflow: hidden; position: relative; background-color: #ffffff; }
+
+  .band { height: 10.5mm; border-bottom: 0.6mm solid #7c3aed; background-color: #f4f2fb; }
+  table.band-table { width: 100%; height: 10.5mm; }
+  td.logo-td { width: 11mm; text-align: center; vertical-align: middle; padding-left: 1.5mm; }
+  img.logo { max-width: 9mm; max-height: 8.5mm; }
+  td.school-td { vertical-align: middle; padding-left: 1.5mm; }
+  .school-name { font-size: 7.5pt; font-weight: 700; line-height: 1.15; }
+  .school-address { font-size: 4.8pt; color: #55556a; line-height: 1.2; }
+  td.kind-td { width: 16mm; text-align: right; vertical-align: middle; padding-right: 2mm; }
+  .kind { display: inline-block; background-color: #7c3aed; color: #ffffff; font-size: 5pt; font-weight: 700;
+          padding: 0.5mm 1.4mm; border-radius: 1mm; letter-spacing: 0.3pt; }
+
+  table.body { width: 100%; margin-top: 2mm; }
+  td.photo-td { width: 21mm; vertical-align: top; padding-left: 2.5mm; }
+  img.photo { width: 18mm; height: 23mm; border: 0.3mm solid #d9d9e3; }
+  .silhouette { width: 18mm; height: 23mm; background-color: #e8e6f3; border: 0.3mm solid #d9d9e3; overflow: hidden; }
+  .silhouette .head { width: 8.5mm; height: 8.5mm; border-radius: 4.25mm; background-color: #b9b3d6; margin: 3.5mm auto 1mm auto; }
+  .silhouette .shoulders { width: 14mm; height: 10mm; border-radius: 7mm 7mm 0 0; background-color: #b9b3d6; margin: 0 auto; }
+  .no-photo { font-size: 4.5pt; color: #8a8aa0; text-align: center; width: 18mm; margin-top: 0.4mm; }
+
+  td.details-td { vertical-align: top; padding-left: 2mm; }
+  .name { font-size: 8.5pt; font-weight: 700; line-height: 1.15; margin-bottom: 1mm; }
+  table.fields td { font-size: 6pt; line-height: 1.3; vertical-align: top; }
+  table.fields td.label { color: #6b6b80; width: 12mm; }
+  table.fields td.value { font-weight: 700; }
+
+  td.qr-td { width: 19mm; vertical-align: top; text-align: center; padding-right: 2mm; }
+  img.qr { width: 16.5mm; height: 16.5mm; }
+  .qr-caption { font-size: 4.3pt; color: #8a8aa0; }
+
+  .foot { position: absolute; left: 0; bottom: 0; width: 85.6mm; height: 5mm; background-color: #7c3aed; color: #ffffff; }
+  table.foot-table { width: 100%; height: 5mm; }
+  table.foot-table td { font-size: 5pt; vertical-align: middle; color: #ffffff; }
+  td.foot-left { padding-left: 2.5mm; }
+  td.foot-right { text-align: right; padding-right: 2.5mm; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!--/* One card. Hindi strings go through pdf.image so conjuncts and matras are shaped correctly. */-->
+<div th:remove="all"><!--/* th:replace runs before th:if, so conditional inclusions sit inside a th:block. Definition only - never rendered here; included below via th:replace. */-->
+<div th:fragment="card(c)" class="card">
+  <div class="band">
+    <table class="band-table">
+      <tr>
+        <td class="logo-td"><img class="logo" th:src="${logoDataUri}" alt="Logo"/></td>
+        <td class="school-td">
+          <div class="school-name">
+            <img th:if="${pdf.needsShaping(schoolName)}" th:src="${pdf.image(schoolName, 7.5, true)}" th:style="${pdf.style(schoolName, 7.5, true)}" alt=""/>
+            <span th:unless="${pdf.needsShaping(schoolName)}" th:text="${schoolName}">School</span>
+          </div>
+          <div class="school-address" th:if="${schoolAddress != null and !schoolAddress.isEmpty()}">
+            <img th:if="${pdf.needsShaping(schoolAddress)}" th:src="${pdf.image(schoolAddress, 4.8, false)}" th:style="${pdf.style(schoolAddress, 4.8, false)}" alt=""/>
+            <span th:unless="${pdf.needsShaping(schoolAddress)}" th:text="${schoolAddress}">Address</span>
+          </div>
+        </td>
+        <td class="kind-td"><span class="kind" th:text="${c.kind}">STUDENT</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <table class="body">
+    <tr>
+      <td class="photo-td">
+        <img th:if="${c.photoDataUri != null}" class="photo" th:src="${c.photoDataUri}" alt="Photo"/>
+        <div th:if="${c.photoDataUri == null}" class="silhouette"><div class="head"></div><div class="shoulders"></div></div>
+      </td>
+      <td class="details-td">
+        <div class="name">
+          <img th:if="${pdf.needsShaping(c.name)}" th:src="${pdf.image(c.name, 8.5, true)}" th:style="${pdf.style(c.name, 8.5, true)}" alt=""/>
+          <span th:unless="${pdf.needsShaping(c.name)}" th:text="${c.name}">Name</span>
+        </div>
+        <table class="fields">
+          <tr th:each="f : ${c.fields}">
+            <td class="label" th:text="${f.label}">Label</td>
+            <td class="value">
+              <img th:if="${pdf.needsShaping(f.value)}" th:src="${pdf.image(f.value, 6, true)}" th:style="${pdf.style(f.value, 6, true)}" alt=""/>
+              <span th:unless="${pdf.needsShaping(f.value)}" th:text="${f.value}">Value</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+      <td class="qr-td">
+        <img class="qr" th:src="${c.qrDataUri}" alt="QR"/>
+        <div class="qr-caption">Scan to verify</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="foot">
+    <table class="foot-table">
+      <tr>
+        <td class="foot-left">
+          <span th:if="${schoolPhone != null and !schoolPhone.isEmpty()}" th:text="'School: ' + ${schoolPhone}">School phone</span>
+          <span th:unless="${hasSchoolLogo}" th:text="${schoolPhone != null and !schoolPhone.isEmpty()} ? ' - Generated by Gurukul' : 'Generated by Gurukul'">Generated by Gurukul</span>
+        </td>
+        <td class="foot-right" th:text="${c.validity}">Valid 2026-27</td>
+      </tr>
+    </table>
+  </div>
+</div>
+</div>
+
+<th:block th:each="rows, pageIter : ${pages}">
+  <div th:class="${pageIter.last} ? 'page last' : 'page'">
+    <th:block th:unless="${sheet}">
+      <th:block th:each="row : ${rows}"><th:block th:each="c : ${row}">
+        <div th:replace="~{::card(${c})}"></div>
+      </th:block></th:block>
+    </th:block>
+    <table th:if="${sheet}" class="sheet">
+      <th:block th:each="row, rowIter : ${rows}">
+        <tr th:if="${!rowIter.first}" class="spacer"><td></td><td class="gap"></td><td></td></tr>
+        <tr>
+          <td class="cell"><div th:replace="~{::card(${row[0]})}"></div></td>
+          <td class="gap"></td>
+          <td class="cell"><th:block th:if="${row.size() > 1}"><div th:replace="~{::card(${row[1]})}"></div></th:block></td>
+        </tr>
+      </th:block>
+    </table>
+  </div>
+</th:block>
+
+</body>
+</html>

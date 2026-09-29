@@ -39,4 +39,13 @@ public interface AiProvider {
 	 */
 	String complete(String systemPrompt, List<ChatTurn> history);
 
+	/**
+	 * Same as {@link #complete(String, List)} but with a caller-chosen output-token cap, for
+	 * features whose answers are much longer than a chat reply (a whole generated quiz). The
+	 * default ignores the cap, so an implementation that can't honour it still works.
+	 */
+	default String complete(String systemPrompt, List<ChatTurn> history, int maxOutputTokens) {
+		return complete(systemPrompt, history);
+	}
+
 }

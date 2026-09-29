@@ -56,6 +56,7 @@ public class SchoolService {
 	private final CredentialRepository credentialRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final SessionTokenService sessionTokenService;
+	private final SchoolLogoService schoolLogoService;
 
 	@Transactional
 	public SchoolRegistrationResponse register(SchoolRegistrationRequest request) {
@@ -174,7 +175,7 @@ public class SchoolService {
 		long studentCount = studentRepository.countBySchoolId(schoolId);
 		long classSectionCount = classSectionRepository.countBySchoolId(schoolId);
 		long teacherCount = 0L;
-		return SchoolResponse.from(school, studentCount, classSectionCount, teacherCount);
+		return SchoolResponse.from(school, schoolLogoService.logoUrl(school), studentCount, classSectionCount, teacherCount);
 	}
 
 	private School findSchool(UUID id) {

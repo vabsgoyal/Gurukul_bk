@@ -26,6 +26,7 @@ import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
 import com.gurukul.students.service.ClassSectionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,12 +50,16 @@ public class AttendanceService {
 	private final ParentService parentService;
 	private final SchoolContext schoolContext;
 	private final GamificationService gamificationService;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Transactional
 	public SectionAttendanceResponse markSection(UUID sectionId, BulkAttendanceRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
 		Employee teacher = resolveMarkingTeacher(section, request.getTeacherId());
+		// Absence alerts only for today's register (school time): back-filling an old day must not
+		// push "marked absent today" to a parent. See AbsenceAlertService for the once-a-day rule.
+		boolean isToday = request.getDate().equals(LocalDate.now(AbsenceAlertService.SCHOOL_ZONE));
 
 		for (AttendanceEntryRequest entry : request.getRecords()) {
 			Student student = studentRepository.findByIdAndSchoolId(entry.getStudentId(), schoolId)
@@ -80,6 +85,9 @@ public class AttendanceService {
 			record.setMethod(null);
 			attendanceRecordRepository.save(record);
 			gamificationService.recordAttendanceXp(schoolId, student.getId(), request.getDate(), entry.getStatus());
+			if (isToday && entry.getStatus() == AttendanceStatus.ABSENT) {
+				eventPublisher.publishEvent(new AbsenceMarkedEvent(schoolId, student.getId(), request.getDate()));
+			}
 		}
 
 		return getSectionRoster(sectionId, request.getDate());
@@ -89,6 +97,9 @@ public class AttendanceService {
 	 * Called by AttendanceDeviceEventService when a registered RFID/fingerprint/face device scans a
 	 * student. Mirrors StaffAttendanceService.selfMark's unconditional-upsert semantics rather than
 	 * inventing a new conflict rule - the newest mark for the day wins, whoever/whatever made it.
+	 *
+	 * <p>A device scan only ever marks PRESENT, so it never raises an absence alert (see
+	 * AbsenceAlertService); and a scan after an alert went out doesn't send a second one.
 	 */
 	@Transactional
 	public AttendanceRecord markByDevice(Student student, AttendanceDevice device) {
