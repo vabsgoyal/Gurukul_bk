@@ -46,14 +46,57 @@ public class ChatDtos {
 		private UUID id;
 		private ConversationType type;
 		private List<ParticipantResponse> participants;
+		@Schema(description = "Newest message, for the list preview - null when the chat has no messages yet")
+		private LastMessageResponse lastMessage;
+		@Schema(description = "Messages from others since the caller last opened this chat (POST .../read)")
+		private long unreadCount;
 
 		public static ConversationResponse from(Conversation conversation, List<ConversationParticipant> participants,
 				Map<UUID, String> namesById) {
+			return from(conversation, participants, namesById, null, 0);
+		}
+
+		public static ConversationResponse from(Conversation conversation, List<ConversationParticipant> participants,
+				Map<UUID, String> namesById, Message lastMessage, long unreadCount) {
 			return new ConversationResponse(
 					conversation.getId(),
 					conversation.getType(),
-					participants.stream().map(p -> ParticipantResponse.from(p, namesById)).toList());
+					participants.stream().map(p -> ParticipantResponse.from(p, namesById)).toList(),
+					lastMessage == null ? null : LastMessageResponse.from(lastMessage),
+					unreadCount);
 		}
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(description = "A conversation's newest message, trimmed for the chat list (no attachment URL - open "
+			+ "the conversation for that)")
+	public static class LastMessageResponse {
+		static final int PREVIEW_MAX = 200;
+
+		private UUID id;
+		private SenderKind senderKind;
+		private OwnerType senderOwnerType;
+		private UUID senderOwnerId;
+		@Schema(description = "First 200 characters; null for an attachment with no caption")
+		private String content;
+		private String attachmentContentType;
+		private String attachmentFileName;
+		private Instant sentAt;
+
+		public static LastMessageResponse from(Message message) {
+			String content = message.getContent();
+			if (content != null && content.length() > PREVIEW_MAX) {
+				content = content.substring(0, PREVIEW_MAX);
+			}
+			return new LastMessageResponse(message.getId(), message.getSenderKind(), message.getSenderOwnerType(),
+					message.getSenderOwnerId(), content, message.getAttachmentContentType(),
+					message.getAttachmentFileName(), message.getSentAt());
+		}
+	}
+
+	@Getter @AllArgsConstructor
+	public static class UnreadCountResponse {
+		private long unread;
 	}
 
 	@Getter @AllArgsConstructor

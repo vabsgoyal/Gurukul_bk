@@ -9,6 +9,7 @@ import com.gurukul.chat.dto.ChatDtos.MessagePageResponse;
 import com.gurukul.chat.dto.ChatDtos.MessageResponse;
 import com.gurukul.chat.dto.ChatDtos.PresignAttachmentRequest;
 import com.gurukul.chat.dto.ChatDtos.PresignAttachmentResponse;
+import com.gurukul.chat.dto.ChatDtos.UnreadCountResponse;
 import com.gurukul.chat.entity.Conversation;
 import com.gurukul.chat.entity.ConversationParticipant;
 import com.gurukul.chat.entity.Message;
@@ -30,6 +31,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,19 +61,47 @@ public class ConversationController {
 	}
 
 	@GetMapping("/api/v1/chat/conversations")
-	@Operation(summary = "List my conversations (1:1 and BOT), most recently updated first")
+	@Operation(summary = "List my conversations (1:1 and BOT), newest activity first",
+			description = "Each carries the participants' names, the newest message (lastMessage) and the caller's "
+					+ "unreadCount - everything the chat list needs in one request, with no per-conversation calls.")
 	public ApiResponse<List<ConversationResponse>> list() {
 		AuthPrincipal principal = AuthContext.current();
 		List<Conversation> conversations = conversationService.listForCaller(principal);
-		Map<UUID, List<ConversationParticipant>> participantsByConversation = conversationService.participantsOf(
-				conversations.stream().map(Conversation::getId).toList());
+		List<UUID> ids = conversations.stream().map(Conversation::getId).toList();
+		Map<UUID, List<ConversationParticipant>> participantsByConversation = conversationService.participantsOf(ids);
 		Map<UUID, String> names = conversationService.namesOf(principal.getSchoolId(),
 				participantsByConversation.values().stream().flatMap(List::stream).toList());
+		Map<UUID, Message> latest = messageService.latestMessages(ids);
+		Map<UUID, Long> unread = messageService.unreadCounts(principal, ids);
+
 		List<ConversationResponse> responses = conversations.stream()
-				.map(c -> ConversationResponse.from(
-						c, participantsByConversation.getOrDefault(c.getId(), List.of()), names))
+				.sorted(Comparator.comparing((Conversation c) -> lastActivity(c, latest)).reversed())
+				.map(c -> ConversationResponse.from(c, participantsByConversation.getOrDefault(c.getId(), List.of()),
+						names, latest.get(c.getId()), unread.getOrDefault(c.getId(), 0L)))
 				.toList();
 		return ApiResponse.success(responses);
+	}
+
+	@PostMapping("/api/v1/chat/conversations/{id}/read")
+	@Operation(summary = "Mark a conversation read up to now",
+			description = "Call when the chat is opened, and again when a message arrives while it's open. Clears "
+					+ "its unreadCount on every device.")
+	public ApiResponse<Void> markRead(@PathVariable UUID id) {
+		AuthPrincipal principal = AuthContext.current();
+		conversationService.requireParticipant(principal, id);
+		messageService.markRead(principal, id);
+		return ApiResponse.success(null, "Marked read");
+	}
+
+	@GetMapping("/api/v1/chat/unread-count")
+	@Operation(summary = "Total unread chat messages", description = "For the Chats tab badge - one cheap query.")
+	public ApiResponse<UnreadCountResponse> unreadCount() {
+		return ApiResponse.success(new UnreadCountResponse(messageService.totalUnread(AuthContext.current())));
+	}
+
+	private static Instant lastActivity(Conversation conversation, Map<UUID, Message> latest) {
+		Message message = latest.get(conversation.getId());
+		return message != null ? message.getSentAt() : conversation.getUpdatedAt();
 	}
 
 	@GetMapping("/api/v1/chat/conversations/{id}/messages")
