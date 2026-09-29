@@ -4,6 +4,7 @@ import com.gurukul.academics.entity.SectionSubjectTeacher;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,5 +20,10 @@ public interface SectionSubjectTeacherRepository extends JpaRepository<SectionSu
 	Optional<SectionSubjectTeacher> findBySectionIdAndSubjectIdAndTeacherId(UUID sectionId, UUID subjectId, UUID teacherId);
 
 	boolean existsBySectionIdAndTeacherId(UUID sectionId, UUID teacherId);
+
+	boolean existsBySectionIdInAndTeacherId(Collection<UUID> sectionIds, UUID teacherId);
+
+	@EntityGraph(attributePaths = {"section", "subject", "teacher"})
+	List<SectionSubjectTeacher> findAllBySectionIdIn(Collection<UUID> sectionIds);
 
 }

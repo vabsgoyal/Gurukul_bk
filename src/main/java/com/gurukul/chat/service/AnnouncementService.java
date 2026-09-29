@@ -141,8 +141,8 @@ public class AnnouncementService {
 
 	/**
 	 * School-wide announcements are visible to any authenticated member of the school, by design -
-	 * announcements are for the whole community. Class-level: ADMIN, any TEACHER, or a STUDENT
-	 * enrolled in that section.
+	 * announcements are for the whole community. Class-level: ADMIN, any TEACHER, a STUDENT enrolled
+	 * in that section, or a PARENT with a linked child enrolled in it.
 	 */
 	@Transactional(readOnly = true)
 	public boolean isSectionVisibleTo(AuthPrincipal principal, UUID sectionId) {
@@ -153,9 +153,20 @@ public class AnnouncementService {
 		if (principal.getRole() == Role.ADMIN || principal.getRole() == Role.TEACHER) {
 			return true;
 		}
+		if (principal.getRole() == Role.PARENT) {
+			return linkedChildren(principal).stream().anyMatch(c -> c.getClassSection().getId().equals(sectionId));
+		}
 		Student student = studentRepository.findByIdAndSchoolId(principal.getOwnerId(), schoolId)
 				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
 		return student.getClassSection().getId().equals(sectionId);
+	}
+
+	/** The parent's linked children at their own school (links are per school already; the school filter is belt-and-braces). */
+	private List<Student> linkedChildren(AuthPrincipal parent) {
+		List<UUID> childIds = parentStudentLinkRepository.findAllByParentId(parent.getOwnerId()).stream()
+				.map(link -> link.getStudentId())
+				.toList();
+		return childIds.isEmpty() ? List.of() : studentRepository.findAllBySchoolIdAndIdIn(parent.getSchoolId(), childIds);
 	}
 
 	public boolean isSchoolVisibleTo(AuthPrincipal principal, UUID schoolId) {
@@ -163,14 +174,18 @@ public class AnnouncementService {
 	}
 
 	/**
-	 * Grade-level: ADMIN, any TEACHER, or a STUDENT currently enrolled in any section of that
-	 * className. Doesn't distinguish academic year - Student only tracks one current enrollment,
-	 * so "which grade am I in right now" is all that matters for this live-visibility check.
+	 * Grade-level: ADMIN, any TEACHER, a STUDENT currently enrolled in any section of that className,
+	 * or a PARENT with a linked child who is. Doesn't distinguish academic year - Student only tracks
+	 * one current enrollment, so "which grade am I in right now" is all that matters for this
+	 * live-visibility check.
 	 */
 	@Transactional(readOnly = true)
 	public boolean isGradeVisibleTo(AuthPrincipal principal, String className) {
 		if (principal.getRole() == Role.ADMIN || principal.getRole() == Role.TEACHER) {
 			return true;
+		}
+		if (principal.getRole() == Role.PARENT) {
+			return linkedChildren(principal).stream().anyMatch(c -> c.getClassSection().getClassName().equals(className));
 		}
 		Student student = studentRepository.findByIdAndSchoolId(principal.getOwnerId(), principal.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Student not found"));
@@ -197,8 +212,8 @@ public class AnnouncementService {
 	/**
 	 * Every employee (any ADMIN/TEACHER can see any announcement - see isSectionVisibleTo/
 	 * isGradeVisibleTo above), whichever students the scope actually covers, and those students'
-	 * parents. The push carries the announcement's own text: the app has no announcements screen
-	 * to open, and parents in particular have no other way to read it.
+	 * parents. The push carries the announcement's own text, so it reads in full even from the
+	 * notification shade; parents can also re-read it on the app's Announcements screen.
 	 */
 	private void notify(Announcement announcement) {
 		UUID schoolId = announcement.getSchoolId();

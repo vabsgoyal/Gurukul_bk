@@ -10,7 +10,9 @@ public enum PushChannel {
 	MESSAGES("messages"),
 	ANNOUNCEMENTS("announcements"),
 	CALLS("calls"),
-	ACADEMICS("academics");
+	ACADEMICS("academics"),
+	/** Absence and fee-due alerts to parents. */
+	ALERTS("alerts");
 
 	private final String androidChannelId;
 

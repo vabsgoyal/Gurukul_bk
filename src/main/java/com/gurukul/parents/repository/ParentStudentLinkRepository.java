@@ -18,4 +18,6 @@ public interface ParentStudentLinkRepository extends JpaRepository<ParentStudent
 
 	List<ParentStudentLink> findAllBySchoolIdAndStudentIdIn(UUID schoolId, Collection<UUID> studentIds);
 
+	List<ParentStudentLink> findAllBySchoolId(UUID schoolId);
+
 }
