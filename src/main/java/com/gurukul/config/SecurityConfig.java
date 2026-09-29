@@ -128,6 +128,26 @@ public class SecurityConfig {
 						// Class-section fee status: admin, or that section's own class teacher (checked in
 						// the service layer) - a class-fees overview tile for a class teacher.
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/fee-status").hasAnyRole("TEACHER", "ADMIN")
+						// ID cards: the fine-grained "whose card" rules (self / linked parent / admin view, and
+						// self-or-linked-parent-only edits) live in IdCardService; these matchers add the
+						// authentication and coarse role gate. Sheets are admin-only, verify is staff-only.
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/class-sections/*/sheet.pdf", "/api/v1/id-cards/staff/sheet.pdf")
+						.hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/verify").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/me", "/api/v1/id-cards/students/*", "/api/v1/id-cards/students/*/card.pdf")
+						.hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/id-cards/students/*/profile", "/api/v1/id-cards/students/*/photo")
+						.hasAnyRole("STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/id-cards/students/*/photo/presign").hasAnyRole("STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/id-cards/students/*/photo").hasAnyRole("STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/id-cards/employees/*", "/api/v1/id-cards/employees/*/card.pdf")
+						.hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/id-cards/employees/*/profile", "/api/v1/id-cards/employees/*/photo")
+						.hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/id-cards/employees/*/photo/presign").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/id-cards/employees/*/photo").hasAnyRole("TEACHER", "ADMIN")
+						// Anything else under /id-cards (e.g. a typo'd path) is never left open.
+						.requestMatchers("/api/v1/id-cards/**").denyAll()
 						// Credential provisioning: admin-only.
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")
