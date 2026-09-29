@@ -30,7 +30,9 @@ import com.gurukul.gamification.repository.QuizQuestionRepository;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
+import com.gurukul.gamification.event.BattleRoomOpenedEvent;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -79,6 +81,7 @@ public class BattleRoomService {
 	private final StudentRepository studentRepository;
 	private final GamificationService gamificationService;
 	private final SimpMessagingTemplate messagingTemplate;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Value("${app.gamification.battle-room.min-players:2}")
 	private int defaultMinPlayers;
@@ -147,6 +150,10 @@ public class BattleRoomService {
 
 		addParticipant(room, creator.getId());
 		broadcast(room);
+		eventPublisher.publishEvent(new BattleRoomOpenedEvent(
+				room.getSchoolId(), room.getId(), room.getRoomCode(), room.getClassName(), room.getAcademicYear(),
+				subject.getName(), creator.getId(), creator.getName(),
+				room.getCreatedAt().plusSeconds(room.getJoinWindowSeconds())));
 		return buildResponse(room);
 	}
 
