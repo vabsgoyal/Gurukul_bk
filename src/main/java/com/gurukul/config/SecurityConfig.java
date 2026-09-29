@@ -71,6 +71,11 @@ public class SecurityConfig {
 						// to: admin-only. Was previously unauthenticated. SchoolController additionally checks
 						// the admin belongs to the school being edited.
 						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*").hasRole("ADMIN")
+						// School logo (shown on report-card PDFs): admin-only; SchoolController additionally checks
+						// the admin belongs to the school in the path.
+						.requestMatchers(HttpMethod.POST, "/api/v1/schools/*/logo/presign").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/schools/*/logo").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/schools/*/logo").hasRole("ADMIN")
 						// Attendance devices (RFID/fingerprint/face) and identifier enrollment: admin-only to
 						// manage; reading an enrollment list is also open to a teacher. The device-event
 						// ingestion endpoint (/api/v1/attendance/device-events) is deliberately NOT listed
@@ -108,9 +113,14 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/report-cards/publish").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card/published-terms").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
+						// Report-card PDF: same roles as the JSON view above, and the same service-layer checks
+						// (it calls ReportCardService.getReportCard). A distinct path, so it needs its own matcher -
+						// an unmatched path would fall through to permitAll() below.
+						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card.pdf").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Section-wide report-card grid: admin, or that section's class teacher (checked in
 						// the service layer) - same authority pattern as publish/fee-status above.
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/report-cards").hasAnyRole("TEACHER", "ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/report-cards.pdf").hasAnyRole("TEACHER", "ADMIN")
 						// Term picker + backfill: same admin-or-class-teacher authority as publish, checked
 						// in the service layer (AssessmentService.requireCanManageTerms).
 						.requestMatchers(HttpMethod.GET, "/api/v1/class-sections/*/terms").hasAnyRole("TEACHER", "ADMIN")

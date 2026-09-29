@@ -187,6 +187,18 @@
 			<artifactId>poi-ooxml</artifactId>
 			<version>5.5.1</version>
 		</dependency>
+		<!-- Shared HTML-to-PDF rendering (common.pdf.PdfRenderService): report cards today, ID cards /
+		     payslips / certificates later. Thymeleaf core only (a standalone TemplateEngine), not the
+		     Spring Boot starter - no MVC view resolver gets switched on for these REST-only controllers. -->
+		<dependency>
+			<groupId>io.github.openhtmltopdf</groupId>
+			<artifactId>openhtmltopdf-pdfbox</artifactId>
+			<version>1.1.87</version>
+		</dependency>
+		<dependency>
+			<groupId>org.thymeleaf</groupId>
+			<artifactId>thymeleaf</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
