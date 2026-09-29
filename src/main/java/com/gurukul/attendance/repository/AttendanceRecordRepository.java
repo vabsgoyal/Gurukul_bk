@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +33,13 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 	List<StudentStatusView> findStudentStatusesBySchoolIdAndSectionIdAndAttendanceDateBetween(
 			@Param("schoolId") UUID schoolId, @Param("sectionId") UUID sectionId,
 			@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+	/** Status of every attendance record (any section) for a set of students - the batched form of
+	 * the per-student history used for report-card attendance %. */
+	@Query("select ar.student.id as studentId, ar.status as status from AttendanceRecord ar "
+			+ "where ar.schoolId = :schoolId and ar.student.id in :studentIds")
+	List<StudentStatusView> findStudentStatusesBySchoolIdAndStudentIdIn(
+			@Param("schoolId") UUID schoolId, @Param("studentIds") Collection<UUID> studentIds);
 
 	/** For the spreadsheet export - every record in a date range, school-wide. */
 	@EntityGraph(attributePaths = {"student", "section", "markedByTeacher", "markedByDevice"})

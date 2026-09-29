@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Marks-percentage -> letter-grade bands, configurable per school. A school that never configures
@@ -71,15 +72,25 @@ public class GradingScaleService {
 
 	@Transactional(readOnly = true)
 	public String resolveGrade(BigDecimal percentage) {
+		return gradeResolver().apply(percentage);
+	}
+
+	/**
+	 * Loads this school's bands once and returns a percentage-to-grade function - for callers that
+	 * grade many values in one request (a section's report cards), where calling resolveGrade per
+	 * value would re-query the bands every time.
+	 */
+	@Transactional(readOnly = true)
+	public Function<BigDecimal, String> gradeResolver() {
 		List<GradingBand> bands = gradingBandRepository.findAllBySchoolIdOrderByMinPercentageDesc(schoolContext.getSchoolId());
 		if (!bands.isEmpty()) {
-			return bands.stream()
+			return percentage -> bands.stream()
 					.filter(b -> percentage.compareTo(b.getMinPercentage()) >= 0)
 					.findFirst()
 					.map(GradingBand::getLabel)
 					.orElse(DEFAULT_FALLBACK_LABEL);
 		}
-		return DEFAULT_BANDS.stream()
+		return percentage -> DEFAULT_BANDS.stream()
 				.filter(b -> percentage.compareTo(b.min()) >= 0)
 				.findFirst()
 				.map(DefaultBand::label)
