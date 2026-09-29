@@ -4,6 +4,7 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.chat.entity.Conversation;
 import com.gurukul.chat.entity.Message;
 import com.gurukul.chat.entity.SenderKind;
+import com.gurukul.chat.repository.ConversationParticipantRepository;
 import com.gurukul.chat.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -24,6 +28,7 @@ import java.util.UUID;
 public class MessageService {
 
 	private final MessageRepository messageRepository;
+	private final ConversationParticipantRepository conversationParticipantRepository;
 
 	@Transactional
 	public Message send(Conversation conversation, AuthPrincipal principal, String content,
@@ -43,7 +48,49 @@ public class MessageService {
 		message.setAttachmentContentType(attachmentContentType);
 		message.setAttachmentFileName(attachmentFileName);
 		message.setSentAt(Instant.now());
-		return messageRepository.save(message);
+		Message saved = messageRepository.save(message);
+		// Replying means you've seen the chat - clears the sender's own unread count.
+		conversationParticipantRepository.markRead(conversation.getId(), principal.getOwnerType(),
+				principal.getOwnerId(), saved.getSentAt());
+		return saved;
+	}
+
+	/** Everything in the conversation up to now counts as read for the caller. */
+	@Transactional
+	public void markRead(AuthPrincipal principal, UUID conversationId) {
+		conversationParticipantRepository.markRead(conversationId, principal.getOwnerType(), principal.getOwnerId(),
+				Instant.now());
+	}
+
+	/** Newest message per conversation - conversations with no messages are absent. */
+	@Transactional(readOnly = true)
+	public Map<UUID, Message> latestMessages(Collection<UUID> conversationIds) {
+		if (conversationIds.isEmpty()) {
+			return Map.of();
+		}
+		Map<UUID, Message> latest = new HashMap<>();
+		for (Message message : messageRepository.findLatestIn(conversationIds)) {
+			latest.putIfAbsent(message.getConversation().getId(), message);
+		}
+		return latest;
+	}
+
+	/** Unread count per conversation for the caller - conversations with none unread are absent. */
+	@Transactional(readOnly = true)
+	public Map<UUID, Long> unreadCounts(AuthPrincipal principal, Collection<UUID> conversationIds) {
+		if (conversationIds.isEmpty()) {
+			return Map.of();
+		}
+		Map<UUID, Long> counts = new HashMap<>();
+		for (Object[] row : messageRepository.countUnread(principal.getOwnerType(), principal.getOwnerId(), conversationIds)) {
+			counts.put((UUID) row[0], (Long) row[1]);
+		}
+		return counts;
+	}
+
+	@Transactional(readOnly = true)
+	public long totalUnread(AuthPrincipal principal) {
+		return messageRepository.countAllUnread(principal.getSchoolId(), principal.getOwnerType(), principal.getOwnerId());
 	}
 
 	/**

@@ -14,6 +14,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -34,5 +35,9 @@ public class ConversationParticipant extends BaseEntity {
 
 	@Column(name = "owner_id", nullable = false)
 	private UUID ownerId;
+
+	/** Messages sent after this are unread for this participant. Null = nothing read yet. */
+	@Column(name = "last_read_at")
+	private Instant lastReadAt;
 
 }

@@ -173,6 +173,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations/*/read").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/unread-count").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations/*/attachments/presign")
 						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/contacts").hasAnyRole("ADMIN", "TEACHER", "PARENT")
