@@ -5,11 +5,15 @@ import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
 import com.gurukul.schools.dto.SchoolLocationUpdateRequest;
+import com.gurukul.schools.dto.SchoolLogoDtos.PresignLogoRequest;
+import com.gurukul.schools.dto.SchoolLogoDtos.PresignLogoResponse;
+import com.gurukul.schools.dto.SchoolLogoDtos.SetLogoRequest;
 import com.gurukul.schools.dto.SchoolRegistrationRequest;
 import com.gurukul.schools.dto.SchoolRegistrationResponse;
 import com.gurukul.schools.dto.SchoolResponse;
 import com.gurukul.schools.dto.SchoolSearchResponse;
 import com.gurukul.schools.dto.SchoolUpdateRequest;
+import com.gurukul.schools.service.SchoolLogoService;
 import com.gurukul.schools.service.SchoolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,6 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +45,7 @@ import java.util.UUID;
 public class SchoolController {
 
 	private final SchoolService schoolService;
+	private final SchoolLogoService schoolLogoService;
 
 	@PostMapping
 	@Operation(
@@ -116,6 +122,41 @@ public class SchoolController {
 			@Valid @RequestBody SchoolLocationUpdateRequest request) {
 		requireAdminOf(id);
 		return ApiResponse.success(schoolService.updateLocation(id, request), "School location updated");
+	}
+
+	@PostMapping("/{id}/logo/presign")
+	@Operation(
+			summary = "Get a presigned upload URL for the school logo",
+			description = """
+					Admin of this school only. PNG or JPEG, max 2 MB. Upload the raw bytes to uploadUrl with a
+					PUT and the same Content-Type, then confirm with PUT /api/v1/schools/{id}/logo. Returns 400
+					if file storage isn't configured on this server. Requires the X-School-Id header.
+					"""
+	)
+	public ApiResponse<PresignLogoResponse> presignLogo(
+			@PathVariable UUID id, @Valid @RequestBody PresignLogoRequest request) {
+		requireAdminOf(id);
+		return ApiResponse.success(schoolLogoService.presignUpload(id, request));
+	}
+
+	@PutMapping("/{id}/logo")
+	@Operation(
+			summary = "Set (or replace) the school logo from an uploaded object",
+			description = "Admin of this school only. objectKey must come from this school's presign call. "
+					+ "The logo appears on report-card PDFs; without one, a Gurukul placeholder is used."
+	)
+	public ApiResponse<SchoolResponse> setLogo(@PathVariable UUID id, @Valid @RequestBody SetLogoRequest request) {
+		requireAdminOf(id);
+		schoolLogoService.setLogo(id, request.getObjectKey());
+		return ApiResponse.success(schoolService.getById(id), "School logo updated");
+	}
+
+	@DeleteMapping("/{id}/logo")
+	@Operation(summary = "Remove the school logo", description = "Admin of this school only.")
+	public ApiResponse<SchoolResponse> removeLogo(@PathVariable UUID id) {
+		requireAdminOf(id);
+		schoolLogoService.removeLogo(id);
+		return ApiResponse.success(schoolService.getById(id), "School logo removed");
 	}
 
 	/**

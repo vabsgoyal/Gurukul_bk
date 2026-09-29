@@ -78,6 +78,13 @@ public class School {
 	@Column(name = "geofence_radius_meters", nullable = false)
 	private Integer geofenceRadiusMeters = 100;
 
+	/**
+	 * S3 object key of the school's logo (under school-logos/{schoolId}/), or null for none. Set via
+	 * the presigned-upload flow in SchoolLogoService; rendered on report-card PDFs.
+	 */
+	@Column(name = "logo_object_key")
+	private String logoObjectKey;
+
 	/** False hides the school from the public directory and rejects all tenant-scoped requests for it. */
 	@Column(nullable = false)
 	private boolean active = true;
