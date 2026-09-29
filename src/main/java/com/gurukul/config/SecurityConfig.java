@@ -200,6 +200,9 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/payroll/runs/*/lines").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/salary-history").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/payroll/lines/*/payslip").hasAnyRole("TEACHER", "ADMIN")
+						// Admissions (applications, documents, enrolment): admin-only, every method. AdmissionService
+						// re-checks the role, and scopes every lookup to the caller's school.
+						.requestMatchers("/api/v1/admissions", "/api/v1/admissions/**").hasRole("ADMIN")
 						// Marketing-site demo form: public by design (prospects have no account). The GET listing
 						// is gated in LeadService by a static LEADS_ADMIN_TOKEN, not user roles.
 						.requestMatchers(HttpMethod.POST, "/api/v1/leads").permitAll()
