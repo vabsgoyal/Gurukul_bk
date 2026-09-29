@@ -18,8 +18,12 @@ import com.gurukul.exams.entity.ReportCardPublication;
 import com.gurukul.exams.repository.AssessmentResultRepository;
 import com.gurukul.exams.repository.ReportCardPublicationRepository;
 import com.gurukul.academics.entity.Subject;
+import com.gurukul.notifications.service.PushChannel;
 import com.gurukul.notifications.service.PushNotificationService;
+import com.gurukul.notifications.service.PushNotificationService.Notification;
 import com.gurukul.notifications.service.PushNotificationService.Recipient;
+import com.gurukul.parents.entity.ParentStudentLink;
+import com.gurukul.parents.repository.ParentStudentLinkRepository;
 import com.gurukul.parents.service.ParentService;
 import com.gurukul.students.entity.ClassSection;
 import com.gurukul.students.entity.Student;
@@ -33,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +59,7 @@ public class ReportCardService {
 	private final SchoolContext schoolContext;
 	private final PushNotificationService pushNotificationService;
 	private final ParentService parentService;
+	private final ParentStudentLinkRepository parentStudentLinkRepository;
 
 	@Transactional
 	public PublicationResponse publish(UUID sectionId, String term) {
@@ -74,19 +80,46 @@ public class ReportCardService {
 		publication.setPublishedAt(Instant.now());
 		publication.setPublishedByEmployee(employeeService.getScopedEntity(principal.getOwnerId()));
 		ReportCardPublication saved = reportCardPublicationRepository.save(publication);
-		notifyStudents(saved);
+		notifyStudentsAndParents(saved);
 		return new PublicationResponse(
 				saved.getClassSection().getId(), saved.getTerm(), saved.getPublishedAt(), saved.getPublishedByEmployee().getName());
 	}
 
-	private void notifyStudents(ReportCardPublication publication) {
+	/**
+	 * One notification for the whole section's students, plus one per child for that child's
+	 * parents - a parent's copy names the child and carries studentId, so tapping it opens the
+	 * right report card even for a parent with more than one child. All sent in shared batches.
+	 */
+	private void notifyStudentsAndParents(ReportCardPublication publication) {
+		UUID schoolId = publication.getSchoolId();
 		UUID sectionId = publication.getClassSection().getId();
-		List<Recipient> recipients = studentRepository.findAllBySchoolIdAndClassSectionId(publication.getSchoolId(), sectionId).stream()
-				.map(s -> new Recipient(OwnerType.STUDENT, s.getId()))
-				.toList();
-		pushNotificationService.sendToRecipients(publication.getSchoolId(), recipients, "Report card published",
-				"Your " + publication.getTerm() + " report card is now available",
-				Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", publication.getTerm()));
+		String term = publication.getTerm();
+		List<Student> students = studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, sectionId);
+		if (students.isEmpty()) {
+			return;
+		}
+		List<Notification> notifications = new ArrayList<>();
+		notifications.add(new Notification(
+				students.stream().map(s -> new Recipient(OwnerType.STUDENT, s.getId())).toList(),
+				"Your report card is ready",
+				"Your " + term + " report card is now available. Tap to see it.",
+				Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", term)));
+
+		Map<UUID, List<Recipient>> parentsByStudent = parentStudentLinkRepository
+				.findAllBySchoolIdAndStudentIdIn(schoolId, students.stream().map(Student::getId).toList()).stream()
+				.collect(Collectors.groupingBy(ParentStudentLink::getStudentId,
+						Collectors.mapping(link -> new Recipient(OwnerType.PARENT, link.getParentId()), Collectors.toList())));
+		for (Student student : students) {
+			List<Recipient> parents = parentsByStudent.getOrDefault(student.getId(), List.of());
+			if (!parents.isEmpty()) {
+				notifications.add(new Notification(parents,
+						student.getName() + "'s report card is ready",
+						"The " + term + " report card is now available. Tap to see it.",
+						Map.of("type", "REPORT_CARD_PUBLISHED", "sectionId", String.valueOf(sectionId), "term", term,
+								"studentId", String.valueOf(student.getId()))));
+			}
+		}
+		pushNotificationService.sendEach(schoolId, PushChannel.ACADEMICS, notifications);
 	}
 
 	/**

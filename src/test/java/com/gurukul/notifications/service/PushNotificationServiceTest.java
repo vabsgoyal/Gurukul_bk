@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.ExpectedCount.times;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -58,7 +60,7 @@ class PushNotificationServiceTest {
 	}
 
 	private void send() {
-		service.sendToOwner(SCHOOL_ID, OwnerType.STUDENT, STUDENT_ID, "Title", "Body", Map.of());
+		service.sendToOwner(SCHOOL_ID, OwnerType.STUDENT, STUDENT_ID, PushChannel.MESSAGES, "Title", "Body", Map.of());
 	}
 
 	@Test
@@ -111,6 +113,58 @@ class PushNotificationServiceTest {
 		send();
 
 		verify(repository, never()).delete(any());
+	}
+
+	@Test
+	void reachesParentsAndSendsTheAndroidChannelAtHighPriority() {
+		UUID parentId = UUID.randomUUID();
+		when(repository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(SCHOOL_ID, OwnerType.PARENT, List.of(parentId)))
+				.thenReturn(List.of(deviceToken("ExponentPushToken[parent]")));
+		expo.expect(once(), requestTo(PushNotificationService.EXPO_PUSH_URL))
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].to").value("ExponentPushToken[parent]"))
+				.andExpect(jsonPath("$[0].channelId").value("academics"))
+				.andExpect(jsonPath("$[0].priority").value("high"))
+				.andRespond(withSuccess("{\"data\": [{\"status\": \"ok\"}]}", MediaType.APPLICATION_JSON));
+
+		service.sendToOwner(SCHOOL_ID, OwnerType.PARENT, parentId, PushChannel.ACADEMICS, "Title", "Body", Map.of());
+
+		expo.verify();
+	}
+
+	@Test
+	void sendsDifferentlyWordedNotificationsInOneBatchAndListsEachPersonOnce() {
+		UUID aaravsParent = UUID.randomUUID();
+		UUID studentId = UUID.randomUUID();
+		when(repository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(SCHOOL_ID, OwnerType.PARENT, List.of(aaravsParent)))
+				.thenReturn(List.of(deviceToken("ExponentPushToken[parent]")));
+		when(repository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(SCHOOL_ID, OwnerType.STUDENT, List.of(studentId)))
+				.thenReturn(List.of(deviceToken("ExponentPushToken[student]")));
+		expo.expect(once(), requestTo(PushNotificationService.EXPO_PUSH_URL))
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0].title").value("Your report card is ready"))
+				.andExpect(jsonPath("$[1].title").value("Aarav's report card is ready"))
+				.andRespond(withSuccess("{\"data\": []}", MediaType.APPLICATION_JSON));
+
+		service.sendEach(SCHOOL_ID, PushChannel.ACADEMICS, List.of(
+				new PushNotificationService.Notification(List.of(new PushNotificationService.Recipient(OwnerType.STUDENT, studentId)),
+						"Your report card is ready", "Body", Map.of()),
+				// The same parent listed twice (two children in one scope) still gets one message.
+				new PushNotificationService.Notification(List.of(
+						new PushNotificationService.Recipient(OwnerType.PARENT, aaravsParent),
+						new PushNotificationService.Recipient(OwnerType.PARENT, aaravsParent)),
+						"Aarav's report card is ready", "Body", Map.of())));
+
+		expo.verify();
+	}
+
+	@Test
+	void sendsNothingWhenNobodyHasADevice() {
+		when(repository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(eq(SCHOOL_ID), any(), anyList())).thenReturn(List.of());
+
+		service.sendToOwner(SCHOOL_ID, OwnerType.EMPLOYEE, UUID.randomUUID(), PushChannel.CALLS, "Title", "Body", Map.of());
+
+		expo.verify();
 	}
 
 	private static DeviceToken deviceToken(String expoPushToken) {
