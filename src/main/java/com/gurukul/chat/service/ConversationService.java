@@ -10,14 +10,20 @@ import com.gurukul.chat.repository.ConversationParticipantRepository;
 import com.gurukul.chat.repository.ConversationRepository;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.employees.repository.EmployeeRepository;
+import com.gurukul.parents.repository.ParentRepository;
 import com.gurukul.students.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,6 +42,8 @@ public class ConversationService {
 	private final ConversationParticipantRepository conversationParticipantRepository;
 	private final EmployeeRepository employeeRepository;
 	private final StudentRepository studentRepository;
+	private final ParentRepository parentRepository;
+	private final ChatContactService chatContactService;
 
 	@Transactional
 	public Conversation createOneToOne(AuthPrincipal principal, CreateConversationRequest request) {
@@ -52,12 +60,21 @@ public class ConversationService {
 			throw new IllegalArgumentException("Student-to-student messaging is not supported");
 		}
 		requireExists(schoolId, otherType, otherId);
+		boolean involvesParent = callerType == OwnerType.PARENT || otherType == OwnerType.PARENT;
+		if (involvesParent) {
+			requireParentPairingAllowed(principal, otherType, otherId);
+		}
 
 		return conversationRepository.findOneToOneBetween(schoolId, callerType, callerId, otherType, otherId)
 				.orElseGet(() -> {
-					ConversationType type = (callerType == OwnerType.EMPLOYEE && otherType == OwnerType.EMPLOYEE)
-							? ConversationType.STAFF_STAFF
-							: ConversationType.STAFF_STUDENT;
+					ConversationType type;
+					if (involvesParent) {
+						type = ConversationType.PARENT_STAFF;
+					} else if (callerType == OwnerType.EMPLOYEE && otherType == OwnerType.EMPLOYEE) {
+						type = ConversationType.STAFF_STAFF;
+					} else {
+						type = ConversationType.STAFF_STUDENT;
+					}
 					Conversation conversation = newConversation(schoolId, type);
 					addParticipant(conversation, callerType, callerId);
 					addParticipant(conversation, otherType, otherId);
@@ -116,14 +133,69 @@ public class ConversationService {
 		return conversation;
 	}
 
-	private void requireExists(UUID schoolId, OwnerType ownerType, UUID ownerId) {
-		boolean exists = ownerType == OwnerType.EMPLOYEE
-				? employeeRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent()
-				: studentRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
-		if (!exists) {
-			throw new EntityNotFoundException(
-					(ownerType == OwnerType.EMPLOYEE ? "Employee" : "Student") + " not found");
+	/**
+	 * A parent may only ever pair with staff, and only with the staff ChatContactService allows (their
+	 * children's teachers, the school's admins); staff may only start with parents of their students
+	 * (an admin: any parent of the school). Student-parent and parent-parent are refused outright.
+	 * AccessDenied rather than a 400: the request is well-formed, the caller just may not reach that
+	 * person.
+	 */
+	private void requireParentPairingAllowed(AuthPrincipal principal, OwnerType otherType, UUID otherId) {
+		OwnerType callerType = principal.getOwnerType();
+		boolean allowed;
+		if (callerType == OwnerType.PARENT) {
+			allowed = otherType == OwnerType.EMPLOYEE
+					&& chatContactService.parentMayContactEmployee(principal.getSchoolId(), principal.getOwnerId(), otherId);
+		} else if (callerType == OwnerType.EMPLOYEE) {
+			allowed = chatContactService.staffMayContactParent(principal, otherId);
+		} else {
+			allowed = false;
 		}
+		if (!allowed) {
+			throw new AccessDeniedException(callerType == OwnerType.PARENT
+					? "You can message your child's teachers and the school's admins only"
+					: "You can message parents of your own students only");
+		}
+	}
+
+	private void requireExists(UUID schoolId, OwnerType ownerType, UUID ownerId) {
+		boolean exists = switch (ownerType) {
+			case EMPLOYEE -> employeeRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+			case STUDENT -> studentRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+			case PARENT -> parentRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+		};
+		if (!exists) {
+			throw new EntityNotFoundException(switch (ownerType) {
+				case EMPLOYEE -> "Employee not found";
+				case STUDENT -> "Student not found";
+				case PARENT -> "Parent not found";
+			});
+		}
+	}
+
+	/**
+	 * Display names for every participant, one query per owner type - so the app can name the other
+	 * party (a parent in particular, who isn't in any directory the app can list) without loading the
+	 * whole school's employee/student lists.
+	 */
+	@Transactional(readOnly = true)
+	public Map<UUID, String> namesOf(UUID schoolId, Collection<ConversationParticipant> participants) {
+		Map<OwnerType, Set<UUID>> idsByType = new EnumMap<>(OwnerType.class);
+		for (ConversationParticipant participant : participants) {
+			idsByType.computeIfAbsent(participant.getOwnerType(), t -> new HashSet<>()).add(participant.getOwnerId());
+		}
+		Map<UUID, String> names = new HashMap<>();
+		idsByType.forEach((ownerType, ids) -> {
+			switch (ownerType) {
+				case EMPLOYEE -> employeeRepository.findAllBySchoolIdAndIdIn(schoolId, ids)
+						.forEach(e -> names.put(e.getId(), e.getName()));
+				case STUDENT -> studentRepository.findAllBySchoolIdAndIdIn(schoolId, ids)
+						.forEach(st -> names.put(st.getId(), st.getName()));
+				case PARENT -> parentRepository.findAllBySchoolIdAndIdIn(schoolId, ids)
+						.forEach(pa -> names.put(pa.getId(), pa.getName()));
+			}
+		});
+		return names;
 	}
 
 	private Conversation newConversation(UUID schoolId, ConversationType type) {

@@ -2,6 +2,7 @@ package com.gurukul.chat.controller;
 
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
+import com.gurukul.chat.dto.ChatDtos.ContactResponse;
 import com.gurukul.chat.dto.ChatDtos.ConversationResponse;
 import com.gurukul.chat.dto.ChatDtos.CreateConversationRequest;
 import com.gurukul.chat.dto.ChatDtos.MessagePageResponse;
@@ -12,6 +13,7 @@ import com.gurukul.chat.entity.Conversation;
 import com.gurukul.chat.entity.ConversationParticipant;
 import com.gurukul.chat.entity.Message;
 import com.gurukul.chat.service.AttachmentService;
+import com.gurukul.chat.service.ChatContactService;
 import com.gurukul.chat.service.ConversationService;
 import com.gurukul.chat.service.MessageService;
 import com.gurukul.common.ApiResponse;
@@ -42,10 +44,13 @@ public class ConversationController {
 	private final ConversationService conversationService;
 	private final MessageService messageService;
 	private final AttachmentService attachmentService;
+	private final ChatContactService chatContactService;
 
 	@PostMapping("/api/v1/chat/conversations")
 	@Operation(summary = "Create (or fetch, if one already exists) a 1:1 conversation",
-			description = "Staff-to-staff and staff-to-student/guardian only. Student-to-student is rejected.")
+			description = "Staff-to-staff, staff-to-student, and parent-to-staff (a parent only with their child's "
+					+ "teachers and the school's admins; a teacher only with parents of their students - see "
+					+ "GET /api/v1/chat/contacts). Student-to-student is rejected.")
 	public ApiResponse<ConversationResponse> create(@Valid @RequestBody CreateConversationRequest request) {
 		AuthPrincipal principal = AuthContext.current();
 		Conversation conversation = conversationService.createOneToOne(principal, request);
@@ -59,9 +64,11 @@ public class ConversationController {
 		List<Conversation> conversations = conversationService.listForCaller(principal);
 		Map<UUID, List<ConversationParticipant>> participantsByConversation = conversationService.participantsOf(
 				conversations.stream().map(Conversation::getId).toList());
+		Map<UUID, String> names = conversationService.namesOf(principal.getSchoolId(),
+				participantsByConversation.values().stream().flatMap(List::stream).toList());
 		List<ConversationResponse> responses = conversations.stream()
 				.map(c -> ConversationResponse.from(
-						c, participantsByConversation.getOrDefault(c.getId(), List.of())))
+						c, participantsByConversation.getOrDefault(c.getId(), List.of()), names))
 				.toList();
 		return ApiResponse.success(responses);
 	}
@@ -101,8 +108,19 @@ public class ConversationController {
 		return ApiResponse.success(toResponse(conversation));
 	}
 
+	@GetMapping("/api/v1/chat/contacts")
+	@Operation(summary = "Who I may start a parent-staff chat with, and why",
+			description = "Parent: their children's class/subject teachers and the school's admins. Teacher: parents "
+					+ "of students in sections they teach. Admin: every parent. Staff-to-staff and staff-to-student "
+					+ "pairing is not listed here (unchanged: use the employee/student directories).")
+	public ApiResponse<List<ContactResponse>> contacts() {
+		return ApiResponse.success(chatContactService.contactsFor(AuthContext.current()));
+	}
+
 	private ConversationResponse toResponse(Conversation conversation) {
-		return ConversationResponse.from(conversation, conversationService.participantsOf(conversation.getId()));
+		List<ConversationParticipant> participants = conversationService.participantsOf(conversation.getId());
+		return ConversationResponse.from(conversation, participants,
+				conversationService.namesOf(conversation.getSchoolId(), participants));
 	}
 
 }

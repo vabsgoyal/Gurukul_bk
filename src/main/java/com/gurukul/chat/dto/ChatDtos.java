@@ -16,6 +16,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class ChatDtos {
@@ -31,9 +32,12 @@ public class ChatDtos {
 	public static class ParticipantResponse {
 		private OwnerType ownerType;
 		private UUID ownerId;
+		@Schema(description = "Display name, resolved server-side (null if that person no longer exists)")
+		private String name;
 
-		public static ParticipantResponse from(ConversationParticipant participant) {
-			return new ParticipantResponse(participant.getOwnerType(), participant.getOwnerId());
+		public static ParticipantResponse from(ConversationParticipant participant, Map<UUID, String> namesById) {
+			return new ParticipantResponse(participant.getOwnerType(), participant.getOwnerId(),
+					namesById.get(participant.getOwnerId()));
 		}
 	}
 
@@ -43,12 +47,30 @@ public class ChatDtos {
 		private ConversationType type;
 		private List<ParticipantResponse> participants;
 
-		public static ConversationResponse from(Conversation conversation, List<ConversationParticipant> participants) {
+		public static ConversationResponse from(Conversation conversation, List<ConversationParticipant> participants,
+				Map<UUID, String> namesById) {
 			return new ConversationResponse(
 					conversation.getId(),
 					conversation.getType(),
-					participants.stream().map(ParticipantResponse::from).toList());
+					participants.stream().map(p -> ParticipantResponse.from(p, namesById)).toList());
 		}
+	}
+
+	@Getter @AllArgsConstructor
+	@Schema(description = "Someone the caller may start a 1:1 chat with, and why. For a parent: their children's "
+			+ "teachers and the school's admins. For staff: parents of their students (any parent, for an admin).")
+	public static class ContactResponse {
+		private OwnerType ownerType;
+		private UUID ownerId;
+		private String name;
+		@Schema(description = "Staff contact only: this person is a school admin")
+		private boolean admin;
+		@Schema(description = "Staff contact only: the parent's children's sections (e.g. \"5 - A\") this person is class teacher of")
+		private List<String> classTeacherOf;
+		@Schema(description = "Staff contact only: \"Subject (section)\" this person teaches the parent's children")
+		private List<String> subjects;
+		@Schema(description = "Parent contact only: \"Child (section)\" for each of their children the caller teaches")
+		private List<String> children;
 	}
 
 	@Getter @Setter

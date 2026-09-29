@@ -52,12 +52,13 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
 	static final String REDACTED = "[redacted]";
 
 	/**
-	 * Not audited: private chat content (admins must not read conversations through the log), push
+	 * Not audited: private chat content (admins must not read conversations through the log - which
+	 * includes inbox Notification rows, since a chat push carries the message preview), push
 	 * tokens, and high-churn gamification gameplay (answers, XP ticks, matchmaking), which is not an
 	 * edit by any useful definition and would drown out the real changes.
 	 */
 	static final Set<String> EXCLUDED_ENTITIES = Set.of(
-			"Message", "Conversation", "ConversationParticipant", "DeviceToken", "ReceiptSequence",
+			"Message", "Conversation", "ConversationParticipant", "DeviceToken", "Notification", "ReceiptSequence",
 			"XpEvent", "StudentGameProfile", "BattleAnswer", "BattleBuzzWinner", "BattleRoom",
 			"BattleRoomParticipant", "PracticeAnswer", "PracticeSession", "QuizAnswer", "QuizChallenge");
 

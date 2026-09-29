@@ -51,6 +51,7 @@ public class PushNotificationService {
 
 	private final DeviceTokenRepository deviceTokenRepository;
 	private final RestClient expoPushRestClient;
+	private final NotificationInboxService notificationInboxService;
 
 	public record Recipient(OwnerType ownerType, UUID ownerId) {
 	}
@@ -87,8 +88,54 @@ public class PushNotificationService {
 	 * <p>Every owner type (employee, student, parent) is looked up. Within one notification tokens
 	 * are de-duplicated, so someone listed twice - a parent of two children in the same
 	 * announcement's scope - gets it once, not twice.
+	 *
+	 * <p>Every notification is also saved to each recipient's inbox (see NotificationInboxService),
+	 * device or no device, so it can be re-read in the app later.
 	 */
 	public void sendEach(UUID schoolId, PushChannel channel, List<Notification> notifications) {
+		for (Notification notification : notifications) {
+			saveToInbox(schoolId, notification);
+		}
+		push(schoolId, channel, notifications);
+	}
+
+	/**
+	 * For alerts that must reach each recipient at most once per {@code dedupeKey} (an absence per
+	 * child per day, a fee reminder per assessment per window): only recipients with no inbox row for
+	 * that key yet get a row and a push. Returns how many recipients were newly notified. Fails open
+	 * like everything else here - a failed claim (including losing a race to a concurrent caller,
+	 * which the unique index turns into an exception) sends nothing and returns 0.
+	 */
+	public int sendOnce(UUID schoolId, PushChannel channel, Notification notification, String dedupeKey) {
+		List<Recipient> fresh;
+		try {
+			fresh = notificationInboxService.claim(schoolId, notification.recipients(), notification.title(),
+					notification.body(), notification.data(), dedupeKey);
+		} catch (Exception e) {
+			log.info("Alert {} not sent - already claimed or inbox write failed: {}", dedupeKey, e.getMessage());
+			return 0;
+		}
+		if (!fresh.isEmpty()) {
+			push(schoolId, channel, List.of(new Notification(fresh, notification.title(), notification.body(),
+					notification.data())));
+		}
+		return fresh.size();
+	}
+
+	private void saveToInbox(UUID schoolId, Notification notification) {
+		if (notification.recipients().isEmpty()) {
+			return;
+		}
+		try {
+			notificationInboxService.record(schoolId, notification.recipients(), notification.title(),
+					notification.body(), notification.data());
+		} catch (Exception e) {
+			log.warn("Saving {} notification(s) to the inbox failed - pushing anyway",
+					notification.recipients().size(), e);
+		}
+	}
+
+	private void push(UUID schoolId, PushChannel channel, List<Notification> notifications) {
 		List<Map<String, Object>> messages = new ArrayList<>();
 		for (Notification notification : notifications) {
 			for (String token : tokensFor(schoolId, notification.recipients())) {

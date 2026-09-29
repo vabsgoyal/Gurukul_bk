@@ -7,6 +7,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,5 +44,11 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
 	/** Used to recompute server-assigned roll numbers (alphabetical rank within the active roster) whenever the roster changes. */
 	List<Student> findAllByClassSectionIdAndStatus(UUID classSectionId, StudentStatus status);
+
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
+	List<Student> findAllBySchoolIdAndIdIn(UUID schoolId, Collection<UUID> ids);
+
+	@EntityGraph(attributePaths = {"classSection", "classSection.classTeacher"})
+	List<Student> findAllBySchoolIdAndClassSectionIdIn(UUID schoolId, Collection<UUID> classSectionIds);
 
 }

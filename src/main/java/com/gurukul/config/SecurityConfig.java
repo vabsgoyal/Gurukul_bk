@@ -88,6 +88,10 @@ public class SecurityConfig {
 						// Push notification device registration: any authenticated session registers its
 						// own device, regardless of role.
 						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/device-token").authenticated()
+						// Notification inbox: any signed-in role reads/marks its own rows only - the owner
+						// always comes from the token (NotificationInboxService), never the request.
+						.requestMatchers(HttpMethod.GET, "/api/v1/notifications", "/api/v1/notifications/unread-count").authenticated()
+						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/*/read", "/api/v1/notifications/read-all").authenticated()
 						// Profile picker: list/switch between the profiles that share the caller's phone.
 						.requestMatchers("/api/v1/auth/profiles", "/api/v1/auth/profiles/**").authenticated()
 						// Assessments: teachers/admins author them; students may only ever read (GETs stay
@@ -122,11 +126,18 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/credentials", "/api/v1/students/*/credentials")
 						.hasRole("ADMIN")
 						// Chat: conversations/messages/bot need to know the sender's identity, so all require
-						// auth. Student-vs-student pairing is rejected in the service layer (depends on
-						// resolving both parties' owner types, which method+path matching can't express).
-						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
-						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
-						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						// auth. Who may pair with whom (no student-to-student; a parent only with their
+						// child's teachers and the school's admins, a teacher only with their students'
+						// parents) is decided in the service layer (ConversationService/ChatContactService),
+						// since it depends on resolving both parties, which method+path matching can't express.
+						// Reading/sending is gated on being a participant (requireParticipant), the same check
+						// the STOMP subscribe/send path uses.
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/conversations/*/messages").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/chat/conversations/*/attachments/presign")
+						.hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/contacts").hasAnyRole("ADMIN", "TEACHER", "PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/bot/conversation").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
 						// Academic Helper: any authenticated in-app role may ask. Which system prompt is
 						// used (a student is taught the method, a teacher gets the answer key) is decided
@@ -138,7 +149,7 @@ public class SecurityConfig {
 						// Announcements: creation role-gated here; the fine-grained "which section" check
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")
-						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
 						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
 						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
 						// Fee categories/structures: creation and per-structure assessment generation are
