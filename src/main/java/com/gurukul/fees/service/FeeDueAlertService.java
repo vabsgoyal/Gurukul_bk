@@ -10,6 +10,7 @@ import com.gurukul.notifications.service.PushNotificationService.Notification;
 import com.gurukul.notifications.service.PushNotificationService.Recipient;
 import com.gurukul.parents.entity.ParentStudentLink;
 import com.gurukul.parents.repository.ParentStudentLinkRepository;
+import com.gurukul.students.entity.StudentStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -90,7 +91,9 @@ public class FeeDueAlertService {
 		BigDecimal balance = assessment.getTotalDue().subtract(
 				assessment.getTotalPaid() != null ? assessment.getTotalPaid() : BigDecimal.ZERO);
 		Optional<String> window = window(assessment.getDueDate(), today);
-		if (parentIds.isEmpty() || balance.signum() <= 0 || window.isEmpty()) {
+		// A withdrawn/transferred child keeps an open assessment; its parents get no reminders.
+		if (parentIds.isEmpty() || balance.signum() <= 0 || window.isEmpty()
+				|| assessment.getStudent().getStatus() != StudentStatus.ACTIVE) {
 			return 0;
 		}
 		String name = assessment.getStudent().getName();
