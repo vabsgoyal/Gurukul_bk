@@ -87,7 +87,8 @@ public class SponsorshipService {
 
 	@Transactional
 	public SponsorshipDtos.SponsorshipPaymentResponse recordPayment(UUID id, SponsorshipDtos.SponsorshipPaymentRequest request) {
-		Sponsorship sponsorship = sponsorshipRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
+		// Locked until commit, so concurrent payments are checked against the remaining pledge one at a time.
+		Sponsorship sponsorship = sponsorshipRepository.findForUpdate(id, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Sponsorship not found"));
 		BigDecimal received = receivedAmount(id);
 		BigDecimal remaining = sponsorship.getPledgedAmount().subtract(received);

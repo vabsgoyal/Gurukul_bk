@@ -87,13 +87,12 @@ public class FeePaymentService {
 	private final ClassSectionService classSectionService;
 
 	/**
-	 * Prototype-only convenience: with no payment gateway wired up, RESPONSE_SUCCESS is the UPI
-	 * app's own unverified claim (see PaymentAttemptStatus). When true, that claim is still used to
-	 * mark the fee PAID so the rest of the app (receipts, dues reports) has something to show during
-	 * testing. Flip to false once real server-side verification exists, so a claimed success no
-	 * longer silently marks a fee as paid.
+	 * With no payment gateway wired up, RESPONSE_SUCCESS is only the UPI app's (or the payer's own)
+	 * unverified claim (see PaymentAttemptStatus). Off by default: a claim is recorded on the
+	 * attempt, and staff record the payment once they've seen the money. Only turn this on in a
+	 * demo, where a claimed success should mark the fee PAID.
 	 */
-	@Value("${app.fees.unverified-upi-auto-mark-paid:true}")
+	@Value("${app.fees.unverified-upi-auto-mark-paid:false}")
 	private boolean unverifiedUpiAutoMarkPaid;
 
 	@Transactional(readOnly = true)
@@ -307,8 +306,10 @@ public class FeePaymentService {
 	 */
 	@Transactional
 	public PaymentAttemptResponse recordAttemptResult(String transactionRef, PaymentAttemptResultRequest request) {
+		// Locked: two concurrent results for the same attempt would otherwise both read the old
+		// status, both pass the alreadyRecorded check below, and record the payment twice.
 		PaymentAttempt attempt = paymentAttemptRepository
-				.findByTransactionRefAndSchoolId(transactionRef, schoolContext.getSchoolId())
+				.findForUpdate(transactionRef, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Payment attempt not found"));
 		assertCanPayOrRecord(attempt.getAssessment());
 
@@ -361,8 +362,9 @@ public class FeePaymentService {
 
 	@Transactional
 	public FeePaymentResponse recordPayment(FeePaymentRequest request) {
+		// Locked until commit, so concurrent payments are checked against the remaining due one at a time.
 		StudentFeeAssessment assessment = assessmentRepository
-				.findByIdAndSchoolId(request.getAssessmentId(), schoolContext.getSchoolId())
+				.findForUpdate(request.getAssessmentId(), schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Fee assessment not found"));
 		assertCanPayOrRecord(assessment);
 
