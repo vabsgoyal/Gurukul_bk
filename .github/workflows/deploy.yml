@@ -78,6 +78,13 @@ jobs:
           GOOGLE_MEET_CLIENT_SECRET: ${{ secrets.GOOGLE_MEET_CLIENT_SECRET }}
           GOOGLE_MEET_REDIRECT_URI: ${{ secrets.GOOGLE_MEET_REDIRECT_URI }}
           APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY }}
+          # Website lead emails (LeadNotifier). Only written when LEADS_NOTIFY_EMAIL, SMTP_USERNAME
+          # and SMTP_PASSWORD are all set, so a missing secret never wipes values set by hand on
+          # the box. SMTP_HOST is optional and defaults to Gmail (port 587, STARTTLS).
+          LEADS_NOTIFY_EMAIL: ${{ secrets.LEADS_NOTIFY_EMAIL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           # Always push the repo's deploy-from-s3.sh to the instance before running it, so the
           # instance can never silently drift from what's committed (it previously did - a stale
@@ -97,6 +104,18 @@ jobs:
           GOOGLE_MEET_CLIENT_SECRET_B64=$(printf '%s' "$GOOGLE_MEET_CLIENT_SECRET" | base64 -w0)
           GOOGLE_MEET_REDIRECT_URI_B64=$(printf '%s' "$GOOGLE_MEET_REDIRECT_URI" | base64 -w0)
           APP_ENCRYPTION_KEY_B64=$(printf '%s' "$APP_ENCRYPTION_KEY" | base64 -w0)
+          MAIL_ENV_B64=""
+          if [[ -n "$LEADS_NOTIFY_EMAIL" && -n "$SMTP_USERNAME" && -n "$SMTP_PASSWORD" ]]; then
+            MAIL_ENV_B64=$(printf '%s\n' \
+              "LEADS_NOTIFY_EMAIL=$LEADS_NOTIFY_EMAIL" \
+              "LEADS_MAIL_FROM=Smart Gurukul Leads <$SMTP_USERNAME>" \
+              "SPRING_MAIL_HOST=${SMTP_HOST:-smtp.gmail.com}" \
+              "SPRING_MAIL_PORT=587" \
+              "SPRING_MAIL_USERNAME=$SMTP_USERNAME" \
+              "SPRING_MAIL_PASSWORD=$SMTP_PASSWORD" \
+              "SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true" \
+              "SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true" | base64 -w0)
+          fi
 
           COMMANDS=$(jq -n \
             --arg key "$ANTHROPIC_API_KEY" \
@@ -109,6 +128,7 @@ jobs:
             --arg gmClientSecret "$GOOGLE_MEET_CLIENT_SECRET_B64" \
             --arg gmRedirectUri "$GOOGLE_MEET_REDIRECT_URI_B64" \
             --arg encKey "$APP_ENCRYPTION_KEY_B64" \
+            --arg mailEnv "$MAIL_ENV_B64" \
             --arg script "$SCRIPT_B64" '[
             "sudo sed -i /^ANTHROPIC_API_KEY=/d /etc/gurukul/backend.env",
             "echo \"ANTHROPIC_API_KEY=\($key)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
@@ -132,6 +152,7 @@ jobs:
             "echo \"APP_ENCRYPTION_KEY=$(echo \($encKey) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^CALL_PREFERRED_PROVIDER=/d /etc/gurukul/backend.env",
             "echo \"CALL_PREFERRED_PROVIDER=GOOGLE_MEET\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "if [ -n \"\($mailEnv)\" ]; then sudo sed -i -E \"/^(LEADS_NOTIFY_EMAIL|LEADS_MAIL_FROM|SPRING_MAIL_[A-Z_]+)=/d\" /etc/gurukul/backend.env && echo \($mailEnv) | base64 -d | sudo tee -a /etc/gurukul/backend.env >/dev/null; fi",
             "echo \($script) | base64 -d | sudo tee /opt/gurukul/deploy-from-s3.sh >/dev/null",
             "sudo chmod +x /opt/gurukul/deploy-from-s3.sh",
             "/opt/gurukul/deploy-from-s3.sh"
