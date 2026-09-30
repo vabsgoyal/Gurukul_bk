@@ -198,8 +198,7 @@ class PushNotificationServiceTest {
 		UUID alreadyAlerted = UUID.randomUUID();
 		UUID fresh = UUID.randomUUID();
 		PushNotificationService.Recipient freshRecipient = new PushNotificationService.Recipient(OwnerType.PARENT, fresh);
-		when(inbox.claim(eq(SCHOOL_ID), anyList(), any(), any(), any(), eq("ABSENCE:x")))
-				.thenReturn(List.of(freshRecipient));
+		when(inbox.unclaimed(anyList(), eq("ABSENCE:x"))).thenReturn(List.of(freshRecipient));
 		when(repository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(SCHOOL_ID, OwnerType.PARENT, List.of(fresh)))
 				.thenReturn(List.of(deviceToken("ExponentPushToken[fresh]")));
 		expo.expect(once(), requestTo(PushNotificationService.EXPO_PUSH_URL))
@@ -214,19 +213,39 @@ class PushNotificationServiceTest {
 
 		expo.verify();
 		org.junit.jupiter.api.Assertions.assertEquals(1, sent);
+		// The inbox row is written after the push, for just the recipient who was pushed.
+		verify(inbox).claim(eq(SCHOOL_ID), eq(List.of(freshRecipient)), any(), any(), any(), eq("ABSENCE:x"));
 		verify(inbox, never()).record(any(), anyList(), any(), any(), any());
 	}
 
 	@Test
-	void sendOnceSendsNothingWhenTheClaimFails() {
-		when(inbox.claim(any(), anyList(), any(), any(), any(), any())).thenThrow(new RuntimeException("duplicate key"));
+	void sendOnceSendsNothingWhenItCannotTellWhoAlreadyHasTheAlert() {
+		when(inbox.unclaimed(anyList(), any())).thenThrow(new RuntimeException("database unavailable"));
 
 		int sent = service.sendOnce(SCHOOL_ID, PushChannel.ALERTS, new PushNotificationService.Notification(
 				List.of(new PushNotificationService.Recipient(OwnerType.PARENT, UUID.randomUUID())),
 				"Absent", "Body", Map.of()), "ABSENCE:y");
 
-		expo.verify();
 		org.junit.jupiter.api.Assertions.assertEquals(0, sent);
+		verify(inbox, never()).claim(any(), anyList(), any(), any(), any(), any());
+	}
+
+	@Test
+	void aFailedInboxWriteAfterThePushIsLoggedNotThrown() {
+		UUID parent = UUID.randomUUID();
+		PushNotificationService.Recipient recipient = new PushNotificationService.Recipient(OwnerType.PARENT, parent);
+		when(inbox.unclaimed(anyList(), eq("ABSENCE:z"))).thenReturn(List.of(recipient));
+		when(inbox.claim(any(), anyList(), any(), any(), any(), any())).thenThrow(new RuntimeException("duplicate key"));
+		when(repository.findAllBySchoolIdAndOwnerTypeAndOwnerIdIn(SCHOOL_ID, OwnerType.PARENT, List.of(parent)))
+				.thenReturn(List.of(deviceToken("ExponentPushToken[z]")));
+		expo.expect(once(), requestTo(PushNotificationService.EXPO_PUSH_URL))
+				.andRespond(withSuccess("{\"data\": []}", MediaType.APPLICATION_JSON));
+
+		int sent = service.sendOnce(SCHOOL_ID, PushChannel.ALERTS,
+				new PushNotificationService.Notification(List.of(recipient), "Absent", "Body", Map.of()), "ABSENCE:z");
+
+		expo.verify();
+		org.junit.jupiter.api.Assertions.assertEquals(1, sent);
 	}
 
 	private static DeviceToken deviceToken(String expoPushToken) {
