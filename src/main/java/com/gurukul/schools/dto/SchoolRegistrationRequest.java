@@ -79,6 +79,7 @@ public class SchoolRegistrationRequest {
 	private Double longitude;
 
 	@Min(1)
+	@Max(1000)
 	@Schema(description = "Geofence radius in meters for teacher self-attendance; defaults to the School entity's default (100) if omitted", example = "100")
 	private Integer geofenceRadiusMeters;
 

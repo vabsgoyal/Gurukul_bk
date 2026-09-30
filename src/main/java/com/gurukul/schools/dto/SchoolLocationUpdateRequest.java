@@ -24,6 +24,7 @@ public class SchoolLocationUpdateRequest {
 
 	@NotNull
 	@Min(1)
+	@Max(1000)
 	@Schema(description = "Radius in meters within which a teacher may self-mark attendance", example = "100")
 	private Integer geofenceRadiusMeters;
 

@@ -87,6 +87,9 @@ public class StaffAttendanceService {
 	 * server-side, against the school's stored coordinates - the client's own "am I inside the
 	 * fence" belief is never trusted, since GPS coordinates are trivially spoofable.
 	 */
+	/** Fixes older (or further in the future, for clock skew) than this are refused as possibly replayed. */
+	static final long MAX_FIX_AGE_MILLIS = 2 * 60 * 1000L;
+
 	@Transactional
 	public StaffAttendanceRecordResponse selfMark(SelfMarkAttendanceRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
@@ -97,6 +100,14 @@ public class StaffAttendanceService {
 				.orElseThrow(() -> new EntityNotFoundException("School not found"));
 		if (school.getLatitude() == null || school.getLongitude() == null) {
 			throw new IllegalStateException("School location has not been configured yet - ask an admin to set it before self-marking attendance");
+		}
+
+		if (Boolean.TRUE.equals(request.getMocked())) {
+			throw new IllegalStateException("Your phone reports a fake (mock) location. Turn off any fake GPS app and try again");
+		}
+		if (request.getFixTimestamp() != null
+				&& Math.abs(System.currentTimeMillis() - request.getFixTimestamp()) > MAX_FIX_AGE_MILLIS) {
+			throw new IllegalStateException("Your location reading is out of date. Refresh your location and try again");
 		}
 
 		double distanceMeters = GeoUtils.distanceMeters(

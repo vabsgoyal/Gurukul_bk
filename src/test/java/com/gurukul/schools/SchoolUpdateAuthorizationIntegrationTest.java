@@ -35,7 +35,7 @@ class SchoolUpdateAuthorizationIntegrationTest {
 			""";
 
 	private static final String LOCATION_PAYLOAD = """
-			{"latitude": 1.0, "longitude": 1.0, "geofenceRadiusMeters": 5000}
+			{"latitude": 1.0, "longitude": 1.0, "geofenceRadiusMeters": 500}
 			""";
 
 	@Autowired

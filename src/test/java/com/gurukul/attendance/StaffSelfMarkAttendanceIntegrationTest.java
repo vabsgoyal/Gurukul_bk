@@ -99,4 +99,79 @@ class StaffSelfMarkAttendanceIntegrationTest {
 				.andExpect(jsonPath("$.message").value(containsString("away from the school")));
 	}
 
+	@Test
+	void selfMarkRefusesMockedAndStaleFixesAndLocationRejectsHugeRadius() throws Exception {
+		MvcResult schoolResult = mockMvc.perform(post("/api/v1/schools")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "Mock GPS Test School",
+								  "address": "11 Test Street",
+								  "city": "Jaipur",
+								  "state": "Rajasthan",
+								  "pincode": "302001",
+								  "contactEmail": "office@mockgpstest.example",
+								  "contactPhone": "9111111122",
+								  "principalName": "Dr. Mock Principal",
+								  "directorName": "Mr. Mock Director",
+								  "principalPhone": "9111111122",
+								  "adminPhone": "8111111122"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andReturn();
+		String schoolId = JsonPath.read(schoolResult.getResponse().getContentAsString(), "$.data.school.id");
+		String adminBearer = "Bearer " + (String) JsonPath.read(schoolResult.getResponse().getContentAsString(), "$.data.principal.token");
+
+		mockMvc.perform(put("/api/v1/schools/" + schoolId + "/location")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"latitude": 26.9124, "longitude": 75.7873, "geofenceRadiusMeters": 50000}
+								"""))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(put("/api/v1/schools/" + schoolId + "/location")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"latitude": 26.9124, "longitude": 75.7873, "geofenceRadiusMeters": 100}
+								"""))
+				.andExpect(status().isOk());
+
+		String teacherEmployeeId = AuthTestSupport.createEmployee(mockMvc, schoolId, "Mock GPS Teacher");
+		String teacherBearer = "Bearer " + AuthTestSupport.provisionAndLogin(
+				mockMvc, schoolId, adminBearer.substring("Bearer ".length()), "employees", teacherEmployeeId, "TEACHER");
+
+		mockMvc.perform(post("/api/v1/staff-attendance/self-mark")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, teacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"latitude": 26.9124, "longitude": 75.7873, "mocked": true}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("fake (mock) location")));
+
+		long stale = System.currentTimeMillis() - 10 * 60 * 1000L;
+		mockMvc.perform(post("/api/v1/staff-attendance/self-mark")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, teacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"latitude\": 26.9124, \"longitude\": 75.7873, \"fixTimestamp\": " + stale + "}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value(containsString("out of date")));
+
+		mockMvc.perform(post("/api/v1/staff-attendance/self-mark")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, teacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"latitude\": 26.9124, \"longitude\": 75.7873, \"mocked\": false, \"fixTimestamp\": "
+								+ System.currentTimeMillis() + "}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("PRESENT"));
+	}
+
 }
