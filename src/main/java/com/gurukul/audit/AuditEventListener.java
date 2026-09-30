@@ -64,6 +64,12 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
 
 	private static final Set<String> SKIPPED_PROPERTIES = Set.of("createdAt", "updatedAt");
 
+	/**
+	 * Derived values the server recomputes on its own - not anyone's edit. A student's roll number
+	 * is their rank in the section, so one name change used to log a rewrite for every classmate.
+	 */
+	private static final Map<String, Set<String>> DERIVED_PROPERTIES = Map.of("Student", Set.of("rollNumber"));
+
 	private static final String INSERT_SQL = """
 			INSERT INTO audit_log (id, school_id, entity_type, entity_id, action, changes,
 			    actor_owner_id, actor_owner_type, actor_role, actor_username, occurred_at)
@@ -83,6 +89,7 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
 	public void onPostUpdate(PostUpdateEvent event) {
 		Map<String, Map<String, Object>> changes = diff(event.getPersister(), event.getSession(),
 				event.getOldState(), event.getState(), event.getDirtyProperties());
+		changes.keySet().removeAll(DERIVED_PROPERTIES.getOrDefault(simpleName(event.getPersister().getEntityName()), Set.of()));
 		if (changes.isEmpty()) {
 			return;
 		}
