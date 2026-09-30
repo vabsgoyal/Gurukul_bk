@@ -42,6 +42,10 @@ public class StaffAttendanceDtos {
 		@NotNull @Min(-180) @Max(180) private Double longitude;
 		@Schema(description = "Device-reported GPS accuracy in meters, if available")
 		private Double accuracy;
+		@Schema(description = "True when the OS reports the fix came from a mock-location provider (Android). Self-mark is refused when true.")
+		private Boolean mocked;
+		@Schema(description = "When the device took the GPS fix, epoch milliseconds. Self-mark is refused if it is too far from server time.")
+		private Long fixTimestamp;
 	}
 
 	@Getter @AllArgsConstructor
