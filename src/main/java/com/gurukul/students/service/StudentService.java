@@ -25,6 +25,10 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.Objects;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -180,16 +184,31 @@ public class StudentService {
 		}
 		Student student = findScoped(id);
 		UUID oldClassSectionId = student.getClassSection().getId();
+		String oldName = student.getName();
+		LocalDate oldAdmissionDate = student.getAdmissionDate();
+		StudentStatus oldStatus = student.getStatus();
 
 		ClassSection classSection = classSectionService.getScopedClassSection(request.getClassSectionId());
 		applyRequest(student, request, classSection);
 		if (request.getStatus() != null) {
 			student.setStatus(request.getStatus());
 		}
-		// Neutralize the roll number before the first save, regardless of what changed - carrying
-		// the old value forward (into a new section's namespace, or while now inactive) can collide
-		// with an existing row the moment anything triggers a flush. recompute() below assigns the
-		// real value for anyone still ACTIVE; INACTIVE-* is the final value for anyone who isn't.
+
+		// Roll numbers are a rank by name, then admission date, within the active roster of a
+		// section. An edit that touches none of those (address, phone, parent details...) can't
+		// move anyone, so it saves just this one row.
+		boolean rosterOrderChanged = !Objects.equals(oldName, student.getName())
+				|| !Objects.equals(oldAdmissionDate, student.getAdmissionDate())
+				|| oldStatus != student.getStatus()
+				|| !oldClassSectionId.equals(classSection.getId());
+		if (!rosterOrderChanged) {
+			return StudentResponse.from(studentRepository.save(student), isAdmin(), tokenCipher);
+		}
+
+		// Neutralize the roll number before the first save - carrying the old value forward (into a
+		// new section's namespace, or while now inactive) can collide with an existing row the moment
+		// anything triggers a flush. recompute() below assigns the real value for anyone still
+		// ACTIVE; INACTIVE-* is the final value for anyone who isn't.
 		student.setRollNumber(student.getStatus() == StudentStatus.ACTIVE
 				? "TMP-" + student.getId()
 				: "INACTIVE-" + student.getId());
@@ -263,10 +282,13 @@ public class StudentService {
 
 	/**
 	 * Roll number is server-computed: 1-indexed alphabetical rank of ACTIVE students within a
-	 * class-section (ties broken by admission date, then creation time). Reassigns every active
-	 * student's roll number in the section whenever the roster changes - a name edit can reorder the
-	 * whole section, not just shift a tail. Runs in two passes (temp values, then final values) so
-	 * the in-progress reshuffle never trips the (class_section_id, roll_number) unique constraint.
+	 * class-section (ties broken by admission date, then creation time), recomputed whenever the
+	 * roster changes - a name edit can reorder the whole section, not just shift a tail.
+	 *
+	 * <p>Only students whose rank actually moves are written. They go through two passes (temp
+	 * values, then final values) so the reshuffle never trips the (class_section_id, roll_number)
+	 * unique constraint; everyone else already holds their final number, and final numbers are
+	 * unique, so they can't collide. Each pass is one JDBC batch (hibernate.jdbc.batch_size).
 	 */
 	private void recomputeActiveRollNumbers(UUID classSectionId) {
 		List<Student> ordered = studentRepository
@@ -276,16 +298,21 @@ public class StudentService {
 						.thenComparing(Student::getCreatedAt))
 				.toList();
 
-		for (Student s : ordered) {
-			s.setRollNumber("TMP-" + s.getId());
-		}
-		studentRepository.saveAll(ordered);
-		studentRepository.flush();
-
+		Map<Student, String> moving = new LinkedHashMap<>();
 		for (int i = 0; i < ordered.size(); i++) {
-			ordered.get(i).setRollNumber(String.valueOf(i + 1));
+			String rank = String.valueOf(i + 1);
+			if (!rank.equals(ordered.get(i).getRollNumber())) {
+				moving.put(ordered.get(i), rank);
+			}
 		}
-		studentRepository.saveAll(ordered);
+		if (moving.isEmpty()) {
+			return;
+		}
+
+		moving.keySet().forEach(s -> s.setRollNumber("TMP-" + s.getId()));
+		studentRepository.flush();
+		moving.forEach(Student::setRollNumber);
+		studentRepository.flush();
 	}
 
 }
