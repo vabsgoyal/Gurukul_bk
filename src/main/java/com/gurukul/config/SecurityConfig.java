@@ -99,8 +99,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/notifications/*/read", "/api/v1/notifications/read-all").authenticated()
 						// Profile picker: list/switch between the profiles that share the caller's phone.
 						.requestMatchers("/api/v1/auth/profiles", "/api/v1/auth/profiles/**").authenticated()
-						// Assessments: teachers/admins author them; students may only ever read (GETs stay
-						// on the general permitAll() below, matching every other read-only listing today).
+						// Assessments: teachers/admins author them; any logged-in role may read (GETs fall to
+						// the authenticated() default below).
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections/*/assessments").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/v1/assessments/*").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.DELETE, "/api/v1/assessments/*").hasAnyRole("TEACHER", "ADMIN")
@@ -119,7 +119,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card/published-terms").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Report-card PDF: same roles as the JSON view above, and the same service-layer checks
 						// (it calls ReportCardService.getReportCard). A distinct path, so it needs its own matcher -
-						// an unmatched path would fall through to permitAll() below.
+						// an unmatched path would fall through to the looser authenticated() default below.
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/report-card.pdf").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						// Section-wide report-card grid: admin, or that section's class teacher (checked in
 						// the service layer) - same authority pattern as publish/fee-status above.
@@ -196,8 +196,8 @@ public class SecurityConfig {
 						// happens in AnnouncementService via the caller's AuthPrincipal.
 						.requestMatchers(HttpMethod.POST, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER")
 						.requestMatchers(HttpMethod.GET, "/api/v1/chat/announcements").hasAnyRole("ADMIN", "TEACHER", "STUDENT", "PARENT")
-						// The /ws STOMP handshake itself needs no matcher here - it stays under permitAll()
-						// below; real auth happens on the STOMP CONNECT frame (see StompAuthChannelInterceptor).
+						// The /ws STOMP handshake is public (see the list below); real auth happens on the
+						// STOMP CONNECT frame (see StompAuthChannelInterceptor).
 						// Fee categories/structures: creation and per-structure assessment generation are
 						// admin-only financial configuration; reads (needed for "My Class Fees" and fee
 						// structure setup screens) are open to any staff member.
@@ -209,13 +209,11 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/fee-structures/*").hasAnyRole("TEACHER", "ADMIN")
 						// Fee assessments/payments: staff (teacher/admin) manage these for their class/school;
 						// a STUDENT may only ever act on their own assessment and a PARENT only a linked
-						// child's, both already enforced in FeePaymentService (assertCanPayOrRecord /
-						// listByStudent) - this role gate just adds the authentication this whole group was
-						// previously missing entirely. GET .../fee-payments/{id} (a staff receipt lookup, per
+						// child's, both enforced in FeePaymentService (assertCanPayOrRecord / listByStudent).
+						// Recording a payment (POST /fee-payments) is admin-only - see further down. GET .../fee-payments/{id} (a staff receipt lookup, per
 						// PaymentReceiptScreen) has no such self-check, so it stays staff-only for now.
 						.requestMatchers(HttpMethod.GET, "/api/v1/fee-assessments").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/v1/students/*/fee-assessments").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
-						.requestMatchers(HttpMethod.POST, "/api/v1/fee-payments").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/fee-payments/*").hasAnyRole("TEACHER", "ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/v1/fee-assessments/*/payment-request").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/fee-assessments/*/payment-attempts/pending").hasAnyRole("TEACHER", "ADMIN", "STUDENT", "PARENT")
@@ -248,6 +246,27 @@ public class SecurityConfig {
 						// is gated in LeadService by a static LEADS_ADMIN_TOKEN, not user roles.
 						.requestMatchers(HttpMethod.POST, "/api/v1/leads").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/leads").permitAll()
+						// Money, procurement and admin reporting: admin-only. The app shows none of these to
+						// teachers, students or parents (PrincipalDashboardScreen hides the tiles), and several
+						// post to the ledger, so a role rule here backs up the hidden UI.
+						.requestMatchers("/api/v1/reports/**").hasRole("ADMIN")
+						.requestMatchers("/api/v1/sponsors", "/api/v1/sponsors/**", "/api/v1/sponsorships", "/api/v1/sponsorships/**").hasRole("ADMIN")
+						.requestMatchers("/api/v1/vendors", "/api/v1/vendors/**").hasRole("ADMIN")
+						.requestMatchers("/api/v1/infra-expense-requests", "/api/v1/infra-expense-requests/**",
+								"/api/v1/infra-expense-categories", "/api/v1/infra-expense-categories/**").hasRole("ADMIN")
+						.requestMatchers("/api/v1/events/*/participation-fees", "/api/v1/events/*/collections",
+								"/api/v1/events/*/balance", "/api/v1/events/*/budget", "/api/v1/events/*/expense-requests",
+								"/api/v1/events/*/expense-requests/**", "/api/v1/events/*/pnl").hasRole("ADMIN")
+						// Recording a fee payment marks the bill paid: staff only. Students and parents pay
+						// through payment requests/attempts above, never by recording a payment themselves.
+						.requestMatchers(HttpMethod.POST, "/api/v1/fee-payments").hasRole("ADMIN")
+						// Roster and structure writes. Teachers add students and create sections/subjects
+						// inline (ClassSectionPicker, SubjectPicker); deleting a student is admin-only, as in the app.
+						.requestMatchers(HttpMethod.POST, "/api/v1/students").hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/students/*").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PATCH, "/api/v1/students/*/class-section").hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections", "/api/v1/class-sections/*/subjects",
+								"/api/v1/subjects").hasAnyRole("ADMIN", "TEACHER")
 						// Everything that has to work without a user login. Anything not listed here or above
 						// needs a valid token for the school in X-School-Id.
 						.requestMatchers("/error").permitAll()

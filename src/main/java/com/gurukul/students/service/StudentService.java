@@ -114,10 +114,9 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse create(StudentRequest request) {
-		// Whoever hits this endpoint just admitted the student and needs the registrationNumber
-		// immediately to share it - include it regardless of role, matching create's existing
-		// (pre-existing, unrelated) lack of a role check on this endpoint.
-		return StudentResponse.from(createEntity(request), true, tokenCipher);
+		// Whoever just added the student needs the registrationNumber to share it, whatever their
+		// role; the decrypted Aadhaar/bank fields still go to admins only.
+		return StudentResponse.from(createEntity(request), true, isAdmin(), tokenCipher);
 	}
 
 	private boolean isAdmin() {

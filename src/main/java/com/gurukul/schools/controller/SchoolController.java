@@ -79,6 +79,11 @@ public class SchoolController {
 	public ApiResponse<SchoolResponse> getById(
 			@Parameter(description = "School UUID", required = true)
 			@PathVariable UUID id) {
+		// The full profile includes the bank account and UPI id fees are paid into, so only this
+		// school's own users may read it - not a user of another school who changes the path id.
+		if (!id.equals(AuthContext.current().getSchoolId())) {
+			throw new AccessDeniedException("You can only view your own school");
+		}
 		return ApiResponse.success(schoolService.getById(id));
 	}
 
