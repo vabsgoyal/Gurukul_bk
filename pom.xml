@@ -234,6 +234,18 @@
 	<build>
 		<plugins>
 			<plugin>
+				<!-- Tests log in by OTP many times per phone; the per-phone request limits are covered
+				     by OtpHardeningIntegrationTest, which sets them back on explicitly. -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<app.otp.request-cooldown-seconds>0</app.otp.request-cooldown-seconds>
+						<app.otp.max-requests-per-hour>1000</app.otp.max-requests-per-hour>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>

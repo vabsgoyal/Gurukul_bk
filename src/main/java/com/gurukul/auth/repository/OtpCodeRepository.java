@@ -12,4 +12,6 @@ public interface OtpCodeRepository extends JpaRepository<OtpCode, UUID> {
 	Optional<OtpCode> findFirstBySchoolIdAndPhoneAndConsumedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
 			UUID schoolId, String phone, Instant now);
 
+	long countBySchoolIdAndPhoneAndCreatedAtAfter(UUID schoolId, String phone, Instant since);
+
 }

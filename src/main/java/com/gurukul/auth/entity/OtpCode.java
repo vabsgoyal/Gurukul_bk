@@ -27,4 +27,8 @@ public class OtpCode extends BaseEntity {
 	@Column(name = "consumed_at")
 	private Instant consumedAt;
 
+	/** Wrong guesses so far; the code is burned (consumedAt set) once this hits the limit. */
+	@Column(name = "failed_attempts", nullable = false)
+	private int failedAttempts;
+
 }

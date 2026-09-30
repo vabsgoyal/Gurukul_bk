@@ -1,5 +1,8 @@
 package com.gurukul.auth.service;
 
+import org.springframework.beans.factory.annotation.Value;
+import java.time.Duration;
+import org.springframework.core.env.Environment;
 import com.gurukul.auth.dto.AuthDtos.LoginResponse;
 import com.gurukul.auth.dto.OtpDtos.LoginProfile;
 import com.gurukul.auth.dto.OtpDtos.OtpVerifyResponse;
@@ -62,10 +65,21 @@ public class OtpService {
 	private final SchoolContext schoolContext;
 	private final OtpChannel otpChannel;
 	private final WhatsAppOtpProperties whatsAppOtpProperties;
+	private final Environment environment;
+
+	@Value("${app.otp.max-failed-attempts:5}")
+	private int maxFailedAttempts;
+
+	@Value("${app.otp.max-requests-per-hour:5}")
+	private int maxRequestsPerHour;
+
+	@Value("${app.otp.request-cooldown-seconds:30}")
+	private long requestCooldownSeconds;
 
 	@Transactional
 	public void requestOtp(String phone) {
 		profilesFor(schoolContext.getSchoolId(), phone);
+		requireRequestAllowed(schoolContext.getSchoolId(), phone);
 
 		String code = generateCode();
 		OtpCode otpCode = new OtpCode();
@@ -77,10 +91,28 @@ public class OtpService {
 
 		if (otpChannel.isConfigured()) {
 			otpChannel.send(phone, code);
+		} else if (environment.matchesProfiles("prod")) {
+			// Never write a live login code to production logs - fail the request instead.
+			throw new IllegalStateException("OTP delivery isn't available right now - please try again later");
 		} else {
-			// Lets OTP login keep working in dev/test environments before WA-AKG is deployed -
-			// same fail-open-at-call-time shape as AiChatService.isConfigured() checks.
+			// Lets OTP login keep working in dev before WA-AKG is set up.
 			log.warn("WhatsApp OTP gateway not configured - code for {} is {} (dev-only log fallback)", phone, code);
+		}
+	}
+
+	/**
+	 * Limits WhatsApp sends per phone - and, with the per-code attempt limit in verifyOtp, how many
+	 * guesses anyone gets: at most maxRequestsPerHour codes an hour (one per cooldown), each burned
+	 * after maxFailedAttempts wrong tries. With 6-digit codes that's 25 guesses in a million an hour.
+	 */
+	private void requireRequestAllowed(UUID schoolId, String phone) {
+		Instant now = Instant.now();
+		if (otpCodeRepository.countBySchoolIdAndPhoneAndCreatedAtAfter(schoolId, phone, now.minusSeconds(requestCooldownSeconds)) > 0) {
+			throw new OtpRateLimitedException("Please wait a moment before requesting another code");
+		}
+		if (otpCodeRepository.countBySchoolIdAndPhoneAndCreatedAtAfter(schoolId, phone, now.minus(Duration.ofHours(1)))
+				>= maxRequestsPerHour) {
+			throw new OtpRateLimitedException("Too many codes requested for this number - please try again in an hour");
 		}
 	}
 
@@ -89,7 +121,7 @@ public class OtpService {
 	 * number, or a teacher who is also a parent): also returns the list plus a selection token, and
 	 * the client finishes with {@link #selectProfile}.
 	 */
-	@Transactional
+	@Transactional(noRollbackFor = BadCredentialsException.class)
 	public OtpVerifyResponse verifyOtp(String phone, String otp) {
 		UUID schoolId = schoolContext.getSchoolId();
 		OtpCode otpCode = otpCodeRepository
@@ -98,6 +130,14 @@ public class OtpService {
 				.orElseThrow(() -> new BadCredentialsException("Invalid or expired OTP"));
 
 		if (!passwordEncoder.matches(otp, otpCode.getCodeHash())) {
+			// Counted even though the request fails (noRollbackFor), and the code is burned at the limit.
+			otpCode.setFailedAttempts(otpCode.getFailedAttempts() + 1);
+			if (otpCode.getFailedAttempts() >= maxFailedAttempts) {
+				otpCode.setConsumedAt(Instant.now());
+				otpCodeRepository.save(otpCode);
+				throw new BadCredentialsException("Too many wrong codes - please request a new one");
+			}
+			otpCodeRepository.save(otpCode);
 			throw new BadCredentialsException("Invalid or expired OTP");
 		}
 		otpCode.setConsumedAt(Instant.now());
