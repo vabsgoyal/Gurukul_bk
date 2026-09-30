@@ -22,18 +22,19 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Runs in EVERY profile including prod - deliberately, per an explicit product decision. Backfills
- * a shared, memorable Principal phone number (9999999999) with an explicit ADMIN credential for
- * any school that doesn't have one yet, so every school - old or new - has a working way to log in
- * as Principal via OTP. Since OtpService now issues a real, per-request, single-use code delivered
+ * Runs in EVERY profile including prod. Gives a school that has NO admin login at all a shared,
+ * memorable Principal phone number (9999999999) with an ADMIN credential, so it isn't locked out.
+ * A school that already has an admin - a real principal from registration or onboarding - is left
+ * alone: whoever controls that one shared number could otherwise log in as ADMIN of every school,
+ * and deleting the account used to be undone on the next restart. Since OtpService now issues a real, per-request, single-use code delivered
  * over WhatsApp, logging in on this number requires receiving that WhatsApp message - it is no
  * longer a fixed-code backdoor.
  *
  * Kept separate from DevAdminSeeder on purpose: that one seeds a fixed global password
  * (admin/admin123), a strictly more dangerous exposure than a phone number, and stays dev-only.
  *
- * Known accepted risk: this number is identical across every school, so whoever controls it can
- * log in as ADMIN for any school that hasn't reassigned it to a real principal's phone.
+ * Remaining risk: this number is identical across every school without an admin of its own, so
+ * whoever controls it can log in as ADMIN there until the school gets a real admin.
  */
 @Component
 @RequiredArgsConstructor
@@ -57,7 +58,7 @@ public class PrincipalPhoneBackfillSeeder implements ApplicationRunner {
 	}
 
 	private void seedIfMissing(UUID schoolId) {
-		if (credentialRepository.existsBySchoolIdAndUsername(schoolId, PRINCIPAL_PHONE)) {
+		if (credentialRepository.existsBySchoolIdAndRole(schoolId, Role.ADMIN)) {
 			return;
 		}
 
