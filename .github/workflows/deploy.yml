@@ -152,6 +152,8 @@ jobs:
             "echo \"APP_ENCRYPTION_KEY=$(echo \($encKey) | base64 -d)\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^CALL_PREFERRED_PROVIDER=/d /etc/gurukul/backend.env",
             "echo \"CALL_PREFERRED_PROVIDER=GOOGLE_MEET\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "sudo sed -i /^APP_CHAT_ATTACHMENTS_BUCKET=/d /etc/gurukul/backend.env",
+            "echo \"APP_CHAT_ATTACHMENTS_BUCKET=smartgurukul-uploads\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "if [ -n \"\($mailEnv)\" ]; then sudo sed -i -E \"/^(LEADS_NOTIFY_EMAIL|LEADS_MAIL_FROM|SPRING_MAIL_[A-Z_]+)=/d\" /etc/gurukul/backend.env && echo \($mailEnv) | base64 -d | sudo tee -a /etc/gurukul/backend.env >/dev/null; fi",
             "echo \($script) | base64 -d | sudo tee /opt/gurukul/deploy-from-s3.sh >/dev/null",
             "sudo chmod +x /opt/gurukul/deploy-from-s3.sh",
