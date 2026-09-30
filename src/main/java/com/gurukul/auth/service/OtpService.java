@@ -58,6 +58,7 @@ public class OtpService {
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
 	private final SessionTokenService sessionTokenService;
+	private final InactiveStaffGuard inactiveStaffGuard;
 	private final SchoolContext schoolContext;
 	private final OtpChannel otpChannel;
 	private final WhatsAppOtpProperties whatsAppOtpProperties;
@@ -189,8 +190,9 @@ public class OtpService {
 	}
 
 	private boolean isDisabled(OwnerType ownerType, UUID ownerId) {
-		return credentialRepository.findByOwnerTypeAndOwnerId(ownerType, ownerId)
-				.map(credential -> !credential.isEnabled()).orElse(false);
+		return inactiveStaffGuard.isInactiveStaff(ownerType, ownerId)
+				|| credentialRepository.findByOwnerTypeAndOwnerId(ownerType, ownerId)
+						.map(credential -> !credential.isEnabled()).orElse(false);
 	}
 
 	private List<LoginProfile> toLoginProfiles(List<PhoneProfile> profiles, AuthPrincipal principal) {

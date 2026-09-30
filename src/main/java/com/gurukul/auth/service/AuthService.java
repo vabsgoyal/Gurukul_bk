@@ -22,6 +22,7 @@ public class AuthService {
 	private final CredentialRepository credentialRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final SessionTokenService sessionTokenService;
+	private final InactiveStaffGuard inactiveStaffGuard;
 	private final SchoolContext schoolContext;
 	private final GoogleTokenVerifier googleTokenVerifier;
 	private final RegistrationService registrationService;
@@ -57,6 +58,9 @@ public class AuthService {
 	 * to just "wait", and doesn't need to guess why login never starts working.
 	 */
 	private void requireEnabled(Credential credential) {
+		if (inactiveStaffGuard.isInactiveStaff(credential)) {
+			throw new BadCredentialsException("This account has been disabled - please contact your school");
+		}
 		if (credential.isEnabled()) {
 			return;
 		}
