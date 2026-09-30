@@ -45,6 +45,7 @@ class SchoolUpdateAuthorizationIntegrationTest {
 	void unauthenticatedCannotEditSchoolProfile() throws Exception {
 		mockMvc.perform(put("/api/v1/schools/" + SCHOOL_ID)
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(HIJACK_PAYLOAD))
 				.andExpect(status().is4xxClientError());
@@ -93,7 +94,7 @@ class SchoolUpdateAuthorizationIntegrationTest {
 	@Test
 	void ownAdminCanEditOwnSchool() throws Exception {
 		String adminToken = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
-		String current = mockMvc.perform(get("/api/v1/schools/" + SCHOOL_ID))
+		String current = mockMvc.perform(get("/api/v1/schools/" + SCHOOL_ID).header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		String name = JsonPath.read(current, "$.data.name");
@@ -117,7 +118,7 @@ class SchoolUpdateAuthorizationIntegrationTest {
 	}
 
 	private void assertNameUnchanged() throws Exception {
-		mockMvc.perform(get("/api/v1/schools/" + SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/schools/" + SCHOOL_ID).header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.name").value(org.hamcrest.Matchers.not("Hijacked School")));
 	}

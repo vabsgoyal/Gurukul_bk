@@ -83,7 +83,7 @@ class SchoolLogoIntegrationTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.message").value("School logo upload is not configured on this server"));
 
-		mockMvc.perform(get("/api/v1/schools/" + SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/schools/" + SCHOOL_ID).header("X-School-Id", SCHOOL_ID))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.logoUrl").doesNotExist());
 

@@ -137,7 +137,7 @@ class SharedPhoneOtpIntegrationTest {
 
 	@Test
 	void profileEndpointsNeedALogin() throws Exception {
-		mockMvc.perform(get("/api/v1/auth/profiles").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/auth/profiles").header("X-School-Id", SCHOOL_ID).header("Authorization", ""))
 				.andExpect(status().isUnauthorized());
 	}
 

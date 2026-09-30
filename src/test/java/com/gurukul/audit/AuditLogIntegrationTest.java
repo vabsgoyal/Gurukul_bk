@@ -112,13 +112,15 @@ class AuditLogIntegrationTest {
 		assertThat(changes.getFirst()).doesNotContain("$2a$").doesNotContain("Password@123");
 	}
 
+	/** No request, no user - a seeder or scheduled job. (Every HTTP write needs a login now.) */
 	@Test
-	void writesWithNoAuthenticatedUserAreAttributedToSystem() throws Exception {
-		String employeeId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "Audit System Actor");
+	void writesWithNoAuthenticatedUserAreAttributedToSystem() {
+		UUID schoolId = new TransactionTemplate(transactionManager).execute(
+				status -> schoolRepository.saveAndFlush(newSchool("Audit System School")).getId());
 
 		String actor = jdbcTemplate.queryForObject(
-				"SELECT actor_username FROM audit_log WHERE entity_type = 'Employee' AND entity_id = ? AND action = 'CREATE'",
-				String.class, employeeId);
+				"SELECT actor_username FROM audit_log WHERE entity_type = 'School' AND entity_id = ? AND action = 'CREATE'",
+				String.class, schoolId.toString());
 		assertThat(actor).isEqualTo("SYSTEM");
 	}
 

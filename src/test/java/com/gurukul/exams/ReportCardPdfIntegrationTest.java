@@ -148,6 +148,7 @@ class ReportCardPdfIntegrationTest {
 				.andExpect(status().isForbidden());
 		mockMvc.perform(get("/api/v1/students/" + hindiStudentId + "/report-card.pdf")
 						.header("X-School-Id", SCHOOL_ID)
+						.header("Authorization", "")
 						.param("term", TERM))
 				.andExpect(status().is4xxClientError());
 	}

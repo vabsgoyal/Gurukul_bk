@@ -193,11 +193,13 @@ class QuizQuestionBankIntegrationTest {
 	void bothNewEndpointsRequireAStaffLogin() throws Exception {
 		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/gamification/arena/questions/bulk")
 						.header("X-School-Id", SCHOOL_ID.toString())
+						.header("Authorization", "")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{}"))
 				.andExpect(status().isUnauthorized());
 		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/teachers/" + teacher.getOwnerId() + "/ai/quiz-generator")
 						.header("X-School-Id", SCHOOL_ID.toString())
+						.header("Authorization", "")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{}"))
 				.andExpect(status().isUnauthorized());

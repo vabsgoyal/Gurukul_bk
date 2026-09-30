@@ -247,8 +247,28 @@ public class SecurityConfig {
 						// Marketing-site demo form: public by design (prospects have no account). The GET listing
 						// is gated in LeadService by a static LEADS_ADMIN_TOKEN, not user roles.
 						.requestMatchers(HttpMethod.POST, "/api/v1/leads").permitAll()
-						// Everything else is unchanged (no auth) for now - see auth ticket for phased retrofit scope.
-						.anyRequest().permitAll());
+						.requestMatchers(HttpMethod.GET, "/api/v1/leads").permitAll()
+						// Everything that has to work without a user login. Anything not listed here or above
+						// needs a valid token for the school in X-School-Id.
+						.requestMatchers("/error").permitAll()
+						// Logging in, and renewing or ending a session (the access token may have expired).
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/google",
+								"/api/v1/auth/otp/request", "/api/v1/auth/otp/verify", "/api/v1/auth/otp/select-profile",
+								"/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
+						// Self-registration: the account doesn't exist yet (admin approval still gates it).
+						.requestMatchers(HttpMethod.POST, "/api/v1/register/**").permitAll()
+						// School picker and new-school setup, both before anyone is logged in.
+						.requestMatchers(HttpMethod.GET, "/api/v1/schools").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/schools").permitAll()
+						// Machines and callbacks that authenticate themselves (X-Device-Key, X-Ops-Key, OAuth state).
+						.requestMatchers(HttpMethod.POST, "/api/v1/attendance/device-events").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/ops/admin-backfill").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/v1/calls/google/callback").permitAll()
+						// STOMP handshake - the login is checked on CONNECT (StompAuthChannelInterceptor).
+						.requestMatchers("/ws", "/ws/**").permitAll()
+						// API docs describe endpoints; they hold no school data.
+						.requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
+						.anyRequest().authenticated());
 		return http.build();
 	}
 

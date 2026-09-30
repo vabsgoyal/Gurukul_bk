@@ -225,9 +225,9 @@ class AdmissionIntegrationTest {
 
 	@Test
 	void adminOnly() throws Exception {
-		mockMvc.perform(get("/api/v1/admissions").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/admissions").header("X-School-Id", SCHOOL_ID).header(HttpHeaders.AUTHORIZATION, ""))
 				.andExpect(status().isUnauthorized());
-		mockMvc.perform(post("/api/v1/admissions").header("X-School-Id", SCHOOL_ID)
+		mockMvc.perform(post("/api/v1/admissions").header("X-School-Id", SCHOOL_ID).header(HttpHeaders.AUTHORIZATION, "")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(applicationJson("Grade 8", "Anon", "2019-01-01", "9000000001")))
 				.andExpect(status().isUnauthorized());

@@ -57,6 +57,7 @@ class DeviceTokenIntegrationTest {
 	void registeringWithoutAuthIsRejected() throws Exception {
 		mockMvc.perform(post("/api/v1/notifications/device-token")
 						.header("X-School-Id", SCHOOL_ID)
+						.header("Authorization", "")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"expoPushToken\": \"ExponentPushToken[no-auth]\"}"))
 				.andExpect(status().isUnauthorized());

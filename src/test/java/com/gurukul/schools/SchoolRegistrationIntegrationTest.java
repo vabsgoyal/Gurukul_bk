@@ -1,5 +1,6 @@
 package com.gurukul.schools;
 
+import com.gurukul.auth.AuthTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -110,7 +111,8 @@ class SchoolRegistrationIntegrationTest {
 
 	@Test
 	void getSchoolByIdWithoutHeader() throws Exception {
-		mockMvc.perform(get("/api/v1/schools/" + SEED_SCHOOL_ID))
+		String admin = AuthTestSupport.loginAsDevAdmin(mockMvc, SEED_SCHOOL_ID);
+		mockMvc.perform(get("/api/v1/schools/" + SEED_SCHOOL_ID).header("Authorization", "Bearer " + admin))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.name").value("Gurukul Demo School"))
 				.andExpect(jsonPath("$.data.principalName").value("Dr. Meena Sharma"))
@@ -121,7 +123,9 @@ class SchoolRegistrationIntegrationTest {
 
 	@Test
 	void invalidSchoolIdHeaderReturns400() throws Exception {
-		mockMvc.perform(get("/api/v1/students").header("X-School-Id", "22222222-2222-2222-2222-222222222222"))
+		// A public route, so the school check answers before any login check would.
+		mockMvc.perform(post("/api/v1/auth/otp/request").header("X-School-Id", "22222222-2222-2222-2222-222222222222")
+						.contentType(MediaType.APPLICATION_JSON).content("{\"phone\": \"9000000000\"}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.message").value("School not found"));
 	}

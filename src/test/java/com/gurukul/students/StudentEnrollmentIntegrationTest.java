@@ -30,7 +30,8 @@ class StudentEnrollmentIntegrationTest {
 
 	@Test
 	void apiV1WithoutSchoolIdHeaderReturns400() throws Exception {
-		mockMvc.perform(get("/api/v1/students"))
+		// A public route, so the header check answers before any login check would.
+		mockMvc.perform(post("/api/v1/auth/otp/request").contentType(MediaType.APPLICATION_JSON).content("{\"phone\": \"9000000000\"}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Missing X-School-Id header"));
@@ -38,7 +39,8 @@ class StudentEnrollmentIntegrationTest {
 
 	@Test
 	void invalidSchoolIdHeaderReturns400() throws Exception {
-		mockMvc.perform(get("/api/v1/students").header("X-School-Id", "not-a-uuid"))
+		mockMvc.perform(post("/api/v1/auth/otp/request").header("X-School-Id", "not-a-uuid")
+						.contentType(MediaType.APPLICATION_JSON).content("{\"phone\": \"9000000000\"}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Invalid X-School-Id header: must be a UUID"));
