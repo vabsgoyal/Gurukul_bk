@@ -1,5 +1,7 @@
 package com.gurukul.students.service;
 
+import com.gurukul.auth.entity.OwnerType;
+import org.springframework.security.access.AccessDeniedException;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
@@ -123,6 +125,12 @@ public class StudentService {
 		return principal != null && principal.getRole() == Role.ADMIN;
 	}
 
+	private static boolean isSelf(UUID studentId) {
+		AuthPrincipal principal = AuthContext.currentOrNull();
+		return principal != null && principal.getOwnerType() == OwnerType.STUDENT
+				&& principal.getOwnerId().equals(studentId);
+	}
+
 	/** Returns the entity (not just its response DTO) - used by RegistrationService, which needs the id for a Credential. */
 	@Transactional
 	public Student createEntity(StudentRequest request) {
@@ -166,6 +174,10 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse update(UUID id, StudentRequest request) {
+		// parentContact is the student's OTP login, so changing another student's would take it over.
+		if (!isAdmin() && !isSelf(id)) {
+			throw new AccessDeniedException("You can only edit your own student record");
+		}
 		Student student = findScoped(id);
 		UUID oldClassSectionId = student.getClassSection().getId();
 

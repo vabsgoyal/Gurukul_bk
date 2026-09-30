@@ -4,6 +4,8 @@ import com.gurukul.auth.entity.Credential;
 import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.repository.CredentialRepository;
+import com.gurukul.auth.security.AuthContext;
+import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.PageResponse;
@@ -16,6 +18,7 @@ import com.gurukul.employees.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,6 +81,11 @@ public class EmployeeService {
 
 	@Transactional
 	public EmployeeResponse create(EmployeeRequest request) {
+		// OTP login finds staff by phone and signs in as that record, so a phone on a new staff
+		// record is a new login. Teachers can still add a colleague by name (EmployeePicker).
+		if (!isAdmin() && request.getContactPhone() != null && !request.getContactPhone().isBlank()) {
+			throw new AccessDeniedException("Only an admin can set a staff member's phone number");
+		}
 		return EmployeeResponse.from(createEntity(request), null);
 	}
 
@@ -93,6 +101,10 @@ public class EmployeeService {
 
 	@Transactional
 	public EmployeeResponse update(UUID id, EmployeeRequest request) {
+		// Changing someone else's phone would let the new number log in as them by OTP.
+		if (!isAdmin() && !isSelf(id)) {
+			throw new AccessDeniedException("You can only edit your own staff record");
+		}
 		Employee employee = findScoped(id);
 		applyRequest(employee, request);
 		if (request.getStatus() != null) {
@@ -120,6 +132,17 @@ public class EmployeeService {
 		employee.setContactPhone(request.getContactPhone());
 		employee.setContactEmail(request.getContactEmail());
 		employee.setEmployeeType(request.getEmployeeType());
+	}
+
+	private static boolean isAdmin() {
+		AuthPrincipal principal = AuthContext.currentOrNull();
+		return principal != null && principal.getRole() == Role.ADMIN;
+	}
+
+	private static boolean isSelf(UUID employeeId) {
+		AuthPrincipal principal = AuthContext.currentOrNull();
+		return principal != null && principal.getOwnerType() == OwnerType.EMPLOYEE
+				&& principal.getOwnerId().equals(employeeId);
 	}
 
 }
