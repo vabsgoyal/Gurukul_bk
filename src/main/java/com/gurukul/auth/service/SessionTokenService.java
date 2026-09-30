@@ -44,16 +44,19 @@ public class SessionTokenService {
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final CredentialRepository credentialRepository;
 	private final JwtService jwtService;
+	private final InactiveStaffGuard inactiveStaffGuard;
 	private final Duration refreshTokenTtl;
 
 	public SessionTokenService(
 			RefreshTokenRepository refreshTokenRepository,
 			CredentialRepository credentialRepository,
 			JwtService jwtService,
+			InactiveStaffGuard inactiveStaffGuard,
 			@Value("${app.auth.refresh-token-days:7}") long refreshTokenDays) {
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.credentialRepository = credentialRepository;
 		this.jwtService = jwtService;
+		this.inactiveStaffGuard = inactiveStaffGuard;
 		this.refreshTokenTtl = Duration.ofDays(refreshTokenDays);
 	}
 
@@ -113,7 +116,7 @@ public class SessionTokenService {
 		Credential credential = credentialRepository.findById(refreshToken.getCredentialId())
 				.orElseThrow(() -> new BadCredentialsException(SESSION_EXPIRED));
 		refreshToken.setRevokedAt(now);
-		if (!credential.isEnabled()) {
+		if (!credential.isEnabled() || inactiveStaffGuard.isInactiveStaff(credential)) {
 			throw new BadCredentialsException(SESSION_EXPIRED);
 		}
 		return issue(credential);
