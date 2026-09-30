@@ -18,9 +18,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
 	@Override
 	public void registerStompEndpoints(StompEndpointRegistry registry) {
-		// No SecurityConfig change needed here - the handshake stays under the existing
-		// anyRequest().permitAll() fallthrough. Real auth happens on the STOMP CONNECT frame via
-		// StompAuthChannelInterceptor, one layer above this HTTP-level handshake.
+		// SecurityConfig lets the /ws handshake through without a login. Real auth happens on the
+		// STOMP CONNECT frame via StompAuthChannelInterceptor, one layer above this HTTP-level handshake.
 		registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS();
 	}
 

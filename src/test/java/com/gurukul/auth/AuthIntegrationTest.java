@@ -42,6 +42,7 @@ class AuthIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/employees/" + employeeId + "/credentials")
 						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"username\": \"nope\", \"password\": \"pw123456\", \"role\": \"TEACHER\"}"))
 				.andExpect(status().isUnauthorized());

@@ -102,6 +102,7 @@ class StudentBulkImportIntegrationTest {
 
 		mockMvc.perform(post("/api/v1/students/bulk")
 						.header("X-School-Id", SCHOOL_ID)
+						.header("Authorization", "Bearer " + teacherLogin())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(payload))
 				.andExpect(status().isForbidden());
@@ -150,14 +151,21 @@ class StudentBulkImportIntegrationTest {
 				.andExpect(jsonPath("$.data.caste").value("Bagri"))
 				.andExpect(jsonPath("$.data.bankAccountNumber").value("50100381240650"));
 
-		// No admin principal on this request: every RTE/sensitive field is null, same as registrationNumber.
+		// A teacher, not an admin: every RTE/sensitive field is null, same as registrationNumber.
 		mockMvc.perform(get("/api/v1/students/" + studentId)
-						.header("X-School-Id", SCHOOL_ID))
+						.header("X-School-Id", SCHOOL_ID)
+						.header("Authorization", "Bearer " + teacherLogin()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.aadhaarNumber").value(org.hamcrest.Matchers.nullValue()))
 				.andExpect(jsonPath("$.data.caste").value(org.hamcrest.Matchers.nullValue()))
 				.andExpect(jsonPath("$.data.bankAccountNumber").value(org.hamcrest.Matchers.nullValue()))
 				.andExpect(jsonPath("$.data.registrationNumber").value(org.hamcrest.Matchers.nullValue()));
+	}
+
+	private String teacherLogin() throws Exception {
+		String admin = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+		String teacherId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "Bulk Import Teacher");
+		return AuthTestSupport.provisionAndLogin(mockMvc, SCHOOL_ID, admin, "employees", teacherId, "TEACHER");
 	}
 
 }

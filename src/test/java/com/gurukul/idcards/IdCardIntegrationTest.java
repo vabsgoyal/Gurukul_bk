@@ -216,7 +216,7 @@ class IdCardIntegrationTest {
 		String tampered = code.substring(0, code.length() - 2) + (code.endsWith("AA") ? "BB" : "AA");
 		mockMvc.perform(as(get("/api/v1/id-cards/verify").param("code", tampered), teacher)).andExpect(status().isNotFound());
 		mockMvc.perform(as(get("/api/v1/id-cards/verify").param("code", code), studentToken)).andExpect(status().isForbidden());
-		mockMvc.perform(get("/api/v1/id-cards/verify").param("code", code).header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/id-cards/verify").param("code", code).header("X-School-Id", SCHOOL_ID).header("Authorization", ""))
 				.andExpect(status().isUnauthorized());
 
 		// Another school's admin: the code doesn't verify, and the card itself isn't reachable.
@@ -264,7 +264,7 @@ class IdCardIntegrationTest {
 		String teacher = token(OwnerType.EMPLOYEE, AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "Not Admin"), Role.TEACHER);
 		mockMvc.perform(as(get("/api/v1/id-cards/class-sections/" + section + "/sheet.pdf"), teacher)).andExpect(status().isForbidden());
 		mockMvc.perform(as(get("/api/v1/id-cards/staff/sheet.pdf"), teacher)).andExpect(status().isForbidden());
-		mockMvc.perform(get("/api/v1/id-cards/staff/sheet.pdf").header("X-School-Id", SCHOOL_ID)).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/id-cards/staff/sheet.pdf").header("X-School-Id", SCHOOL_ID).header("Authorization", "")).andExpect(status().isUnauthorized());
 	}
 
 	@Test

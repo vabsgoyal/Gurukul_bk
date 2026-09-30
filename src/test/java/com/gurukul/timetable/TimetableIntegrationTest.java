@@ -127,7 +127,7 @@ class TimetableIntegrationTest {
 		Fixture f = fixture();
 		putSchedule(f.teacher1Login, STANDARD_SCHEDULE.formatted("false")).andExpect(status().isForbidden());
 		putSchedule(studentLogin(f.sectionA), STANDARD_SCHEDULE.formatted("false")).andExpect(status().isForbidden());
-		mockMvc.perform(put("/api/v1/periods").header("X-School-Id", SCHOOL_ID)
+		mockMvc.perform(put("/api/v1/periods").header("X-School-Id", SCHOOL_ID).header("Authorization", "")
 						.contentType(MediaType.APPLICATION_JSON).content(STANDARD_SCHEDULE.formatted("false")))
 				.andExpect(status().isUnauthorized());
 	}
@@ -298,8 +298,8 @@ class TimetableIntegrationTest {
 		getTimetable(parent, f.sectionA).andExpect(status().isOk());
 		getTimetable(parent, f.sectionB).andExpect(status().isForbidden());
 
-		mockMvc.perform(get("/api/v1/class-sections/" + f.sectionA + "/timetable").header("X-School-Id", SCHOOL_ID))
-				.andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/class-sections/" + f.sectionA + "/timetable").header("X-School-Id", SCHOOL_ID)
+						.header("Authorization", "")).andExpect(status().isUnauthorized());
 	}
 
 	@Test

@@ -173,7 +173,7 @@ class ParentAlertsIntegrationTest {
 				.andExpect(status().isOk());
 		unread(parentBearer, 0);
 
-		mockMvc.perform(get("/api/v1/notifications").header("X-School-Id", SCHOOL_ID))
+		mockMvc.perform(get("/api/v1/notifications").header("X-School-Id", SCHOOL_ID).header(HttpHeaders.AUTHORIZATION, ""))
 				.andExpect(status().isUnauthorized());
 	}
 
