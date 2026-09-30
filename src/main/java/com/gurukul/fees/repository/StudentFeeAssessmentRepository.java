@@ -1,5 +1,9 @@
 package com.gurukul.fees.repository;
 
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.entity.StudentFeeAssessment;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +62,11 @@ public interface StudentFeeAssessmentRepository extends JpaRepository<StudentFee
 	long countBySchoolIdAndStatusAndStudent_ClassSection_Id(UUID schoolId, FeeAssessmentStatus status, UUID classSectionId);
 
 	Optional<StudentFeeAssessment> findByIdAndSchoolId(UUID id, UUID schoolId);
+
+	/** Row-locked while a payment is recorded, so the remaining-due check and totalPaid update can't interleave. */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select a from StudentFeeAssessment a where a.id = :id and a.schoolId = :schoolId")
+	Optional<StudentFeeAssessment> findForUpdate(@Param("id") UUID id, @Param("schoolId") UUID schoolId);
 
 	Optional<StudentFeeAssessment> findBySchoolIdAndStudentIdAndAcademicYear(
 			UUID schoolId, UUID studentId, String academicYear);

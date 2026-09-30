@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * app.fees.unverified-upi-auto-mark-paid), and a repeated RESPONSE_SUCCESS report for the same
  * attempt does not double-record the payment.
  */
-@SpringBootTest
+@SpringBootTest(properties = "app.fees.unverified-upi-auto-mark-paid=true")
 @AutoConfigureMockMvc
 class PaymentAttemptIntegrationTest {
 
