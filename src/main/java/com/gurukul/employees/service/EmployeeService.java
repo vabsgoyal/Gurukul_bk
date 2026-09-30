@@ -9,6 +9,7 @@ import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.FuzzyMatcher;
 import com.gurukul.common.PageResponse;
+import com.gurukul.common.PartialUpdate;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.employees.dto.EmployeeRequest;
 import com.gurukul.employees.dto.EmployeeResponse;
@@ -128,10 +129,11 @@ public class EmployeeService {
 		employee.setName(request.getName());
 		employee.setDesignation(request.getDesignation());
 		employee.setJoinDate(request.getJoinDate());
-		employee.setBankAccount(request.getBankAccount());
-		employee.setContactPhone(request.getContactPhone());
-		employee.setContactEmail(request.getContactEmail());
-		employee.setEmployeeType(request.getEmployeeType());
+		// Optional fields: left out keeps the current value, "" clears it (see PartialUpdate).
+		employee.setBankAccount(PartialUpdate.text(employee.getBankAccount(), request.getBankAccount()));
+		employee.setContactPhone(PartialUpdate.text(employee.getContactPhone(), request.getContactPhone()));
+		employee.setContactEmail(PartialUpdate.text(employee.getContactEmail(), request.getContactEmail()));
+		employee.setEmployeeType(PartialUpdate.value(employee.getEmployeeType(), request.getEmployeeType()));
 	}
 
 	private static boolean isAdmin() {

@@ -1,5 +1,6 @@
 package com.gurukul.students.service;
 
+import com.gurukul.common.PartialUpdate;
 import com.gurukul.auth.entity.OwnerType;
 import org.springframework.security.access.AccessDeniedException;
 import com.gurukul.auth.entity.Role;
@@ -240,16 +241,25 @@ public class StudentService {
 		student.setClassSection(classSection);
 		student.setAdmissionDate(request.getAdmissionDate());
 
-		student.setSssmId(request.getSssmId());
-		student.setAadhaarNumberEncrypted(
-				request.getAadhaarNumber() != null ? tokenCipher.encrypt(request.getAadhaarNumber()) : null);
-		student.setCaste(request.getCaste());
-		student.setCategory(request.getCategory());
-		student.setAnnualIncome(request.getAnnualIncome());
-		student.setPreviousSchoolName(request.getPreviousSchoolName());
+		// RTE fields: the app's edit form doesn't send them, so a field left out keeps its current
+		// value and "" clears it (see PartialUpdate) - otherwise every app edit wiped them.
+		student.setSssmId(PartialUpdate.text(student.getSssmId(), request.getSssmId()));
+		student.setAadhaarNumberEncrypted(encryptedUpdate(student.getAadhaarNumberEncrypted(), request.getAadhaarNumber()));
+		student.setCaste(PartialUpdate.text(student.getCaste(), request.getCaste()));
+		student.setCategory(PartialUpdate.text(student.getCategory(), request.getCategory()));
+		student.setAnnualIncome(PartialUpdate.value(student.getAnnualIncome(), request.getAnnualIncome()));
+		student.setPreviousSchoolName(PartialUpdate.text(student.getPreviousSchoolName(), request.getPreviousSchoolName()));
 		student.setBankAccountNumberEncrypted(
-				request.getBankAccountNumber() != null ? tokenCipher.encrypt(request.getBankAccountNumber()) : null);
-		student.setBankIfsc(request.getBankIfsc());
+				encryptedUpdate(student.getBankAccountNumberEncrypted(), request.getBankAccountNumber()));
+		student.setBankIfsc(PartialUpdate.text(student.getBankIfsc(), request.getBankIfsc()));
+	}
+
+	private String encryptedUpdate(String currentCiphertext, String sentPlaintext) {
+		String value = PartialUpdate.text(null, sentPlaintext);
+		if (sentPlaintext == null) {
+			return currentCiphertext;
+		}
+		return value == null ? null : tokenCipher.encrypt(value);
 	}
 
 	/**
