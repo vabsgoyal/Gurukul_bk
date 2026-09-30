@@ -2,6 +2,8 @@ package com.gurukul.leads.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -14,7 +16,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A demo request submitted from the public marketing site. Deliberately not a {@code BaseEntity}:
+ * A demo or website-services request submitted from the public marketing site. Deliberately not a {@code BaseEntity}:
  * a prospect has no school in the system yet, so there is no school_id to scope it to.
  */
 @Getter
@@ -53,6 +55,17 @@ public class DemoLead {
 
 	@Column(length = 1000)
 	private String message;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "request_type", nullable = false, length = 30)
+	private LeadType requestType = LeadType.DEMO;
+
+	/** Website services picked on the form, comma-separated (WEBSITE_SERVICES leads only). */
+	@Column(length = 300)
+	private String services;
+
+	@Column(length = 40)
+	private String budget;
 
 	@Column(name = "source_page", length = 200)
 	private String sourcePage;
