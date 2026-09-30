@@ -90,34 +90,47 @@ public class PushNotificationService {
 	 * announcement's scope - gets it once, not twice.
 	 *
 	 * <p>Every notification is also saved to each recipient's inbox (see NotificationInboxService),
-	 * device or no device, so it can be re-read in the app later.
+	 * device or no device, so it can be re-read in the app later. The push goes out first: saving a
+	 * row per recipient (a whole class for a battle room) is the slow part, and time-critical pushes
+	 * - a 60-second battle room, an incoming call - shouldn't wait for it.
 	 */
 	public void sendEach(UUID schoolId, PushChannel channel, List<Notification> notifications) {
+		push(schoolId, channel, notifications);
 		for (Notification notification : notifications) {
 			saveToInbox(schoolId, notification);
 		}
-		push(schoolId, channel, notifications);
 	}
 
 	/**
 	 * For alerts that must reach each recipient at most once per {@code dedupeKey} (an absence per
-	 * child per day, a fee reminder per assessment per window): only recipients with no inbox row for
-	 * that key yet get a row and a push. Returns how many recipients were newly notified. Fails open
-	 * like everything else here - a failed claim (including losing a race to a concurrent caller,
-	 * which the unique index turns into an exception) sends nothing and returns 0.
+	 * child per day, a fee reminder per assessment per window, a battle room per class per cooldown):
+	 * only recipients with no inbox row for that key yet are pushed, and then get a row. Returns how
+	 * many recipients were newly notified. Fails open like everything else here.
+	 *
+	 * <p>The push goes out before the rows are written (one read decides who's new), so a class-wide
+	 * alert isn't held up by writing a row per student. The cost: two identical alerts in the same
+	 * instant can both push, where before the unique index let only one through - at worst one extra
+	 * notification. The index still keeps the inbox to one row each.
 	 */
 	public int sendOnce(UUID schoolId, PushChannel channel, Notification notification, String dedupeKey) {
 		List<Recipient> fresh;
 		try {
-			fresh = notificationInboxService.claim(schoolId, notification.recipients(), notification.title(),
-					notification.body(), notification.data(), dedupeKey);
+			fresh = notificationInboxService.unclaimed(notification.recipients(), dedupeKey);
 		} catch (Exception e) {
-			log.info("Alert {} not sent - already claimed or inbox write failed: {}", dedupeKey, e.getMessage());
+			log.warn("Alert {} not sent - couldn't check who already has it: {}", dedupeKey, e.getMessage());
 			return 0;
 		}
-		if (!fresh.isEmpty()) {
-			push(schoolId, channel, List.of(new Notification(fresh, notification.title(), notification.body(),
-					notification.data())));
+		if (fresh.isEmpty()) {
+			return 0;
+		}
+		push(schoolId, channel, List.of(new Notification(fresh, notification.title(), notification.body(),
+				notification.data())));
+		try {
+			notificationInboxService.claim(schoolId, fresh, notification.title(), notification.body(),
+					notification.data(), dedupeKey);
+		} catch (Exception e) {
+			log.info("Alert {} pushed, but its inbox rows weren't saved (likely a concurrent send): {}",
+					dedupeKey, e.getMessage());
 		}
 		return fresh.size();
 	}
@@ -136,15 +149,23 @@ public class PushNotificationService {
 	}
 
 	private void push(UUID schoolId, PushChannel channel, List<Notification> notifications) {
+		long started = System.nanoTime();
 		List<Map<String, Object>> messages = new ArrayList<>();
 		for (Notification notification : notifications) {
 			for (String token : tokensFor(schoolId, notification.recipients())) {
 				messages.add(message(token, channel, notification));
 			}
 		}
+		if (messages.isEmpty()) {
+			return;
+		}
+		long tokensLoaded = System.nanoTime();
 		for (int from = 0; from < messages.size(); from += EXPO_MAX_BATCH) {
 			sendBatch(messages.subList(from, Math.min(from + EXPO_MAX_BATCH, messages.size())));
 		}
+		log.info("Push {}: {} device(s) in {} ms (device lookup {} ms, Expo {} ms)", channel, messages.size(),
+				(System.nanoTime() - started) / 1_000_000, (tokensLoaded - started) / 1_000_000,
+				(System.nanoTime() - tokensLoaded) / 1_000_000);
 	}
 
 	private Set<String> tokensFor(UUID schoolId, List<Recipient> recipients) {

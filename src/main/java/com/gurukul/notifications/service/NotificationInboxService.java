@@ -66,6 +66,15 @@ public class NotificationInboxService {
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public List<Recipient> claim(UUID schoolId, Collection<Recipient> recipients, String title, String body,
 			Map<String, Object> data, String dedupeKey) {
+		List<Recipient> fresh = unclaimed(recipients, dedupeKey);
+		notificationRepository.saveAllAndFlush(
+				fresh.stream().map(r -> row(schoolId, r, title, body, data, dedupeKey)).toList());
+		return fresh;
+	}
+
+	/** Recipients with no inbox row for {@code dedupeKey} yet - one read, no writes. */
+	@Transactional(readOnly = true)
+	public List<Recipient> unclaimed(Collection<Recipient> recipients, String dedupeKey) {
 		Map<OwnerType, Set<UUID>> idsByType = new EnumMap<>(OwnerType.class);
 		for (Recipient recipient : recipients) {
 			idsByType.computeIfAbsent(recipient.ownerType(), t -> new HashSet<>()).add(recipient.ownerId());
@@ -74,13 +83,9 @@ public class NotificationInboxService {
 		idsByType.forEach((ownerType, ids) -> notificationRepository
 				.findRecipientIdsWithDedupeKey(ownerType, ids, dedupeKey)
 				.forEach(id -> alreadySent.add(new Recipient(ownerType, id))));
-
-		List<Recipient> fresh = new LinkedHashSet<>(recipients).stream()
+		return new LinkedHashSet<>(recipients).stream()
 				.filter(r -> !alreadySent.contains(r))
 				.toList();
-		notificationRepository.saveAllAndFlush(
-				fresh.stream().map(r -> row(schoolId, r, title, body, data, dedupeKey)).toList());
-		return fresh;
 	}
 
 	@Transactional(readOnly = true)
