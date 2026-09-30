@@ -1,5 +1,6 @@
 package com.gurukul.leads.dto;
 
+import com.gurukul.leads.entity.LeadType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -11,12 +12,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public class LeadDtos {
 
 	@Getter @Setter @NoArgsConstructor
-	@Schema(description = "A demo request from the marketing site")
+	@Schema(description = "A demo or website-services request from the marketing site")
 	public static class CreateLeadRequest {
 		@NotBlank @Size(max = 100)
 		private String name;
@@ -49,6 +51,17 @@ public class LeadDtos {
 		@Size(max = 1000)
 		private String message;
 
+		@Schema(description = "What is being asked for; DEMO when omitted", example = "WEBSITE_SERVICES")
+		private LeadType requestType;
+
+		@Size(max = 10)
+		@Schema(description = "Website services wanted (WEBSITE_SERVICES only)", example = "[\"New school website\", \"Online admission form\"]")
+		private List<@Size(max = 40) String> services;
+
+		@Size(max = 40)
+		@Schema(example = "₹15,000 - ₹30,000")
+		private String budget;
+
 		@Size(max = 200)
 		@Schema(description = "Path of the page the form was submitted from", example = "/gps-attendance.html")
 		private String sourcePage;
@@ -77,6 +90,9 @@ public class LeadDtos {
 		private String state;
 		private String studentCount;
 		private String message;
+		private LeadType requestType;
+		private String services;
+		private String budget;
 		private String sourcePage;
 		private Instant createdAt;
 	}

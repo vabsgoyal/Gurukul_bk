@@ -1,5 +1,6 @@
 package com.gurukul.leads;
 
+import com.gurukul.leads.entity.LeadType;
 import com.gurukul.leads.repository.DemoLeadRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,40 @@ class LeadIntegrationTest {
 			assertThat(lead.getPhone()).isEqualTo("+91 98765 43210");
 			assertThat(lead.getIpHash()).hasSize(64).doesNotContain(ip);
 		});
+	}
+
+	@Test
+	void websiteServicesRequestIsStoredWithItsServices() throws Exception {
+		mockMvc.perform(submit("""
+						{"name": "Ravi Jain", "schoolName": "Green Valley School", "phone": "9876543210",
+						 "email": "ravi@example.org", "requestType": "WEBSITE_SERVICES",
+						 "services": ["New school website", " Online admission form ", "New school website", ""],
+						 "budget": "15k-30k", "sourcePage": "/website-services.html"}
+						""", freshIp()))
+				.andExpect(status().isAccepted());
+
+		assertThat(demoLeadRepository.findAll()).singleElement().satisfies(lead -> {
+			assertThat(lead.getRequestType()).isEqualTo(LeadType.WEBSITE_SERVICES);
+			assertThat(lead.getServices()).isEqualTo("New school website, Online admission form");
+			assertThat(lead.getBudget()).isEqualTo("15k-30k");
+		});
+	}
+
+	@Test
+	void requestTypeDefaultsToDemoAndUnknownTypesAreRejected() throws Exception {
+		mockMvc.perform(submit(validLead("Default Type School"), freshIp())).andExpect(status().isAccepted());
+		assertThat(demoLeadRepository.findAll()).singleElement()
+				.satisfies(lead -> assertThat(lead.getRequestType()).isEqualTo(LeadType.DEMO));
+
+		mockMvc.perform(submit("""
+						{"name": "A", "schoolName": "S", "phone": "9876543210", "requestType": "HACK"}
+						""", freshIp()))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(submit("""
+						{"name": "A", "schoolName": "S", "phone": "9876543210", "services": ["%s"]}
+						""".formatted("x".repeat(41)), freshIp()))
+				.andExpect(status().isBadRequest());
+		assertThat(demoLeadRepository.count()).isEqualTo(1);
 	}
 
 	@Test
