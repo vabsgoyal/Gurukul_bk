@@ -1,6 +1,5 @@
 package com.gurukul.auth;
 
-import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Money, procurement, reports and roster deletes are admin-only; teachers keep the inline roster
- * and structure writes the app gives them; students and parents get neither.
+ * Money, procurement, reports, adding students and roster deletes are admin-only; teachers keep the
+ * inline section/subject writes the app gives them; students and parents get neither.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -90,17 +89,24 @@ class AdminOnlyRulesIntegrationTest {
 	}
 
 	@Test
-	void aTeacherAddingAStudentGetsTheRegistrationNumberButNoSensitiveFields() throws Exception {
-		String created = mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON).content("""
-						{"name": "Teacher Added", "dob": "2013-01-01", "gender": "FEMALE", "address": "1 Road",
-						 "parentName": "Parent", "parentContact": "9876512345", "classSectionId": "%s",
-						 "admissionDate": "2026-04-01", "aadhaarNumber": "123412341234"}
-						""".formatted(SECTION)), teacher))
+	void onlyAnAdminCanAddAStudentAndOnlyTheAdminGetsTheSensitiveFieldsBack() throws Exception {
+		String body = """
+				{"name": "%s", "dob": "2013-01-01", "gender": "FEMALE", "address": "1 Road",
+				 "parentName": "Parent", "parentContact": "%s", "classSectionId": "%s",
+				 "admissionDate": "2026-04-01", "aadhaarNumber": "123412341234", "bankAccountNumber": "5566778899"}
+				""";
+		for (String bearer : new String[] {teacher, student}) {
+			mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+							.content(body.formatted("Not Added", "9876512340", SECTION)), bearer))
+					.andExpect(status().isForbidden());
+		}
+
+		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+						.content(body.formatted("Admin Added", "9876512345", SECTION)), admin))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.registrationNumber").exists())
-				.andExpect(jsonPath("$.data.aadhaarNumber").doesNotExist())
-				.andReturn().getResponse().getContentAsString();
-		JsonPath.read(created, "$.data.id");
+				.andExpect(jsonPath("$.data.registrationNumber").isNotEmpty())
+				.andExpect(jsonPath("$.data.aadhaarNumber").value("123412341234"))
+				.andExpect(jsonPath("$.data.bankAccountNumber").value("5566778899"));
 	}
 
 	@Test

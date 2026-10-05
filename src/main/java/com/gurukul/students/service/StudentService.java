@@ -119,9 +119,14 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse create(StudentRequest request) {
-		// Whoever just added the student needs the registrationNumber to share it, whatever their
-		// role; the decrypted Aadhaar/bank fields still go to admins only.
-		return StudentResponse.from(createEntity(request), true, isAdmin(), tokenCipher);
+		// Adding a student is admin-only (also enforced in SecurityConfig). Checked here too so the
+		// rule holds whatever the route config says. The response uses the caller's real role, like
+		// every other read, so the registrationNumber and decrypted Aadhaar/bank fields go to admins only.
+		// createEntity itself stays unguarded: bulk import and admissions call it after their own checks.
+		if (!isAdmin()) {
+			throw new AccessDeniedException("Only an admin can add a student");
+		}
+		return StudentResponse.from(createEntity(request), isAdmin(), tokenCipher);
 	}
 
 	private boolean isAdmin() {

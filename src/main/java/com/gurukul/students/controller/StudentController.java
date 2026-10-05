@@ -155,6 +155,7 @@ public class StudentController {
 					Registers a new student with status ACTIVE.
 					Roll number must be unique within the school.
 					classSectionId must reference a class-section in the same school.
+					Admin only.
 					"""
 	)
 	@ApiResponses({
@@ -165,6 +166,10 @@ public class StudentController {
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(
 					responseCode = "400",
 					description = "Validation failed or roll number already exists"
+			),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(
+					responseCode = "403",
+					description = "Caller is not an admin"
 			)
 	})
 	public ApiResponse<StudentResponse> create(

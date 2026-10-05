@@ -65,6 +65,19 @@ class EditsKeepUnsentFieldsIntegrationTest {
 				.andExpect(jsonPath("$.data.bankAccountNumber").value("5566778899"))
 				.andExpect(jsonPath("$.data.bankIfsc").value("SBIN0000001"));
 
+		// A value that is sent replaces the old one; the rest are still kept.
+		mockMvc.perform(put("/api/v1/students/" + id).header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(APP_STUDENT_EDIT.formatted(SECTION,
+								", \"sssmId\": \"SSSM-2\", \"bankAccountNumber\": \"1112223334\", \"annualIncome\": 90000")))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/students/" + id).header("X-School-Id", SCHOOL_ID))
+				.andExpect(jsonPath("$.data.sssmId").value("SSSM-2"))
+				.andExpect(jsonPath("$.data.bankAccountNumber").value("1112223334"))
+				.andExpect(jsonPath("$.data.annualIncome").value(90000))
+				.andExpect(jsonPath("$.data.aadhaarNumber").value("123412341234"))
+				.andExpect(jsonPath("$.data.caste").value("Caste"));
+
 		// Sending "" still clears a field on purpose.
 		mockMvc.perform(put("/api/v1/students/" + id).header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -73,7 +86,7 @@ class EditsKeepUnsentFieldsIntegrationTest {
 		mockMvc.perform(get("/api/v1/students/" + id).header("X-School-Id", SCHOOL_ID))
 				.andExpect(jsonPath("$.data.caste").value(nullValue()))
 				.andExpect(jsonPath("$.data.aadhaarNumber").value(nullValue()))
-				.andExpect(jsonPath("$.data.sssmId").value("SSSM-1"));
+				.andExpect(jsonPath("$.data.sssmId").value("SSSM-2"));
 	}
 
 	@Test
@@ -102,6 +115,17 @@ class EditsKeepUnsentFieldsIntegrationTest {
 				.andExpect(jsonPath("$.data.name").value("Kept Teacher Renamed"))
 				.andExpect(jsonPath("$.data.contactEmail").value("kept@school.example"))
 				.andExpect(jsonPath("$.data.employeeType").value("TEACHING"));
+
+		mockMvc.perform(put("/api/v1/employees/" + id).header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name": "Kept Teacher Renamed", "designation": "Senior Teacher", "joinDate": "2024-04-01",
+								 "contactEmail": "new@school.example", "employeeType": "NON_TEACHING"}
+								"""))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/employees/" + id).header("X-School-Id", SCHOOL_ID))
+				.andExpect(jsonPath("$.data.contactEmail").value("new@school.example"))
+				.andExpect(jsonPath("$.data.employeeType").value("NON_TEACHING"));
 
 		mockMvc.perform(put("/api/v1/employees/" + id).header("X-School-Id", SCHOOL_ID)
 						.contentType(MediaType.APPLICATION_JSON)
