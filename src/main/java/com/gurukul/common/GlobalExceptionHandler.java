@@ -99,6 +99,12 @@ public class GlobalExceptionHandler {
 				com.gurukul.timetable.service.TimetableConflictException.ERROR_CODE));
 	}
 
+	@ExceptionHandler(com.gurukul.attendance.service.SelfMarkConflictException.class)
+	public ResponseEntity<ApiResponse<Void>> handleSelfMarkConflict(com.gurukul.attendance.service.SelfMarkConflictException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage(),
+				com.gurukul.attendance.service.SelfMarkConflictException.ERROR_CODE));
+	}
+
 	/** Malformed JSON / unparseable values (e.g. a time of "8.30") are a client error, not a 500. */
 	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
 	public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(

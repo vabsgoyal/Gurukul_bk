@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -172,6 +173,89 @@ class StaffSelfMarkAttendanceIntegrationTest {
 								+ System.currentTimeMillis() + "}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PRESENT"));
+	}
+
+
+	/**
+	 * Admin-entered attendance (bulk staff entry) wins over self check-in: a teacher marked ABSENT
+	 * by an admin cannot replace it with PRESENT. Re-saving over their own self-mark stays allowed.
+	 */
+	@Test
+	void selfMarkDoesNotOverwriteAdminEnteredAttendance() throws Exception {
+		MvcResult schoolResult = mockMvc.perform(post("/api/v1/schools")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "Admin Wins Test School",
+								  "address": "12 Test Street",
+								  "city": "Jaipur",
+								  "state": "Rajasthan",
+								  "pincode": "302001",
+								  "contactEmail": "office@adminwinstest.example",
+								  "contactPhone": "9111111133",
+								  "principalName": "Dr. Admin Principal",
+								  "directorName": "Mr. Admin Director",
+								  "principalPhone": "9111111133",
+								  "adminPhone": "8111111133"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andReturn();
+		String schoolId = JsonPath.read(schoolResult.getResponse().getContentAsString(), "$.data.school.id");
+		String adminBearer = "Bearer " + (String) JsonPath.read(schoolResult.getResponse().getContentAsString(), "$.data.principal.token");
+
+		mockMvc.perform(put("/api/v1/schools/" + schoolId + "/location")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"latitude": 26.9124, "longitude": 75.7873, "geofenceRadiusMeters": 100}
+								"""))
+				.andExpect(status().isOk());
+
+		String absentTeacherId = AuthTestSupport.createEmployee(mockMvc, schoolId, "Admin Marked Teacher");
+		String absentTeacherBearer = "Bearer " + AuthTestSupport.provisionAndLogin(
+				mockMvc, schoolId, adminBearer.substring("Bearer ".length()), "employees", absentTeacherId, "TEACHER");
+		String selfTeacherId = AuthTestSupport.createEmployee(mockMvc, schoolId, "Self Marked Teacher");
+		String selfTeacherBearer = "Bearer " + AuthTestSupport.provisionAndLogin(
+				mockMvc, schoolId, adminBearer.substring("Bearer ".length()), "employees", selfTeacherId, "TEACHER");
+
+		String today = java.time.LocalDate.now().toString();
+		mockMvc.perform(post("/api/v1/staff-attendance")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"date": "%s", "records": [{"employeeId": "%s", "status": "ABSENT"}]}
+								""".formatted(today, absentTeacherId)))
+				.andExpect(status().isOk());
+
+		String fix = "{\"latitude\": 26.9124, \"longitude\": 75.7873}";
+		mockMvc.perform(post("/api/v1/staff-attendance/self-mark")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, absentTeacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(fix))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(containsString("already marked your attendance today as ABSENT")));
+
+		mockMvc.perform(get("/api/v1/staff-attendance")
+						.header("X-School-Id", schoolId)
+						.header(HttpHeaders.AUTHORIZATION, adminBearer)
+						.param("date", today))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.entries[?(@.employeeId == '" + absentTeacherId + "')].status").value("ABSENT"));
+
+		// Checking in twice over one's own self-mark is still fine.
+		for (int i = 0; i < 2; i++) {
+			mockMvc.perform(post("/api/v1/staff-attendance/self-mark")
+							.header("X-School-Id", schoolId)
+							.header(HttpHeaders.AUTHORIZATION, selfTeacherBearer)
+							.contentType(MediaType.APPLICATION_JSON)
+							.content(fix))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.status").value("PRESENT"));
+		}
 	}
 
 }

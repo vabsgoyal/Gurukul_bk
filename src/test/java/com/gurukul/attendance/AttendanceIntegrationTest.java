@@ -167,6 +167,78 @@ class AttendanceIntegrationTest {
 				.andExpect(jsonPath("$.data.entries[?(@.studentId == '" + studentId + "')].status").value("PRESENT"));
 	}
 
+	/**
+	 * Section roster/history reads use the same rule as marking: a teacher may read only the
+	 * section they are class teacher of; an admin may read any section.
+	 */
+	@Test
+	void teacherCannotReadAnotherSectionsRosterOrHistory() throws Exception {
+		String suffix = UUID.randomUUID().toString().substring(0, 8);
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+
+		MvcResult ownResult = mockMvc.perform(post("/api/v1/class-sections")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"className": "Grade 9", "section": "OWN-%s", "academicYear": "2026-27"}
+								""".formatted(suffix)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String ownSectionId = JsonPath.read(ownResult.getResponse().getContentAsString(), "$.data.id");
+		MvcResult otherResult = mockMvc.perform(post("/api/v1/class-sections")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"className": "Grade 9", "section": "OTH-%s", "academicYear": "2026-27"}
+								""".formatted(suffix)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String otherSectionId = JsonPath.read(otherResult.getResponse().getContentAsString(), "$.data.id");
+
+		String teacherId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "Scoped Reader " + suffix);
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+						"/api/v1/class-sections/" + ownSectionId + "/class-teacher")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"teacherId\": \"" + teacherId + "\"}"))
+				.andExpect(status().isOk());
+		String teacherBearer = AuthTestSupport.provisionAndLogin(mockMvc, SCHOOL_ID, adminBearer, "employees", teacherId, "TEACHER");
+
+		// Own section: roster and history readable.
+		mockMvc.perform(get("/api/v1/class-sections/" + ownSectionId + "/attendance")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer)
+						.param("date", "2026-08-03"))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/class-sections/" + ownSectionId + "/attendance/history")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer))
+				.andExpect(status().isOk());
+
+		// Someone else's section: 403 on both.
+		mockMvc.perform(get("/api/v1/class-sections/" + otherSectionId + "/attendance")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer)
+						.param("date", "2026-08-03"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/class-sections/" + otherSectionId + "/attendance/history")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer))
+				.andExpect(status().isForbidden());
+
+		// Admin is unrestricted.
+		mockMvc.perform(get("/api/v1/class-sections/" + otherSectionId + "/attendance")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+						.param("date", "2026-08-03"))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/class-sections/" + otherSectionId + "/attendance/history")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
+				.andExpect(status().isOk());
+	}
+
 	@Test
 	void sectionHistoryAggregatesEveryStudentsAttendanceOverARange() throws Exception {
 		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
