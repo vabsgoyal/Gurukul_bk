@@ -66,6 +66,20 @@ public class PushNotificationService {
 		deviceTokenRepository.save(token);
 	}
 
+	/**
+	 * Logout: stop pushing to this device. Only removes the row when it currently belongs to the
+	 * caller, so one user can't knock another's device off by guessing its token; anything else
+	 * (unknown token, already reassigned to someone else) is a silent no-op.
+	 */
+	@Transactional
+	public void unregisterToken(AuthPrincipal principal, String expoPushToken) {
+		deviceTokenRepository.findByExpoPushToken(expoPushToken)
+				.filter(token -> principal.getSchoolId().equals(token.getSchoolId())
+						&& token.getOwnerType() == principal.getOwnerType()
+						&& principal.getOwnerId().equals(token.getOwnerId()))
+				.ifPresent(deviceTokenRepository::delete);
+	}
+
 	public void sendToOwner(UUID schoolId, OwnerType ownerType, UUID ownerId, PushChannel channel,
 			String title, String body, Map<String, Object> data) {
 		sendToRecipients(schoolId, List.of(new Recipient(ownerType, ownerId)), channel, title, body, data);

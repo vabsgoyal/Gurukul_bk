@@ -7,11 +7,15 @@ import com.gurukul.auth.repository.CredentialRepository;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.employees.repository.EmployeeRepository;
+import com.gurukul.parents.entity.ParentStudentLink;
+import com.gurukul.parents.repository.ParentRepository;
+import com.gurukul.parents.repository.ParentStudentLinkRepository;
 import com.gurukul.students.entity.Student;
 import com.gurukul.students.repository.StudentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -25,11 +29,13 @@ import java.util.UUID;
  *   <li>STUDENT &lt;-&gt; EMPLOYEE, where the EMPLOYEE is that student's {@code
  *       ClassSection.classTeacher}, a subject teacher assigned to that section ({@code
  *       SectionSubjectTeacher}), or an admin (full diagnostic reach, matching admin's access
- *       everywhere else - Arena, Battle Room, House Wars, Events). A parent's login is a
- *       STUDENT-owner-type session (see OtpService.resolveOwner) - there is no separate Parent
- *       entity in this codebase.</li>
+ *       everywhere else - Arena, Battle Room, House Wars, Events).</li>
+ *   <li>PARENT &lt;-&gt; EMPLOYEE, where the EMPLOYEE is the class teacher or a subject teacher of
+ *       one of the parent's linked children's sections, or an admin of the school - the student
+ *       rule applied through each linked child.</li>
  *   <li>STUDENT &lt;-&gt; STUDENT, where both are in the same class-section (classmates).</li>
  * </ul>
+ * Anything else - parent &lt;-&gt; parent, parent &lt;-&gt; student - is denied.
  */
 @Service
 public class CallAuthorizationService {
@@ -38,16 +44,22 @@ public class CallAuthorizationService {
 	private final StudentRepository studentRepository;
 	private final CredentialRepository credentialRepository;
 	private final SectionSubjectTeacherRepository sectionSubjectTeacherRepository;
+	private final ParentRepository parentRepository;
+	private final ParentStudentLinkRepository parentStudentLinkRepository;
 
 	public CallAuthorizationService(
 			EmployeeRepository employeeRepository,
 			StudentRepository studentRepository,
 			CredentialRepository credentialRepository,
-			SectionSubjectTeacherRepository sectionSubjectTeacherRepository) {
+			SectionSubjectTeacherRepository sectionSubjectTeacherRepository,
+			ParentRepository parentRepository,
+			ParentStudentLinkRepository parentStudentLinkRepository) {
 		this.employeeRepository = employeeRepository;
 		this.studentRepository = studentRepository;
 		this.credentialRepository = credentialRepository;
 		this.sectionSubjectTeacherRepository = sectionSubjectTeacherRepository;
+		this.parentRepository = parentRepository;
+		this.parentStudentLinkRepository = parentStudentLinkRepository;
 	}
 
 	public void requireCanCall(AuthPrincipal principal, OwnerType otherType, UUID otherId) {
@@ -71,18 +83,40 @@ public class CallAuthorizationService {
 			return isSameClassSection(schoolId, callerId, otherId);
 		}
 		if (callerType == OwnerType.EMPLOYEE && otherType == OwnerType.EMPLOYEE) {
-			return isAdmin(otherId) || isAdmin(callerId);
+			return isAdmin(schoolId, otherId) || isAdmin(schoolId, callerId);
 		}
-		UUID studentId = callerType == OwnerType.STUDENT ? callerId : otherId;
-		UUID employeeId = callerType == OwnerType.EMPLOYEE ? callerId : otherId;
-		return isAdmin(employeeId)
-				|| isClassTeacherOf(schoolId, studentId, employeeId)
-				|| isSubjectTeacherOf(schoolId, studentId, employeeId);
+		if (isPair(callerType, otherType, OwnerType.STUDENT, OwnerType.EMPLOYEE)) {
+			UUID studentId = callerType == OwnerType.STUDENT ? callerId : otherId;
+			UUID employeeId = callerType == OwnerType.EMPLOYEE ? callerId : otherId;
+			return isAdmin(schoolId, employeeId) || teachesStudent(schoolId, studentId, employeeId);
+		}
+		if (isPair(callerType, otherType, OwnerType.PARENT, OwnerType.EMPLOYEE)) {
+			UUID parentId = callerType == OwnerType.PARENT ? callerId : otherId;
+			UUID employeeId = callerType == OwnerType.EMPLOYEE ? callerId : otherId;
+			if (parentRepository.findByIdAndSchoolId(parentId, schoolId).isEmpty()) {
+				return false;
+			}
+			if (isAdmin(schoolId, employeeId)) {
+				return true;
+			}
+			List<ParentStudentLink> links = parentStudentLinkRepository.findAllByParentId(parentId);
+			return links.stream().anyMatch(link -> teachesStudent(schoolId, link.getStudentId(), employeeId));
+		}
+		return false;
 	}
 
-	private boolean isAdmin(UUID employeeId) {
+	private static boolean isPair(OwnerType a, OwnerType b, OwnerType x, OwnerType y) {
+		return (a == x && b == y) || (a == y && b == x);
+	}
+
+	private boolean teachesStudent(UUID schoolId, UUID studentId, UUID employeeId) {
+		return isClassTeacherOf(schoolId, studentId, employeeId) || isSubjectTeacherOf(schoolId, studentId, employeeId);
+	}
+
+	/** Same school only - an admin credential from another school grants nothing here. */
+	private boolean isAdmin(UUID schoolId, UUID employeeId) {
 		return credentialRepository.findByOwnerTypeAndOwnerId(OwnerType.EMPLOYEE, employeeId)
-				.map(credential -> credential.getRole() == Role.ADMIN)
+				.map(credential -> credential.getRole() == Role.ADMIN && schoolId.equals(credential.getSchoolId()))
 				.orElse(false);
 	}
 
@@ -113,11 +147,21 @@ public class CallAuthorizationService {
 
 	/** Throws if {@code otherType}/{@code otherId} doesn't exist in this school - checked before authz. */
 	public void requireExists(UUID schoolId, OwnerType ownerType, UUID ownerId) {
-		boolean exists = ownerType == OwnerType.EMPLOYEE
-				? employeeRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent()
-				: studentRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+		if (ownerType == null) {
+			throw new IllegalArgumentException("Owner type is required");
+		}
+		boolean exists = switch (ownerType) {
+			case EMPLOYEE -> employeeRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+			case STUDENT -> studentRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+			case PARENT -> parentRepository.findByIdAndSchoolId(ownerId, schoolId).isPresent();
+		};
 		if (!exists) {
-			throw new EntityNotFoundException((ownerType == OwnerType.EMPLOYEE ? "Employee" : "Student") + " not found");
+			String label = switch (ownerType) {
+				case EMPLOYEE -> "Employee";
+				case STUDENT -> "Student";
+				case PARENT -> "Parent";
+			};
+			throw new EntityNotFoundException(label + " not found");
 		}
 	}
 

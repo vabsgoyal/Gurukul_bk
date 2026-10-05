@@ -52,6 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -62,9 +63,11 @@ import java.util.stream.Collectors;
  * extend that same entity rather than introducing a second "event" concept, so a Sports Meet can
  * both take RSVPs and collect an entry fee through the existing money features.
  *
- * <p>A plain finance-tracking event (participationType left null/NONE) behaves exactly as before -
- * no permission check, no visibility restriction, no notification. Only events that opt into a
- * participation model get the new authorization/visibility/notification behavior.
+ * <p>Creating or editing any event needs an admin or teacher (editing: an admin or the creating
+ * teacher). An event given a scope - including a plain "just an announcement" one with
+ * participationType NONE, the app's default - is restricted to that class/grade and announced to
+ * it, same as a participation event. A scope-less finance-tracking event (the original kind) stays
+ * visible to everyone and isn't announced.
  */
 @Service
 @RequiredArgsConstructor
@@ -110,6 +113,7 @@ public class EventService {
 
 	@Transactional
 	public EventResponse create(AuthPrincipal principal, EventRequest request) {
+		requireStaff(principal);
 		SchoolEvent event = new SchoolEvent();
 		event.setSchoolId(schoolContext.getSchoolId());
 		applyRequest(event, request);
@@ -129,33 +133,29 @@ public class EventService {
 		boolean opensIntoParticipation = request.getParticipationType() != null
 				&& request.getParticipationType() != EventParticipationType.NONE;
 		if (opensIntoParticipation) {
-			if (principal == null) {
-				throw new AccessDeniedException("Authentication is required to create a participation event");
-			}
-			if (principal.getRole() != Role.ADMIN && principal.getRole() != Role.TEACHER) {
-				throw new AccessDeniedException("Only a teacher or admin can create a participation event");
-			}
 			if (request.getScope() == null) {
 				throw new IllegalArgumentException("scope is required when participationType is set");
 			}
 			if (request.getStartAt() == null || request.getEndAt() == null) {
 				throw new IllegalArgumentException("startAt/endAt are required when participationType is set");
 			}
-			if (request.getEndAt().isBefore(request.getStartAt())) {
-				throw new IllegalArgumentException("endAt must not be before startAt");
-			}
 			if (request.getParticipationType() == EventParticipationType.REGISTRATION
 					&& (request.getRegistrationFields() == null || request.getRegistrationFields().isEmpty())) {
 				throw new IllegalArgumentException("registrationFields is required when participationType is REGISTRATION");
 			}
-			applyScope(principal, event, request.getScope(), request.getSectionId(), request.getClassName());
 			if (request.getParticipationType() == EventParticipationType.REGISTRATION) {
 				event.setRegistrationFieldsJson(writeJson(request.getRegistrationFields()));
 			}
 		}
+		if (request.getStartAt() != null && request.getEndAt() != null && request.getEndAt().isBefore(request.getStartAt())) {
+			throw new IllegalArgumentException("endAt must not be before startAt");
+		}
+		if (request.getScope() != null) {
+			applyScope(principal, event, request.getScope(), request.getSectionId(), request.getClassName());
+		}
 
 		SchoolEvent saved = eventRepository.save(event);
-		if (opensIntoParticipation) {
+		if (saved.getScope() != null) {
 			notifyViaAnnouncement(principal, saved);
 		}
 		return toResponse(principal, saved);
@@ -163,12 +163,13 @@ public class EventService {
 
 	@Transactional
 	public EventResponse update(AuthPrincipal principal, UUID id, EventRequest request) {
+		requireStaff(principal);
 		SchoolEvent event = findScoped(id);
-		if (isParticipationEvent(event)) {
-			if (principal == null) {
-				throw new AccessDeniedException("Authentication is required to edit a participation event");
-			}
-			requireEditor(principal, event);
+		requireEditor(principal, event);
+		if (request.getScope() != null && scopeChanges(event, request)) {
+			event.setSectionId(null);
+			event.setClassName(null);
+			applyScope(principal, event, request.getScope(), request.getSectionId(), request.getClassName());
 		}
 		applyRequest(event, request);
 		if (request.getStatus() != null) {
@@ -195,6 +196,7 @@ public class EventService {
 	/** Soft cancel for the participation flow - RSVPs/registrations/poll data stay intact for history. */
 	@Transactional
 	public void cancel(AuthPrincipal principal, UUID id) {
+		requireStaff(principal);
 		SchoolEvent event = findScoped(id);
 		requireEditor(principal, event);
 		event.setCancelled(true);
@@ -318,8 +320,20 @@ public class EventService {
 		return vote;
 	}
 
-	private boolean isParticipationEvent(SchoolEvent event) {
-		return event.getParticipationType() != null && event.getParticipationType() != EventParticipationType.NONE;
+	/** Only staff create or change events; parents and students just see and take part in them. */
+	private void requireStaff(AuthPrincipal principal) {
+		if (principal == null) {
+			throw new AccessDeniedException("Authentication is required to create or change an event");
+		}
+		if (principal.getRole() != Role.ADMIN && principal.getRole() != Role.TEACHER) {
+			throw new AccessDeniedException("Only a teacher or admin can create or change an event");
+		}
+	}
+
+	private static boolean scopeChanges(SchoolEvent event, EventRequest request) {
+		return request.getScope() != event.getScope()
+				|| (request.getScope() == EventScope.CLASS && !Objects.equals(request.getSectionId(), event.getSectionId()))
+				|| (request.getScope() == EventScope.GRADE && !Objects.equals(request.getClassName(), event.getClassName()));
 	}
 
 	/** Loaded, visible, and matches the event's own participation model without being cancelled. */
@@ -435,8 +449,12 @@ public class EventService {
 		if (event.getVenue() != null && !event.getVenue().isBlank()) {
 			body.append("Venue: ").append(event.getVenue()).append(". ");
 		}
-		body.append(event.getStartAt()).append(" to ").append(event.getEndAt()).append(".");
-		return body.toString();
+		if (event.getStartAt() != null && event.getEndAt() != null) {
+			body.append(event.getStartAt()).append(" to ").append(event.getEndAt()).append(".");
+		} else if (event.getEventDate() != null) {
+			body.append("On ").append(event.getEventDate()).append(".");
+		}
+		return body.toString().trim();
 	}
 
 	private String resolveName(UUID ownerId, OwnerType ownerType, UUID schoolId) {
