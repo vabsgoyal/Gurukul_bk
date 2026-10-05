@@ -68,6 +68,8 @@ public class InfraExpenseDtos {
 	@Getter @Setter
 	@Schema(name = "InfraExpenseApprovalActionRequest")
 	public static class ApprovalActionRequest {
+		/** Ignored - the signed-in user is recorded as the actor. Kept so existing clients that still send it don't break. */
+		@Schema(deprecated = true, description = "Ignored; the signed-in user is recorded as the actor")
 		private String actor;
 		private String comment;
 	}

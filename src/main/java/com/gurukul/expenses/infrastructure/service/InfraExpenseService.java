@@ -1,5 +1,6 @@
 package com.gurukul.expenses.infrastructure.service;
 
+import com.gurukul.auth.security.AuthContext;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.expenses.infrastructure.dto.InfraExpenseDtos;
@@ -65,7 +66,7 @@ public class InfraExpenseService {
 	@Transactional
 	public InfraExpenseDtos.RequestResponse submit(UUID id, InfraExpenseDtos.ApprovalActionRequest action) {
 		InfraExpenseRequest entity = findScoped(id);
-		workflowService.submit(ENTITY_TYPE, id, action.getActor() != null ? action.getActor() : "admin");
+		workflowService.submit(ENTITY_TYPE, id, currentActor());
 		entity.setStatus(InfraExpenseStatus.SUBMITTED);
 		return InfraExpenseDtos.RequestResponse.from(requestRepository.save(entity));
 	}
@@ -73,7 +74,7 @@ public class InfraExpenseService {
 	@Transactional
 	public InfraExpenseDtos.RequestResponse approve(UUID id, InfraExpenseDtos.ApprovalActionRequest action) {
 		InfraExpenseRequest entity = findScoped(id);
-		workflowService.approve(ENTITY_TYPE, id, action.getActor() != null ? action.getActor() : "principal", action.getComment());
+		workflowService.approve(ENTITY_TYPE, id, currentActor(), action.getComment());
 		entity.setStatus(InfraExpenseStatus.APPROVED);
 		return InfraExpenseDtos.RequestResponse.from(requestRepository.save(entity));
 	}
@@ -81,7 +82,7 @@ public class InfraExpenseService {
 	@Transactional
 	public InfraExpenseDtos.RequestResponse reject(UUID id, InfraExpenseDtos.ApprovalActionRequest action) {
 		InfraExpenseRequest entity = findScoped(id);
-		workflowService.reject(ENTITY_TYPE, id, action.getActor() != null ? action.getActor() : "principal", action.getComment());
+		workflowService.reject(ENTITY_TYPE, id, currentActor(), action.getComment());
 		entity.setStatus(InfraExpenseStatus.REJECTED);
 		return InfraExpenseDtos.RequestResponse.from(requestRepository.save(entity));
 	}
@@ -137,6 +138,15 @@ public class InfraExpenseService {
 	private InfraExpenseRequest findScoped(UUID id) {
 		return requestRepository.findByIdAndSchoolId(id, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Expense request not found"));
+	}
+
+	/**
+	 * The approval history records who actually acted - the signed-in user - not the request body's
+	 * free-text "actor", which anyone could set to any name (it used to default to "admin" or
+	 * "principal", so history couldn't show who approved). The request field is ignored.
+	 */
+	private static String currentActor() {
+		return AuthContext.current().getUsername();
 	}
 
 }

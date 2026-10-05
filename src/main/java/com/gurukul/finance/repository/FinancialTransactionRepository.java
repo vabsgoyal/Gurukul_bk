@@ -1,6 +1,7 @@
 package com.gurukul.finance.repository;
 
 import com.gurukul.finance.entity.FinancialTransaction;
+import com.gurukul.finance.entity.SourceType;
 import com.gurukul.finance.entity.TransactionDirection;
 import com.gurukul.finance.entity.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +16,10 @@ import java.util.UUID;
 public interface FinancialTransactionRepository extends JpaRepository<FinancialTransaction, UUID> {
 
 	List<FinancialTransaction> findAllBySchoolIdOrderByTransactionDateDescCreatedAtDesc(UUID schoolId);
+
+	/** Whether a ledger entry for this source already carries this payment reference (used for per-attempt idempotency). */
+	boolean existsBySchoolIdAndSourceTypeAndSourceIdAndPaymentReference(
+			UUID schoolId, SourceType sourceType, UUID sourceId, String paymentReference);
 
 	Optional<FinancialTransaction> findByIdAndSchoolId(UUID id, UUID schoolId);
 

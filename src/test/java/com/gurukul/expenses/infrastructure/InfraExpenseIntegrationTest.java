@@ -1,6 +1,11 @@
 package com.gurukul.expenses.infrastructure;
 
 import com.gurukul.auth.AuthTestSupport;
+import com.gurukul.expenses.infrastructure.service.InfraExpenseService;
+import com.gurukul.workflow.entity.ApprovalHistory;
+import com.gurukul.workflow.entity.ApprovalRequest;
+import com.gurukul.workflow.repository.ApprovalHistoryRepository;
+import com.gurukul.workflow.service.WorkflowService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +16,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,6 +33,12 @@ class InfraExpenseIntegrationTest {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private WorkflowService workflowService;
+
+	@Autowired
+	private ApprovalHistoryRepository approvalHistoryRepository;
 
 	@Test
 	void infraExpenseWorkflow() throws Exception {
@@ -92,6 +106,51 @@ class InfraExpenseIntegrationTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalOutflow").value(outflowBefore + 14500.00));
+	}
+
+	@Test
+	void approvalHistoryRecordsTheSignedInUserNotTheRequestBodyActor() throws Exception {
+		String adminBearer = AuthTestSupport.loginAsDevAdmin(mockMvc, SCHOOL_ID);
+		String approverId = AuthTestSupport.createEmployee(mockMvc, SCHOOL_ID, "Infra Approver");
+		String approverUsername = "approver-" + UUID.randomUUID().toString().substring(0, 8);
+		mockMvc.perform(post("/api/v1/employees/" + approverId + "/credentials")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"username": "%s", "password": "Password@123", "role": "ADMIN"}
+								""".formatted(approverUsername)))
+				.andExpect(status().isOk());
+		String approverBearer = AuthTestSupport.login(mockMvc, SCHOOL_ID, approverUsername, "Password@123");
+
+		String requestId = JsonPath.read(mockMvc.perform(post("/api/v1/infra-expense-requests")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"categoryId": "%s", "description": "Projector", "estimatedAmount": 30000.00}
+								""".formatted(CATEGORY_ID)))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.id");
+
+		mockMvc.perform(post("/api/v1/infra-expense-requests/" + requestId + "/submit")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"actor\": \"principal\"}"))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/api/v1/infra-expense-requests/" + requestId + "/approve")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + approverBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"actor\": \"principal\", \"comment\": \"ok\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("APPROVED"));
+
+		ApprovalRequest approval = workflowService.findByEntity(InfraExpenseService.ENTITY_TYPE, UUID.fromString(requestId));
+		assertThat(approval.getSubmittedBy()).isEqualTo(AuthTestSupport.DEV_ADMIN_USERNAME);
+		assertThat(approval.getApprovedBy()).isEqualTo(approverUsername);
+		assertThat(approvalHistoryRepository.findAll().stream()
+				.filter(h -> h.getApprovalRequest().getId().equals(approval.getId()))
+				.map(ApprovalHistory::getChangedBy))
+				.containsExactlyInAnyOrder(AuthTestSupport.DEV_ADMIN_USERNAME, approverUsername);
 	}
 
 }

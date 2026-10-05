@@ -92,6 +92,45 @@ class PaymentIntegrityIntegrationTest {
 	}
 
 	@Test
+	void staffConfirmASelfReportedUpiPaymentOnceByItsReference() throws Exception {
+		String ref = JsonPath.read(mockMvc.perform(post("/api/v1/fee-assessments/" + assessmentId + "/payment-request")
+						.header("X-School-Id", SCHOOL_ID))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.referenceId");
+		mockMvc.perform(post("/api/v1/payment-attempts/" + ref + "/result").header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\": \"RESPONSE_SUCCESS\", \"upiTransactionId\": \"UPI-CLAIMED\"}"))
+				.andExpect(status().isOk());
+
+		// Staff have seen the money and confirm it, citing the attempt's reference.
+		String confirm = """
+				{"assessmentId": "%s", "amount": 4000.00, "paymentMethod": "UPI", "paymentReference": "%s"}
+				""".formatted(assessmentId, ref);
+		mockMvc.perform(post("/api/v1/fee-payments").header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+						.contentType(MediaType.APPLICATION_JSON).content(confirm))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/fee-assessments/" + assessmentId + "/payment-attempts").header("X-School-Id", SCHOOL_ID))
+				.andExpect(jsonPath("$.data[0].status").value("VERIFIED"));
+
+		// The same attempt can't be confirmed twice, even for an amount that would still fit.
+		mockMvc.perform(post("/api/v1/fee-payments").header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+						.contentType(MediaType.APPLICATION_JSON).content(confirm))
+				.andExpect(status().isBadRequest());
+
+		// And the payer's app can't overwrite a confirmed attempt.
+		mockMvc.perform(post("/api/v1/payment-attempts/" + ref + "/result").header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\": \"FAILED\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("VERIFIED"));
+
+		mockMvc.perform(get("/api/v1/fee-assessments").param("size", "1000").header("X-School-Id", SCHOOL_ID))
+				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].status").value("PARTIAL"))
+				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].totalPaid").value(4000.0));
+	}
+
+	@Test
 	void twoPaymentsAtTheSameMomentCannotBothBeRecorded() throws Exception {
 		String fullAmount = """
 				{"assessmentId": "%s", "amount": 9000.00, "paymentMethod": "CASH"}

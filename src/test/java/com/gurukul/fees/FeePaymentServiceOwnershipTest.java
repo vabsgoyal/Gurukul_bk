@@ -4,7 +4,9 @@ import com.gurukul.auth.entity.OwnerType;
 import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.SchoolContext;
+import com.gurukul.fees.dto.FeePaymentRequest;
 import com.gurukul.fees.dto.FeePaymentRequestResponse;
+import com.gurukul.finance.entity.PaymentMethod;
 import com.gurukul.fees.entity.FeeAssessmentStatus;
 import com.gurukul.fees.entity.StudentFeeAssessment;
 import com.gurukul.fees.repository.FeePaymentRepository;
@@ -147,6 +149,38 @@ class FeePaymentServiceOwnershipTest {
 
 		assertThatThrownBy(() -> feePaymentService.listByStudent(OWNING_STUDENT_ID))
 				.isInstanceOf(AccessDeniedException.class);
+	}
+
+	@Test
+	void studentCannotRecordAPaymentDirectlyEvenForOwnFee() {
+		authenticateAs(OWNING_STUDENT_ID, Role.STUDENT, OwnerType.STUDENT);
+
+		assertThatThrownBy(() -> feePaymentService.recordPayment(cashPayment()))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
+	@Test
+	void linkedParentCannotRecordAPaymentDirectly() {
+		authenticateAs(UUID.randomUUID(), Role.PARENT, OwnerType.PARENT);
+
+		assertThatThrownBy(() -> feePaymentService.recordPayment(cashPayment()))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
+	@Test
+	void teacherCannotRecordAPaymentDirectly() {
+		authenticateAs(UUID.randomUUID(), Role.TEACHER, OwnerType.EMPLOYEE);
+
+		assertThatThrownBy(() -> feePaymentService.recordPayment(cashPayment()))
+				.isInstanceOf(AccessDeniedException.class);
+	}
+
+	private static FeePaymentRequest cashPayment() {
+		FeePaymentRequest request = new FeePaymentRequest();
+		request.setAssessmentId(ASSESSMENT_ID);
+		request.setAmount(new BigDecimal("10000.00"));
+		request.setPaymentMethod(PaymentMethod.CASH);
+		return request;
 	}
 
 }

@@ -178,6 +178,22 @@ class PaymentAttemptIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].status").value("PAID"))
 				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].totalPaid").value(9000.00));
+
+		// Nor may flipping the attempt to FAILED and back to RESPONSE_SUCCESS record a second payment.
+		for (String outcome : new String[] {"FAILED", "RESPONSE_SUCCESS"}) {
+			mockMvc.perform(post("/api/v1/payment-attempts/" + transactionRef + "/result")
+							.header("X-School-Id", SCHOOL_ID)
+							.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer)
+							.contentType(MediaType.APPLICATION_JSON)
+							.content("{\"status\": \"" + outcome + "\"}"))
+					.andExpect(status().isOk());
+		}
+		mockMvc.perform(get("/api/v1/fee-assessments")
+						.param("size", "1000")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminBearer))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[?(@.id=='" + assessmentId + "')].totalPaid").value(9000.00));
 	}
 
 }
