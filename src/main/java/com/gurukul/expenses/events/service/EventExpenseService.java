@@ -1,5 +1,6 @@
 package com.gurukul.expenses.events.service;
 
+import com.gurukul.auth.security.AuthContext;
 import com.gurukul.common.EntityNotFoundException;
 import com.gurukul.common.SchoolContext;
 import com.gurukul.collections.service.EventCollectionService;
@@ -90,7 +91,7 @@ public class EventExpenseService {
 	@Transactional
 	public EventExpenseDtos.ExpenseRequestResponse submit(UUID eventId, UUID reqId, EventExpenseDtos.ApprovalActionRequest action) {
 		EventExpenseRequest entity = findExpenseRequest(eventId, reqId);
-		workflowService.submit(ENTITY_TYPE, reqId, action.getActor() != null ? action.getActor() : "admin");
+		workflowService.submit(ENTITY_TYPE, reqId, currentActor());
 		entity.setStatus(EventExpenseStatus.SUBMITTED);
 		return EventExpenseDtos.ExpenseRequestResponse.from(expenseRequestRepository.save(entity));
 	}
@@ -98,7 +99,7 @@ public class EventExpenseService {
 	@Transactional
 	public EventExpenseDtos.ExpenseRequestResponse approve(UUID eventId, UUID reqId, EventExpenseDtos.ApprovalActionRequest action) {
 		EventExpenseRequest entity = findExpenseRequest(eventId, reqId);
-		workflowService.approve(ENTITY_TYPE, reqId, action.getActor() != null ? action.getActor() : "principal", action.getComment());
+		workflowService.approve(ENTITY_TYPE, reqId, currentActor(), action.getComment());
 		entity.setStatus(EventExpenseStatus.APPROVED);
 		return EventExpenseDtos.ExpenseRequestResponse.from(expenseRequestRepository.save(entity));
 	}
@@ -162,6 +163,15 @@ public class EventExpenseService {
 			throw new IllegalArgumentException("Outflow is not enabled for this event");
 		}
 		return event;
+	}
+
+	/**
+	 * The approval history records who actually acted - the signed-in user - not the request body's
+	 * free-text "actor", which anyone could set to any name (it used to default to "admin" or
+	 * "principal", so history couldn't show who approved). The request field is ignored.
+	 */
+	private static String currentActor() {
+		return AuthContext.current().getUsername();
 	}
 
 }

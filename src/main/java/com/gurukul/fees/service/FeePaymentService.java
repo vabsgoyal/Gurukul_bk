@@ -302,7 +302,8 @@ public class FeePaymentService {
 	/**
 	 * Records what the UPI app claimed (or, if it returned nothing, the user's own self-report)
 	 * once control returns to this app. See PaymentAttemptStatus and unverifiedUpiAutoMarkPaid for
-	 * why RESPONSE_SUCCESS here does not, by itself, prove the payment happened.
+	 * why RESPONSE_SUCCESS here does not, by itself, prove the payment happened - by default it is
+	 * only noted on the attempt, and staff confirm it with POST /fee-payments (see recordPayment).
 	 */
 	@Transactional
 	public PaymentAttemptResponse recordAttemptResult(String transactionRef, PaymentAttemptResultRequest request) {
@@ -312,6 +313,11 @@ public class FeePaymentService {
 				.findForUpdate(transactionRef, schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Payment attempt not found"));
 		assertCanPayOrRecord(attempt.getAssessment());
+
+		// Staff have already confirmed this payment - the payer's app can't overwrite that.
+		if (attempt.getStatus() == PaymentAttemptStatus.VERIFIED) {
+			return PaymentAttemptResponse.from(attempt);
+		}
 
 		PaymentAttemptStatus previousStatus = attempt.getStatus();
 		attempt.setStatus(request.getStatus());
@@ -324,25 +330,33 @@ public class FeePaymentService {
 		attempt = paymentAttemptRepository.save(attempt);
 
 		// Guards against double-recording a FeePayment if this endpoint is ever called twice for the
-		// same attempt (e.g. a retried request) - only the first transition into RESPONSE_SUCCESS counts.
+		// same attempt (e.g. a retried request, or SUCCESS -> FAILED -> SUCCESS): at most one payment
+		// is ever recorded per attempt, keyed on the attempt's reference in the ledger.
 		boolean alreadyRecorded = previousStatus == PaymentAttemptStatus.RESPONSE_SUCCESS
-				|| previousStatus == PaymentAttemptStatus.VERIFIED;
+				|| paymentRecordedForAttempt(attempt);
 		if (request.getStatus() == PaymentAttemptStatus.RESPONSE_SUCCESS && unverifiedUpiAutoMarkPaid && !alreadyRecorded) {
 			FeePaymentRequest paymentRequest = new FeePaymentRequest();
 			paymentRequest.setAssessmentId(attempt.getAssessment().getId());
 			paymentRequest.setAmount(attempt.getAmount());
 			paymentRequest.setPaymentMethod(PaymentMethod.UPI);
 			paymentRequest.setPaymentReference(attempt.getTransactionRef());
-			recordPayment(paymentRequest);
+			applyPayment(paymentRequest);
 		}
 
 		return PaymentAttemptResponse.from(attempt);
 	}
 
+	private boolean paymentRecordedForAttempt(PaymentAttempt attempt) {
+		return transactionRepository.existsBySchoolIdAndSourceTypeAndSourceIdAndPaymentReference(
+				schoolContext.getSchoolId(), SourceType.FEE_PAYMENT, attempt.getAssessment().getId(),
+				attempt.getTransactionRef());
+	}
+
 	/**
-	 * A STUDENT may only pay/record for their own assessment; a PARENT must be linked to the
-	 * assessment's student (mirrors listByStudent's existing check). Any other caller (EMPLOYEE, or
-	 * no principal at all in tests) passes through unchanged - same pre-existing gap noted above.
+	 * For the payer-facing endpoints (payment request, attempts): a STUDENT may only act on their own
+	 * assessment; a PARENT must be linked to the assessment's student (mirrors listByStudent's
+	 * existing check). Any other caller (EMPLOYEE, or no principal at all in tests) passes through.
+	 * Recording a payment directly is separately staff-only - see assertStaffCanRecord.
 	 */
 	private void assertCanPayOrRecord(StudentFeeAssessment assessment) {
 		AuthPrincipal principal = AuthContext.currentOrNull();
@@ -360,13 +374,59 @@ public class FeePaymentService {
 		}
 	}
 
+	/**
+	 * Staff recording a payment they've seen the money for (cash, cheque, bank transfer, or a UPI
+	 * payment a payer reported from the app). ADMIN only - a student or parent must never be able to
+	 * mark their own fee paid; they go through the payment-attempt endpoints instead.
+	 *
+	 * <p>To confirm a payer's self-reported UPI payment, send the attempt's transactionRef as
+	 * paymentReference: the attempt is then marked VERIFIED, and a second payment against the same
+	 * attempt is refused.
+	 */
 	@Transactional
 	public FeePaymentResponse recordPayment(FeePaymentRequest request) {
+		assertStaffCanRecord();
+
+		// The attempt (if this confirms one) is locked before the assessment - the same order
+		// recordAttemptResult takes them in, so the two paths can't deadlock each other.
+		PaymentAttempt attempt = request.getPaymentReference() == null ? null : paymentAttemptRepository
+				.findForUpdate(request.getPaymentReference(), schoolContext.getSchoolId())
+				.orElse(null);
+		if (attempt != null) {
+			if (!attempt.getAssessment().getId().equals(request.getAssessmentId())) {
+				throw new IllegalArgumentException("That payment reference belongs to a different fee assessment");
+			}
+			if (attempt.getStatus() == PaymentAttemptStatus.VERIFIED || paymentRecordedForAttempt(attempt)) {
+				throw new IllegalStateException("A payment has already been recorded for this payment attempt");
+			}
+		}
+
+		FeePaymentResponse response = applyPayment(request);
+
+		if (attempt != null) {
+			attempt.setStatus(PaymentAttemptStatus.VERIFIED);
+			paymentAttemptRepository.save(attempt);
+		}
+		return response;
+	}
+
+	/**
+	 * Only staff (ADMIN) may record a payment directly. No principal at all means an internal call
+	 * or a unit test - SecurityConfig already requires an ADMIN login for POST /fee-payments.
+	 */
+	private void assertStaffCanRecord() {
+		AuthPrincipal principal = AuthContext.currentOrNull();
+		if (principal != null && principal.getRole() != Role.ADMIN) {
+			throw new AccessDeniedException("Only school staff can record a fee payment");
+		}
+	}
+
+	/** Records the payment against the (row-locked) assessment. Callers have already checked who may do this. */
+	private FeePaymentResponse applyPayment(FeePaymentRequest request) {
 		// Locked until commit, so concurrent payments are checked against the remaining due one at a time.
 		StudentFeeAssessment assessment = assessmentRepository
 				.findForUpdate(request.getAssessmentId(), schoolContext.getSchoolId())
 				.orElseThrow(() -> new EntityNotFoundException("Fee assessment not found"));
-		assertCanPayOrRecord(assessment);
 
 		BigDecimal remaining = assessment.getTotalDue().subtract(assessment.getTotalPaid());
 		if (request.getAmount().compareTo(remaining) > 0) {

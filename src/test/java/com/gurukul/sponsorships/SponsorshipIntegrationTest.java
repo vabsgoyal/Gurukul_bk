@@ -1,5 +1,6 @@
 package com.gurukul.sponsorships;
 
+import com.gurukul.sponsorships.repository.SponsorshipPaymentRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +31,9 @@ class SponsorshipIntegrationTest {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private SponsorshipPaymentRepository sponsorshipPaymentRepository;
 
 	@Test
 	void sponsorshipPaymentFlow() throws Exception {
@@ -59,6 +72,54 @@ class SponsorshipIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"amount\": 30000.00, \"paymentMethod\": \"BANK_TRANSFER\"}"))
 				.andExpect(status().isOk());
+
+		// Fully received now - any further payment would overpay the pledge.
+		mockMvc.perform(post("/api/v1/sponsorships/" + sponsorshipId + "/payments")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"amount\": 1.00, \"paymentMethod\": \"BANK_TRANSFER\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void twoPaymentsAtTheSameMomentCannotOverpayAPledge() throws Exception {
+		String sponsorId = JsonPath.read(mockMvc.perform(post("/api/v1/sponsors")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\": \"Race Corp\"}"))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.id");
+		String sponsorshipId = JsonPath.read(mockMvc.perform(post("/api/v1/sponsorships")
+						.header("X-School-Id", SCHOOL_ID)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sponsorId\": \"%s\", \"purpose\": \"SPORTS\", \"pledgedAmount\": 10000.00}".formatted(sponsorId)))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.id");
+
+		// Each payment alone fits the pledge; both together would overpay it.
+		String payment = "{\"amount\": 6000.00, \"paymentMethod\": \"BANK_TRANSFER\"}";
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		List<Future<Integer>> results = new ArrayList<>();
+		for (int i = 0; i < 2; i++) {
+			Callable<Integer> pay = () -> {
+				start.await();
+				return mockMvc.perform(post("/api/v1/sponsorships/" + sponsorshipId + "/payments")
+								.header("X-School-Id", SCHOOL_ID)
+								.contentType(MediaType.APPLICATION_JSON).content(payment))
+						.andReturn().getResponse().getStatus();
+			};
+			results.add(pool.submit(pay));
+		}
+		start.countDown();
+		List<Integer> statuses = new ArrayList<>();
+		for (Future<Integer> result : results) {
+			statuses.add(result.get());
+		}
+		pool.shutdown();
+
+		assertThat(statuses).containsExactlyInAnyOrder(200, 400);
+		assertThat(sponsorshipPaymentRepository.findAll().stream()
+				.filter(p -> p.getSponsorship().getId().toString().equals(sponsorshipId))
+				.count()).isEqualTo(1);
 	}
 
 }
