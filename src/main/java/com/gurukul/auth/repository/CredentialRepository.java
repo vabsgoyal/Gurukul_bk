@@ -21,6 +21,8 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
 
 	Optional<Credential> findByOwnerTypeAndOwnerId(OwnerType ownerType, UUID ownerId);
 
+	Optional<Credential> findBySchoolIdAndOwnerTypeAndOwnerId(UUID schoolId, OwnerType ownerType, UUID ownerId);
+
 	boolean existsBySchoolIdAndRole(UUID schoolId, Role role);
 
 	List<Credential> findAllBySchoolIdAndOwnerType(UUID schoolId, OwnerType ownerType);

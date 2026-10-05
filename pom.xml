@@ -242,6 +242,8 @@
 					<systemPropertyVariables>
 						<app.otp.request-cooldown-seconds>0</app.otp.request-cooldown-seconds>
 						<app.otp.max-requests-per-hour>1000</app.otp.max-requests-per-hour>
+						<!-- Every test registers its schools from 127.0.0.1. -->
+						<app.schools.max-registrations-per-ip-per-hour>1000</app.schools.max-registrations-per-ip-per-hour>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

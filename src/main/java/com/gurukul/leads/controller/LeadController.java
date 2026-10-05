@@ -1,6 +1,7 @@
 package com.gurukul.leads.controller;
 
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.ClientIp;
 import com.gurukul.leads.dto.LeadDtos.CreateLeadRequest;
 import com.gurukul.leads.dto.LeadDtos.LeadReceived;
 import com.gurukul.leads.dto.LeadDtos.LeadResponse;
@@ -35,7 +36,7 @@ public class LeadController {
 	@Operation(summary = "Submit a demo request",
 			description = "Public, no auth or X-School-Id. Rate-limited per address; returns 429 when over the limit.")
 	public ApiResponse<LeadReceived> submit(@Valid @RequestBody CreateLeadRequest request, HttpServletRequest http) {
-		leadService.submit(request, clientIp(http));
+		leadService.submit(request, ClientIp.of(http));
 		return ApiResponse.success(new LeadReceived("received"), "Thanks! We'll be in touch within one working day.");
 	}
 
@@ -45,23 +46,6 @@ public class LeadController {
 	public ApiResponse<List<LeadResponse>> list(
 			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
 		return ApiResponse.success(leadService.list(authorization));
-	}
-
-	/**
-	 * nginx fronts the app and appends the real peer address to X-Forwarded-For, so the LAST entry
-	 * is the one our proxy saw. Earlier entries are client-supplied and trivially spoofable, which
-	 * would let anyone rotate them to dodge the rate limit.
-	 */
-	static String clientIp(HttpServletRequest request) {
-		String forwarded = request.getHeader("X-Forwarded-For");
-		if (forwarded != null && !forwarded.isBlank()) {
-			String[] parts = forwarded.split(",");
-			String last = parts[parts.length - 1].trim();
-			if (!last.isEmpty()) {
-				return last;
-			}
-		}
-		return request.getRemoteAddr();
 	}
 
 }

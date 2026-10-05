@@ -36,7 +36,9 @@ public class ParentController {
 	}
 
 	@PostMapping("/api/v1/parents/me/children")
-	@Operation(summary = "Link another child to my account (e.g. a sibling), by roll number - no re-approval needed")
+	@Operation(summary = "Link another child to my account (e.g. a sibling), by registration number - no re-approval needed",
+			description = "The child's parentContact on file must equal this parent's phone (400 otherwise); 5 failed tries "
+					+ "per registration number lock it for 15 minutes.")
 	public ApiResponse<Void> linkChild(@Valid @RequestBody LinkChildRequest request) {
 		AuthPrincipal principal = requireParent(AuthContext.current());
 		registrationService.linkAdditionalChild(principal.getOwnerId(), request);

@@ -4,6 +4,7 @@ import com.gurukul.auth.entity.Role;
 import com.gurukul.auth.security.AuthContext;
 import com.gurukul.auth.security.AuthPrincipal;
 import com.gurukul.common.ApiResponse;
+import com.gurukul.common.ClientIp;
 import com.gurukul.schools.dto.SchoolLocationUpdateRequest;
 import com.gurukul.schools.dto.SchoolLogoDtos.PresignLogoRequest;
 import com.gurukul.schools.dto.SchoolLogoDtos.PresignLogoResponse;
@@ -14,11 +15,13 @@ import com.gurukul.schools.dto.SchoolResponse;
 import com.gurukul.schools.dto.SchoolSearchResponse;
 import com.gurukul.schools.dto.SchoolUpdateRequest;
 import com.gurukul.schools.service.SchoolLogoService;
+import com.gurukul.schools.service.SchoolRegistrationRateLimiter;
 import com.gurukul.schools.service.SchoolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -46,6 +49,7 @@ public class SchoolController {
 
 	private final SchoolService schoolService;
 	private final SchoolLogoService schoolLogoService;
+	private final SchoolRegistrationRateLimiter registrationRateLimiter;
 
 	@PostMapping
 	@Operation(
@@ -57,9 +61,15 @@ public class SchoolController {
 	)
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "School registered"),
-			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed")
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+					description = "Same school name + pincode, or a principal/admin phone that is already a school admin"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429",
+					description = "Too many registrations from this address in the last hour")
 	})
-	public ApiResponse<SchoolRegistrationResponse> register(@Valid @RequestBody SchoolRegistrationRequest request) {
+	public ApiResponse<SchoolRegistrationResponse> register(
+			@Valid @RequestBody SchoolRegistrationRequest request, HttpServletRequest http) {
+		registrationRateLimiter.checkAndRecord(ClientIp.of(http));
 		return ApiResponse.success(schoolService.register(request), "School registered");
 	}
 
@@ -69,7 +79,8 @@ public class SchoolController {
 			description = """
 					Returns school profile and live counts (students, class-sections, teachers).
 					Counts are computed from related tables, not stored on the school row.
-					No X-School-Id header required.
+					Requires a login at this school (403 otherwise). Bank account, IFSC, account holder and
+					UPI override are returned to ADMIN only; other roles get them as null.
 					"""
 	)
 	@ApiResponses({
@@ -81,10 +92,14 @@ public class SchoolController {
 			@PathVariable UUID id) {
 		// The full profile includes the bank account and UPI id fees are paid into, so only this
 		// school's own users may read it - not a user of another school who changes the path id.
-		if (!id.equals(AuthContext.current().getSchoolId())) {
+		AuthPrincipal principal = AuthContext.current();
+		if (!id.equals(principal.getSchoolId())) {
 			throw new AccessDeniedException("You can only view your own school");
 		}
-		return ApiResponse.success(schoolService.getById(id));
+		SchoolResponse school = schoolService.getById(id);
+		// Bank account, IFSC and UPI override are the admin's to see and edit; everyone else gets the
+		// rest of the profile (name, logo, contacts, location) with those fields null.
+		return ApiResponse.success(principal.getRole() == Role.ADMIN ? school : school.withoutBankDetails());
 	}
 
 	@PutMapping("/{id}")

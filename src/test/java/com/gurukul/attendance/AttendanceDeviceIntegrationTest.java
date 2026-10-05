@@ -1,6 +1,7 @@
 package com.gurukul.attendance;
 
 import com.gurukul.auth.AuthTestSupport;
+import com.gurukul.schools.SchoolTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,10 +46,12 @@ class AttendanceDeviceIntegrationTest {
 								  "contactPhone": "9222222222",
 								  "principalName": "Dr. Device Principal",
 								  "directorName": "Mr. Device Director",
-								  "principalPhone": "9222222222",
-								  "adminPhone": "8222222222"
+								  "principalPhone": "9%s",
+								  "adminPhone": "8%s"
 								}
-								""".formatted(namePrefix, namePrefix.toLowerCase())))
+								""".formatted(namePrefix, namePrefix.toLowerCase(),
+								// Registration refuses a phone that is already some school's admin.
+								SchoolTestSupport.randomDigits(9), SchoolTestSupport.randomDigits(9))))
 				.andExpect(status().isOk())
 				.andReturn();
 		return result.getResponse().getContentAsString();

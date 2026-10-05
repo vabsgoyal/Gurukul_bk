@@ -14,6 +14,8 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
 
 	Optional<ApprovalRequest> findByIdAndSchoolId(UUID id, UUID schoolId);
 
+	Optional<ApprovalRequest> findBySchoolIdAndEntityTypeAndEntityId(UUID schoolId, String entityType, UUID entityId);
+
 	List<ApprovalRequest> findAllBySchoolIdAndEntityTypeAndStatusOrderByCreatedAtAsc(
 			UUID schoolId, String entityType, ApprovalStatus status);
 
