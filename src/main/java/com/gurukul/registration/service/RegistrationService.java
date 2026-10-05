@@ -245,14 +245,28 @@ public class RegistrationService {
 
 	/**
 	 * An already-approved parent linking another child (e.g. a sibling enrolling later) - no
-	 * further approval needed, since the parent identity itself is already trusted; only the
-	 * registrationNumber lookup needs to succeed.
+	 * further approval needed, but the child's parentContact on file must be the phone this parent
+	 * registered with (the same check as the original claim, behind the same per-student rate
+	 * limit). A registration number alone isn't secret - it's printed on ID cards and report cards -
+	 * so without this any parent could attach any student and read their marks, fees and attendance.
 	 */
 	@Transactional
 	public void linkAdditionalChild(UUID parentId, LinkChildRequest request) {
 		UUID schoolId = schoolContext.getSchoolId();
-		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, request.getStudentRegistrationNumber())
+		String registrationNumber = request.getStudentRegistrationNumber();
+		Parent parent = parentRepository.findByIdAndSchoolId(parentId, schoolId)
+				.orElseThrow(() -> new EntityNotFoundException("Parent not found"));
+		if (parentClaimRateLimiter.isLocked(schoolId, registrationNumber)) {
+			throw new IllegalArgumentException("Too many failed attempts - try again later");
+		}
+		Student student = studentRepository.findBySchoolIdAndRegistrationNumber(schoolId, registrationNumber)
 				.orElseThrow(() -> new EntityNotFoundException("No student found with that registration number"));
+		if (parent.getPhone() == null || !parent.getPhone().equals(student.getParentContact())) {
+			parentClaimRateLimiter.recordFailure(schoolId, registrationNumber);
+			throw new IllegalArgumentException("This child's parent contact number on school records doesn't match "
+					+ "your account's phone number - ask the school to update it, then try again");
+		}
+		parentClaimRateLimiter.recordSuccess(schoolId, registrationNumber);
 		if (parentStudentLinkRepository.existsByParentIdAndStudentId(parentId, student.getId())) {
 			throw new IllegalArgumentException("This child is already linked to your account");
 		}
@@ -279,7 +293,7 @@ public class RegistrationService {
 	public void approve(String entityType, UUID entityId, String approvedBy, String comment) {
 		workflowService.approve(entityType, entityId, approvedBy, comment);
 		Credential credential = credentialRepository
-				.findByOwnerTypeAndOwnerId(ownerTypeFor(entityType), entityId)
+				.findBySchoolIdAndOwnerTypeAndOwnerId(schoolContext.getSchoolId(), ownerTypeFor(entityType), entityId)
 				.orElseThrow(() -> new EntityNotFoundException("Credential not found for this registration"));
 		credential.setEnabled(true);
 		credentialRepository.save(credential);

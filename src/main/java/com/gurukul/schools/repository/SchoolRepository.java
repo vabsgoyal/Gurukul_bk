@@ -12,4 +12,6 @@ public interface SchoolRepository extends JpaRepository<School, UUID> {
 
 	List<School> findAllByActiveTrueAndNameContainingIgnoreCaseOrderByNameAsc(String name);
 
+	boolean existsByNameIgnoreCaseAndPincode(String name, String pincode);
+
 }

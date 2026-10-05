@@ -84,6 +84,18 @@ public class SchoolResponse {
 	@Schema(description = "When the school record was last updated")
 	private Instant updatedAt;
 
+	/**
+	 * The same profile with the fee-receiving bank account and UPI override blanked - for this
+	 * school's non-admin users (teachers, students), who need the name, logo, contacts and location
+	 * but not where the money goes. Fee payments build their UPI intent server-side, so nobody but
+	 * the admin's Fee Payment Settings screen reads these fields.
+	 */
+	public SchoolResponse withoutBankDetails() {
+		return new SchoolResponse(id, name, address, city, state, pincode, contactEmail, contactPhone,
+				principalName, directorName, null, null, null, null, latitude, longitude, geofenceRadiusMeters,
+				logoUrl, studentCount, classSectionCount, teacherCount, createdAt, updatedAt);
+	}
+
 	public static SchoolResponse from(School school, String logoUrl, long studentCount, long classSectionCount, long teacherCount) {
 		return new SchoolResponse(
 				school.getId(),

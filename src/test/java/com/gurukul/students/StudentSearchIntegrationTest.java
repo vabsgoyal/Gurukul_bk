@@ -1,5 +1,6 @@
 package com.gurukul.students;
 
+import com.gurukul.schools.SchoolTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -81,7 +82,7 @@ class StudentSearchIntegrationTest {
 
 		String otherSchool = """
 				{
-				  "name": "Other School",
+				  "name": "Other Search School %s",
 				  "address": "1 Other Street",
 				  "city": "Delhi",
 				  "state": "Delhi",
@@ -90,10 +91,11 @@ class StudentSearchIntegrationTest {
 				  "contactPhone": "9000000098",
 				  "principalName": "Dr. Other",
 				  "directorName": "Mr. Other",
-				  "principalPhone": "9000000098",
-				  "adminPhone": "8000000098"
+				  "principalPhone": "9%s",
+				  "adminPhone": "8%s"
 				}
-				""";
+				""".formatted(SchoolTestSupport.randomDigits(6), SchoolTestSupport.randomDigits(9),
+				SchoolTestSupport.randomDigits(9));
 
 		var result = mockMvc.perform(post("/api/v1/schools")
 						.contentType(MediaType.APPLICATION_JSON)

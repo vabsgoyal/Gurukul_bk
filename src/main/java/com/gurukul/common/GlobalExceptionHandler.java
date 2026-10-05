@@ -85,6 +85,19 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(ApiResponse.error(ex.getMessage(), "RATE_LIMITED"));
 	}
 
+	@ExceptionHandler(com.gurukul.schools.service.SchoolRegistrationRateLimitedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleSchoolRegistrationRateLimited(
+			com.gurukul.schools.service.SchoolRegistrationRateLimitedException ex) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(ApiResponse.error(ex.getMessage(), "RATE_LIMITED"));
+	}
+
+	@ExceptionHandler(com.gurukul.schools.service.SchoolAlreadyRegisteredException.class)
+	public ResponseEntity<ApiResponse<Void>> handleSchoolAlreadyRegistered(
+			com.gurukul.schools.service.SchoolAlreadyRegisteredException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage(),
+				com.gurukul.schools.service.SchoolAlreadyRegisteredException.ERROR_CODE));
+	}
+
 	/** 409 with the list of clashing slots in data, so the editor can highlight each one. */
 	@ExceptionHandler(com.gurukul.timetable.service.TimetableClashException.class)
 	public ResponseEntity<ApiResponse<java.util.List<com.gurukul.timetable.dto.TimetableDtos.ClashResponse>>> handleTimetableClash(

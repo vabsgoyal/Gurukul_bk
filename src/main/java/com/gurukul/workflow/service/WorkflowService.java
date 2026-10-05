@@ -24,7 +24,8 @@ public class WorkflowService {
 
 	@Transactional
 	public ApprovalRequest getOrCreate(String entityType, UUID entityId) {
-		return approvalRequestRepository.findByEntityTypeAndEntityId(entityType, entityId)
+		return approvalRequestRepository
+				.findBySchoolIdAndEntityTypeAndEntityId(schoolContext.getSchoolId(), entityType, entityId)
 				.orElseGet(() -> {
 					ApprovalRequest request = new ApprovalRequest();
 					request.setSchoolId(schoolContext.getSchoolId());
@@ -73,8 +74,14 @@ public class WorkflowService {
 		return approvalRequestRepository.save(request);
 	}
 
+	/**
+	 * Scoped to the caller's school: entity ids (e.g. a pending parent's id from another school's
+	 * registration inbox) are not secret, so an unscoped lookup let one school's admin approve or
+	 * reject another school's request. A request from another school is reported as not found.
+	 */
 	public ApprovalRequest findByEntity(String entityType, UUID entityId) {
-		return approvalRequestRepository.findByEntityTypeAndEntityId(entityType, entityId)
+		return approvalRequestRepository
+				.findBySchoolIdAndEntityTypeAndEntityId(schoolContext.getSchoolId(), entityType, entityId)
 				.orElseThrow(() -> new EntityNotFoundException("Approval request not found"));
 	}
 

@@ -63,6 +63,7 @@ public class SchoolService {
 		if (request.getPrincipalPhone().equals(request.getAdminPhone())) {
 			throw new IllegalArgumentException("principalPhone and adminPhone must be different numbers");
 		}
+		requireNotAlreadyRegistered(request);
 
 		School school = new School();
 		school.setName(request.getName());
@@ -87,6 +88,24 @@ public class SchoolService {
 				request.getAdminPhone(), request.getAdminUsername(), request.getAdminPassword());
 
 		return new SchoolRegistrationResponse(toResponse(saved), principalLogin, adminLogin);
+	}
+
+	/**
+	 * Registration is public and hands out two ADMIN logins, so refuse what looks like a second copy
+	 * of a school that's already here: same name in the same pincode, or a principal/admin phone that
+	 * already logs in as some school's admin (OTP login is per school, so a reused number would also
+	 * make that person's login ambiguous).
+	 */
+	private void requireNotAlreadyRegistered(SchoolRegistrationRequest request) {
+		if (schoolRepository.existsByNameIgnoreCaseAndPincode(request.getName().trim(), request.getPincode().trim())) {
+			throw new SchoolAlreadyRegisteredException("A school named \"" + request.getName().trim()
+					+ "\" is already registered in pincode " + request.getPincode().trim()
+					+ " - ask its admin for a login, or contact Gurukul support");
+		}
+		if (employeeRepository.existsAdminWithContactPhoneIn(List.of(request.getPrincipalPhone(), request.getAdminPhone()))) {
+			throw new SchoolAlreadyRegisteredException("This principal or admin phone number is already an admin login "
+					+ "for a school on Gurukul - log in with it instead, or contact Gurukul support");
+		}
 	}
 
 	private LoginResponse createAdminLogin(
