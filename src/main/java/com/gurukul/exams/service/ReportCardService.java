@@ -242,8 +242,12 @@ public class ReportCardService {
 	private ReportCardResponse computeReportCard(Student student, ClassSection section, String term, boolean published,
 			Instant publishedAt, List<AssessmentResult> results, BigDecimal attendancePercentage,
 			Function<BigDecimal, String> grades) {
+		// A result with no marks that isn't marked absent hasn't been entered yet - leave it out of
+		// both obtained and max, otherwise a partly entered subject reads as a 0/max failure.
+		// (Absent still counts as 0 out of max.)
 		Map<UUID, List<AssessmentResult>> bySubject = results.stream()
 				.filter(r -> r.getAssessment().getSubject() != null)
+				.filter(r -> r.isAbsent() || r.getMarksObtained() != null)
 				.collect(Collectors.groupingBy(r -> r.getAssessment().getSubject().getId()));
 
 		List<SubjectResultResponse> subjectRows = bySubject.values().stream()

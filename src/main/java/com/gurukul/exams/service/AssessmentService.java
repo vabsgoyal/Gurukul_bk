@@ -66,13 +66,25 @@ public class AssessmentService {
 	@Transactional
 	public AssessmentResponse update(UUID id, AssessmentRequest request) {
 		Assessment assessment = findScoped(id);
+		UUID sectionId = assessment.getSection().getId();
+		String oldTerm = assessment.getTerm();
+		String newTerm = normalizeTerm(request.getTerm());
+		requireTermNotPublished(sectionId, oldTerm,
+				"Report cards for " + oldTerm + " have already been published - its assessments can't be edited");
+		if (newTerm != null && !newTerm.equals(oldTerm)) {
+			requireTermNotPublished(sectionId, newTerm,
+					"Report cards for " + newTerm + " have already been published - assessments can't be moved into it");
+		}
 		applyRequest(assessment, request);
 		return AssessmentResponse.from(assessmentRepository.save(assessment));
 	}
 
 	@Transactional
 	public void delete(UUID id) {
-		assessmentRepository.delete(findScoped(id));
+		Assessment assessment = findScoped(id);
+		requireTermNotPublished(assessment.getSection().getId(), assessment.getTerm(),
+				"Report cards for " + assessment.getTerm() + " have already been published - its assessments can't be deleted");
+		assessmentRepository.delete(assessment);
 	}
 
 	/**
@@ -101,6 +113,8 @@ public class AssessmentService {
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
 		requireCanManageTerms(section);
 		String normalized = normalizeTerm(term);
+		requireTermNotPublished(sectionId, normalized,
+				"Report cards for " + normalized + " have already been published - assessments can't be added to it");
 		UUID schoolId = schoolContext.getSchoolId();
 		List<Assessment> untermed = assessmentRepository.findAllBySchoolIdAndSectionIdAndTermIsNull(schoolId, sectionId);
 		untermed.forEach(a -> a.setTerm(normalized));
@@ -115,6 +129,16 @@ public class AssessmentService {
 				&& section.getClassTeacher().getId().equals(principal.getOwnerId());
 		if (principal.getRole() != Role.ADMIN && !isClassTeacher) {
 			throw new AccessDeniedException("Only an admin or this section's class teacher can backfill assessment terms");
+		}
+	}
+
+	/**
+	 * A published (section, term) is locked: changing, removing or adding assessments in it would
+	 * silently change report cards students and parents have already seen.
+	 */
+	private void requireTermNotPublished(UUID sectionId, String term, String message) {
+		if (term != null && reportCardPublicationRepository.existsByClassSection_IdAndTerm(sectionId, term)) {
+			throw new IllegalStateException(message);
 		}
 	}
 

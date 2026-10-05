@@ -135,14 +135,16 @@ class ReportCardTermMatchingIntegrationTest {
 				.andExpect(jsonPath("$.data.published").value(true))
 				.andExpect(jsonPath("$.data.subjects.length()").value(0));
 
-		// The class teacher discovers and fixes this: lists terms (correctly shows none yet, since
-		// the assessment has no term), then backfills every untermed assessment in the section.
+		// The class teacher discovers this: lists terms (correctly shows none yet, since the
+		// assessment has no term).
 		mockMvc.perform(get("/api/v1/class-sections/" + sectionId + "/terms")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()").value(0));
 
+		// Backfilling into the already-published "Term 1" is refused - it would silently change a
+		// report card students have already seen.
 		mockMvc.perform(patch("/api/v1/class-sections/" + sectionId + "/assessments/backfill-term")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer)
@@ -150,16 +152,34 @@ class ReportCardTermMatchingIntegrationTest {
 						.content("""
 								{"term": "Term 1"}
 								"""))
+				.andExpect(status().isBadRequest());
+
+		// Backfilling into a not-yet-published term works.
+		mockMvc.perform(patch("/api/v1/class-sections/" + sectionId + "/assessments/backfill-term")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"term": "Term 1 Final"}
+								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.assessmentsUpdated").value(1));
 
-		// Now the terms list shows it, published.
 		mockMvc.perform(get("/api/v1/class-sections/" + sectionId + "/terms")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].term").value("Term 1"))
-				.andExpect(jsonPath("$.data[0].published").value(true));
+				.andExpect(jsonPath("$.data[0].term").value("Term 1 Final"))
+				.andExpect(jsonPath("$.data[0].published").value(false));
+
+		mockMvc.perform(post("/api/v1/class-sections/" + sectionId + "/report-cards/publish")
+						.header("X-School-Id", SCHOOL_ID)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + teacherBearer)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"term": "Term 1 Final"}
+								"""))
+				.andExpect(status().isOk());
 
 		// And the student's report card - fetched via the auto-resolved latest published term,
 		// exactly like the fixed ReportCardScreen does, with no term guessed/typed at all - now
@@ -168,12 +188,12 @@ class ReportCardTermMatchingIntegrationTest {
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + studentBearer))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].term").value("Term 1"));
+				.andExpect(jsonPath("$.data[0].term").value("Term 1 Final"));
 
 		mockMvc.perform(get("/api/v1/students/" + studentId + "/report-card")
 						.header("X-School-Id", SCHOOL_ID)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + studentBearer)
-						.param("term", "Term 1"))
+						.param("term", "Term 1 Final"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.published").value(true))
 				.andExpect(jsonPath("$.data.subjects.length()").value(1))

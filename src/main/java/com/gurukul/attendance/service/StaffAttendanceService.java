@@ -128,6 +128,11 @@ public class StaffAttendanceService {
 					newRecord.setAttendanceDate(today);
 					return newRecord;
 				});
+		if (isAdminEntered(record)) {
+			throw new SelfMarkConflictException(
+					"An admin has already marked your attendance today as " + record.getStatus()
+							+ ". Ask an admin if this needs to change");
+		}
 		record.setStatus(AttendanceStatus.PRESENT);
 		record.setMarkedByEmployee(employee);
 		record.setSelfMarked(true);
@@ -138,6 +143,15 @@ public class StaffAttendanceService {
 		record.setMethod(null);
 		StaffAttendanceRecord saved = staffAttendanceRecordRepository.save(record);
 		return StaffAttendanceRecordResponse.from(saved);
+	}
+
+	/**
+	 * A saved record that was neither a self check-in nor a device scan came from the admin-only bulk
+	 * entry (markStaffAttendance) - that decision must not be replaced by the teacher's own check-in.
+	 * A new, unsaved record (id null) has no source yet.
+	 */
+	private static boolean isAdminEntered(StaffAttendanceRecord record) {
+		return record.getId() != null && !record.isSelfMarked() && record.getMarkedByDevice() == null;
 	}
 
 	/**

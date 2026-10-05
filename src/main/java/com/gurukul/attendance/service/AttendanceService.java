@@ -90,7 +90,7 @@ public class AttendanceService {
 			}
 		}
 
-		return getSectionRoster(sectionId, request.getDate());
+		return buildRoster(section, request.getDate());
 	}
 
 	/**
@@ -126,8 +126,14 @@ public class AttendanceService {
 
 	@Transactional(readOnly = true)
 	public SectionAttendanceResponse getSectionRoster(UUID sectionId, LocalDate date) {
-		UUID schoolId = schoolContext.getSchoolId();
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
+		requireCanAccessSectionAttendance(section);
+		return buildRoster(section, date);
+	}
+
+	private SectionAttendanceResponse buildRoster(ClassSection section, LocalDate date) {
+		UUID schoolId = schoolContext.getSchoolId();
+		UUID sectionId = section.getId();
 
 		List<Student> students = studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, sectionId);
 		Map<UUID, AttendanceRecord> recordsByStudentId = attendanceRecordRepository
@@ -193,6 +199,7 @@ public class AttendanceService {
 	public SectionAttendanceHistoryResponse getSectionHistory(UUID sectionId, LocalDate from, LocalDate to) {
 		UUID schoolId = schoolContext.getSchoolId();
 		ClassSection section = classSectionService.getScopedClassSection(sectionId);
+		requireCanAccessSectionAttendance(section);
 
 		List<Student> students = studentRepository.findAllBySchoolIdAndClassSectionId(schoolId, sectionId).stream()
 				.sorted(Comparator.comparing(Student::getRollNumber))
@@ -227,6 +234,27 @@ public class AttendanceService {
 				section.getId(), section.getClassName(), section.getSection(), section.getAcademicYear(), from, to, summaries);
 	}
 
+	/**
+	 * Section roster/history reads follow the same rule as marking (see resolveMarkingTeacher): an
+	 * admin can read any section, a teacher only the section they are class teacher of. Without this
+	 * any teacher in the school could read every section's register.
+	 */
+	private void requireCanAccessSectionAttendance(ClassSection section) {
+		AuthPrincipal principal = AuthContext.current();
+		if (principal.getRole() == Role.ADMIN) {
+			return;
+		}
+		if (!isClassTeacher(section, principal)) {
+			throw new AccessDeniedException("Only this section's class teacher can view its attendance");
+		}
+	}
+
+	private static boolean isClassTeacher(ClassSection section, AuthPrincipal principal) {
+		return principal.getRole() == Role.TEACHER
+				&& section.getClassTeacher() != null
+				&& section.getClassTeacher().getId().equals(principal.getOwnerId());
+	}
+
 	private Employee resolveMarkingTeacher(ClassSection section, UUID requestedTeacherId) {
 		AuthPrincipal principal = AuthContext.current();
 		if (principal.getRole() == Role.ADMIN) {
@@ -235,7 +263,7 @@ public class AttendanceService {
 		}
 		// Caller is a TEACHER (the only other role permitted to hit this endpoint) - must be this
 		// section's own class teacher; the requested teacherId in the body, if any, is ignored.
-		if (section.getClassTeacher() == null || !section.getClassTeacher().getId().equals(principal.getOwnerId())) {
+		if (!isClassTeacher(section, principal)) {
 			throw new AccessDeniedException("Only this section's class teacher can mark its attendance");
 		}
 		return employeeService.getScopedEntity(principal.getOwnerId());
