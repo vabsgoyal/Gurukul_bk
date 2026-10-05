@@ -111,21 +111,11 @@ public class StudentResponse {
 	 * as any other field they're not entitled to. {@code cipher} may be null when isAdmin is false.
 	 */
 	public static StudentResponse from(Student student, boolean isAdmin, TokenCipher cipher) {
-		return from(student, isAdmin, isAdmin, cipher);
-	}
-
-	/**
-	 * Registration number and the sensitive RTE fields (Aadhaar, bank, ...) are gated separately:
-	 * whoever adds a student gets the registration number back to share, but only an admin ever
-	 * sees the decrypted sensitive fields.
-	 */
-	public static StudentResponse from(Student student, boolean includeRegistrationNumber, boolean isAdmin,
-			TokenCipher cipher) {
 		return new StudentResponse(
 				student.getId(),
 				student.getSchoolId(),
 				student.getRollNumber(),
-				includeRegistrationNumber ? student.getRegistrationNumber() : null,
+				isAdmin ? student.getRegistrationNumber() : null,
 				student.getName(),
 				student.getDob(),
 				student.getGender().name(),

@@ -1,6 +1,5 @@
 package com.gurukul.auth;
 
-import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,17 +89,33 @@ class AdminOnlyRulesIntegrationTest {
 	}
 
 	@Test
-	void aTeacherAddingAStudentGetsTheRegistrationNumberButNoSensitiveFields() throws Exception {
-		String created = mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON).content("""
-						{"name": "Teacher Added", "dob": "2013-01-01", "gender": "FEMALE", "address": "1 Road",
-						 "parentName": "Parent", "parentContact": "9876512345", "classSectionId": "%s",
-						 "admissionDate": "2026-04-01", "aadhaarNumber": "123412341234"}
-						""".formatted(SECTION)), teacher))
+	void adminsAndTeachersAddStudentsButOnlyAnAdminGetsTheSensitiveFieldsBack() throws Exception {
+		String body = """
+				{"name": "%s", "dob": "2013-01-01", "gender": "FEMALE", "address": "1 Road",
+				 "parentName": "Parent", "parentContact": "%s", "classSectionId": "%s",
+				 "admissionDate": "2026-04-01", "aadhaarNumber": "123412341234", "bankAccountNumber": "5566778899"}
+				""";
+		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+						.content(body.formatted("Not Added", "9876512340", SECTION)), student))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/students").header("X-School-Id", SCHOOL_ID).header(HttpHeaders.AUTHORIZATION, "")
+						.contentType(MediaType.APPLICATION_JSON).content(body.formatted("Not Added", "9876512341", SECTION)))
+				.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+						.content(body.formatted("Teacher Added", "9876512342", SECTION)), teacher))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.registrationNumber").exists())
+				.andExpect(jsonPath("$.data.id").isNotEmpty())
+				.andExpect(jsonPath("$.data.registrationNumber").doesNotExist())
 				.andExpect(jsonPath("$.data.aadhaarNumber").doesNotExist())
-				.andReturn().getResponse().getContentAsString();
-		JsonPath.read(created, "$.data.id");
+				.andExpect(jsonPath("$.data.bankAccountNumber").doesNotExist());
+
+		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+						.content(body.formatted("Admin Added", "9876512345", SECTION)), admin))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.registrationNumber").isNotEmpty())
+				.andExpect(jsonPath("$.data.aadhaarNumber").value("123412341234"))
+				.andExpect(jsonPath("$.data.bankAccountNumber").value("5566778899"));
 	}
 
 	@Test
