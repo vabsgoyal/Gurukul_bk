@@ -1,6 +1,7 @@
 package com.gurukul.expenses.infrastructure;
 
 import com.gurukul.auth.AuthTestSupport;
+import com.gurukul.common.SchoolContext;
 import com.gurukul.expenses.infrastructure.service.InfraExpenseService;
 import com.gurukul.workflow.entity.ApprovalHistory;
 import com.gurukul.workflow.entity.ApprovalRequest;
@@ -39,6 +40,9 @@ class InfraExpenseIntegrationTest {
 
 	@Autowired
 	private ApprovalHistoryRepository approvalHistoryRepository;
+
+	@Autowired
+	private SchoolContext schoolContext;
 
 	@Test
 	void infraExpenseWorkflow() throws Exception {
@@ -144,7 +148,15 @@ class InfraExpenseIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("APPROVED"));
 
-		ApprovalRequest approval = workflowService.findByEntity(InfraExpenseService.ENTITY_TYPE, UUID.fromString(requestId));
+		// Approval lookups are school-scoped; outside a request the school has to be set by hand.
+		schoolContext.setSchoolId(UUID.fromString(SCHOOL_ID));
+		ApprovalRequest approval;
+		try {
+			approval = workflowService.findByEntity(InfraExpenseService.ENTITY_TYPE, UUID.fromString(requestId));
+		}
+		finally {
+			schoolContext.clear();
+		}
 		assertThat(approval.getSubmittedBy()).isEqualTo(AuthTestSupport.DEV_ADMIN_USERNAME);
 		assertThat(approval.getApprovedBy()).isEqualTo(approverUsername);
 		assertThat(approvalHistoryRepository.findAll().stream()
