@@ -119,19 +119,23 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse create(StudentRequest request) {
-		// Adding a student is admin-only (also enforced in SecurityConfig). Checked here too so the
-		// rule holds whatever the route config says. The response uses the caller's real role, like
-		// every other read, so the registrationNumber and decrypted Aadhaar/bank fields go to admins only.
+		// Admins and teachers add students (teachers inline from the app); checked here too so the rule
+		// holds whatever the route config says. The response uses the caller's real role, like every
+		// other read, so the registrationNumber and decrypted Aadhaar/bank fields go to admins only.
 		// createEntity itself stays unguarded: bulk import and admissions call it after their own checks.
-		if (!isAdmin()) {
-			throw new AccessDeniedException("Only an admin can add a student");
+		if (!isAdmin() && !hasRole(Role.TEACHER)) {
+			throw new AccessDeniedException("Only an admin or teacher can add a student");
 		}
 		return StudentResponse.from(createEntity(request), isAdmin(), tokenCipher);
 	}
 
 	private boolean isAdmin() {
+		return hasRole(Role.ADMIN);
+	}
+
+	private static boolean hasRole(Role role) {
 		AuthPrincipal principal = AuthContext.currentOrNull();
-		return principal != null && principal.getRole() == Role.ADMIN;
+		return principal != null && principal.getRole() == role;
 	}
 
 	private static boolean isSelf(UUID studentId) {

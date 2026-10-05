@@ -19,8 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Money, procurement, reports, adding students and roster deletes are admin-only; teachers keep the
- * inline section/subject writes the app gives them; students and parents get neither.
+ * Money, procurement, reports and roster deletes are admin-only; teachers keep the inline roster
+ * and structure writes the app gives them; students and parents get neither.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -89,17 +89,26 @@ class AdminOnlyRulesIntegrationTest {
 	}
 
 	@Test
-	void onlyAnAdminCanAddAStudentAndOnlyTheAdminGetsTheSensitiveFieldsBack() throws Exception {
+	void adminsAndTeachersAddStudentsButOnlyAnAdminGetsTheSensitiveFieldsBack() throws Exception {
 		String body = """
 				{"name": "%s", "dob": "2013-01-01", "gender": "FEMALE", "address": "1 Road",
 				 "parentName": "Parent", "parentContact": "%s", "classSectionId": "%s",
 				 "admissionDate": "2026-04-01", "aadhaarNumber": "123412341234", "bankAccountNumber": "5566778899"}
 				""";
-		for (String bearer : new String[] {teacher, student}) {
-			mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
-							.content(body.formatted("Not Added", "9876512340", SECTION)), bearer))
-					.andExpect(status().isForbidden());
-		}
+		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+						.content(body.formatted("Not Added", "9876512340", SECTION)), student))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/students").header("X-School-Id", SCHOOL_ID).header(HttpHeaders.AUTHORIZATION, "")
+						.contentType(MediaType.APPLICATION_JSON).content(body.formatted("Not Added", "9876512341", SECTION)))
+				.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
+						.content(body.formatted("Teacher Added", "9876512342", SECTION)), teacher))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.id").isNotEmpty())
+				.andExpect(jsonPath("$.data.registrationNumber").doesNotExist())
+				.andExpect(jsonPath("$.data.aadhaarNumber").doesNotExist())
+				.andExpect(jsonPath("$.data.bankAccountNumber").doesNotExist());
 
 		mockMvc.perform(as(post("/api/v1/students").contentType(MediaType.APPLICATION_JSON)
 						.content(body.formatted("Admin Added", "9876512345", SECTION)), admin))
