@@ -260,13 +260,37 @@ public class SecurityConfig {
 						// Recording a fee payment marks the bill paid: staff only. Students and parents pay
 						// through payment requests/attempts above, never by recording a payment themselves.
 						.requestMatchers(HttpMethod.POST, "/api/v1/fee-payments").hasRole("ADMIN")
-						// Roster and structure writes. Teachers add students and create sections/subjects
-						// inline (ClassSectionPicker, SubjectPicker); deleting a student is admin-only, as in the app.
+						// Roster and structure writes. Teachers add students (product decision - the app shows
+						// them an Add button) and create sections/subjects inline (ClassSectionPicker,
+						// SubjectPicker); deleting or transferring a student is admin-only, as in the app
+						// (StudentDetailScreen shows Transfer/Delete to admins only).
 						.requestMatchers(HttpMethod.POST, "/api/v1/students").hasAnyRole("ADMIN", "TEACHER")
 						.requestMatchers(HttpMethod.DELETE, "/api/v1/students/*").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.PATCH, "/api/v1/students/*/class-section").hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.PATCH, "/api/v1/students/*/class-section").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/v1/class-sections", "/api/v1/class-sections/*/subjects",
 								"/api/v1/subjects").hasAnyRole("ADMIN", "TEACHER")
+						// Editing a whole student or staff record (class-section, status, bank account, phone...)
+						// is admin-only - the app's only Edit buttons for these are admin-only, and own-profile
+						// edits go through /api/v1/id-cards/*/profile instead. Previously a student could PUT
+						// their own record into another section or ALUMNI, and a teacher could change their own
+						// salary bank account. Bulk import and invites were already admin-checked in the
+						// controller; the matcher backs that up.
+						.requestMatchers(HttpMethod.PUT, "/api/v1/students/*").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/students/bulk", "/api/v1/students/*/invite").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/employees/*").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/employees/*/invite").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.GET, "/api/v1/employees/*/invite").hasRole("ADMIN")
+						// Adding staff: admin, or a teacher adding a colleague by name from EmployeePicker
+						// (EmployeeService still keeps a phone number - i.e. a new login - admin-only).
+						.requestMatchers(HttpMethod.POST, "/api/v1/employees").hasAnyRole("ADMIN", "TEACHER")
+						// Events: creating, editing and cancelling is staff-only (the app shows "Create event"
+						// to EMPLOYEE logins only); EventService adds the creator/scope checks for
+						// participation events. Reading, RSVPs, registrations and votes stay open to any
+						// logged-in role (the authenticated() default below); the finance sub-endpoints are
+						// admin-only above.
+						.requestMatchers(HttpMethod.POST, "/api/v1/events").hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/events/*").hasAnyRole("ADMIN", "TEACHER")
+						.requestMatchers(HttpMethod.DELETE, "/api/v1/events/*").hasAnyRole("ADMIN", "TEACHER")
 						// Everything that has to work without a user login. Anything not listed here or above
 						// needs a valid token for the school in X-School-Id.
 						.requestMatchers("/error").permitAll()

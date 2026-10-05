@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * OTP login finds staff by contactPhone and students by parentContact, and signs in as that
- * record. So only an admin (or the person themselves) may change those numbers, and only an admin
+ * record. So only an admin may change those numbers, and only an admin
  * may put a phone on a new staff record - otherwise any login could take over another account.
  */
 @SpringBootTest
@@ -84,10 +84,15 @@ class PhoneTakeoverIntegrationTest {
 	}
 
 	@Test
-	void everyoneCanStillEditTheirOwnProfileAndAdminsCanEditAnyone() throws Exception {
+	void onlyAnAdminEditsAWholeRecordEvenTheirOwn() throws Exception {
+		// A whole-record PUT also carries class-section, status and bank account, so it's admin-only
+		// (SecurityConfig); own-profile edits in the app go through /api/v1/id-cards/*/profile.
+		updateEmployee(teacher, teacherId, "Takeover Teacher", phone()).andExpect(status().isForbidden());
+		updateStudent(student, studentId, "Takeover Student", phone()).andExpect(status().isForbidden());
+
 		String newTeacherPhone = phone();
-		updateEmployee(teacher, teacherId, "Takeover Teacher", newTeacherPhone).andExpect(status().isOk());
-		updateStudent(student, studentId, "Takeover Student", phone()).andExpect(status().isOk());
+		updateEmployee(admin, teacherId, "Takeover Teacher", newTeacherPhone).andExpect(status().isOk());
+		updateStudent(admin, studentId, "Takeover Student", phone()).andExpect(status().isOk());
 		updateEmployee(admin, victimAdminId, "Victim Principal Renamed", phone()).andExpect(status().isOk());
 
 		mockMvc.perform(get("/api/v1/employees/" + teacherId).header("X-School-Id", SCHOOL_ID))
