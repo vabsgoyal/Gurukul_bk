@@ -1,0 +1,5 @@
+[Unit]
+Description=Certbot renewal
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --quiet --deploy-hook "systemctl reload nginx"

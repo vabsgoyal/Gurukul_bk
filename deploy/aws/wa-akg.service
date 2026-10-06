@@ -1,6 +1,4 @@
-# WA-AKG WhatsApp gateway (OTP delivery). Install on EC2:
-#   sudo cp deploy/aws/wa-akg.service /etc/systemd/system/
-#   sudo systemctl daemon-reload && sudo systemctl enable --now wa-akg
+# WA-AKG WhatsApp gateway (OTP delivery for Gurukul).
 [Unit]
 Description=WA-AKG WhatsApp Gateway (OTP delivery for Gurukul)
 Documentation=https://github.com/vabsgoyal/Gurukul_bk/tree/main/whatsapp-gateway
@@ -13,12 +11,14 @@ User=gurukul
 Group=gurukul
 WorkingDirectory=/opt/whatsapp-gateway
 EnvironmentFile=/opt/whatsapp-gateway/.env
-ExecStart=/usr/bin/npm run start
+Environment=NODE_ENV=production
+# tsx directly rather than "npm run start" (npx tsx ...): skips two npm wrapper processes (~140 MB) on a 2 GB box.
+ExecStart=/opt/whatsapp-gateway/node_modules/.bin/tsx src/server/index.ts
 # always, not on-failure: a clean exit (code 0) must also bring OTP delivery back
 Restart=always
 RestartSec=5
-MemoryMax=1536M
-MemoryHigh=1280M
+MemoryHigh=640M
+MemoryMax=900M
 
 [Install]
 WantedBy=multi-user.target

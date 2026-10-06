@@ -10,11 +10,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # S3 deploy-artifact bucket's region - unchanged, only the EC2 instance moved (see EC2_REGION).
-  AWS_REGION: eu-north-1
-  # Where the EC2 instance / SSM target actually lives - kept separate from AWS_REGION since the
-  # two diverged when the instance moved to ap-south-1 but the S3 bucket didn't.
-  EC2_REGION: ap-south-1
+  # S3 deploy-artifact bucket's region. Since the move to the new AWS account, the bucket and the
+  # instance are both in Sydney (the account's only allowed Region).
+  AWS_REGION: ap-southeast-2
+  # Where the EC2 instance / SSM target lives. Kept separate from AWS_REGION so the bucket and the
+  # instance can sit in different Regions again (e.g. the planned move to Mumbai).
+  EC2_REGION: ap-southeast-2
 
 jobs:
   test:
@@ -153,7 +154,7 @@ jobs:
             "sudo sed -i /^CALL_PREFERRED_PROVIDER=/d /etc/gurukul/backend.env",
             "echo \"CALL_PREFERRED_PROVIDER=GOOGLE_MEET\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "sudo sed -i /^APP_CHAT_ATTACHMENTS_BUCKET=/d /etc/gurukul/backend.env",
-            "echo \"APP_CHAT_ATTACHMENTS_BUCKET=smartgurukul-uploads\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
+            "echo \"APP_CHAT_ATTACHMENTS_BUCKET=smartgurukul-uploads-485157611101\" | sudo tee -a /etc/gurukul/backend.env >/dev/null",
             "if [ -n \"\($mailEnv)\" ]; then sudo sed -i -E \"/^(LEADS_NOTIFY_EMAIL|LEADS_MAIL_FROM|SPRING_MAIL_[A-Z_]+)=/d\" /etc/gurukul/backend.env && echo \($mailEnv) | base64 -d | sudo tee -a /etc/gurukul/backend.env >/dev/null; fi",
             "echo \($script) | base64 -d | sudo tee /opt/gurukul/deploy-from-s3.sh >/dev/null",
             "sudo chmod +x /opt/gurukul/deploy-from-s3.sh",
